@@ -1,0 +1,124 @@
+namespace BetterBTD.Models.GameElements;
+
+public enum MapDifficultyTier
+{
+    Beginner,
+    Intermediate,
+    Advanced,
+    Expert
+}
+
+public enum GameMapType
+{
+    MonkeyMeadow,
+    InTheLoop,
+    ThreeMilesRound,
+    MiddleOfTheRoad,
+    SpaPits,
+    TinkerTon,
+    TreeStump,
+    TownCenter,
+    OneTwoTree,
+    ScrapYard,
+    TheCabin,
+    Resort,
+    Skates,
+    LotusIsland,
+    CandyFalls,
+    WinterPark,
+    Carved,
+    ParkPath,
+    AlpineRun,
+    FrozenOver,
+    Cubism,
+    FourCircles,
+    Hedge,
+    EndOfTheRoad,
+    Logs,
+
+    SulfurSprings,
+    WaterPark,
+    Polyphemus,
+    CoveredGarden,
+    Quarry,
+    QuietStreet,
+    BloonariusPrime,
+    Balance,
+    Encrypted,
+    Bazaar,
+    AdorasTemple,
+    SpringSpring,
+    KartMonkey,
+    MoonLanding,
+    Haunted,
+    Downstream,
+    FiringRange,
+    Cracked,
+    Streambed,
+    Chutes,
+    Rake,
+    SpiceIslands,
+    LuminousCove,
+    LostCrevasse,
+    AncientPortal,
+
+    CastleRevenge,
+    DarkPath,
+    Erosion,
+    MidnightMansion,
+    SunkenColumns,
+    XFactor,
+    Mesa,
+    Geared,
+    Spillway,
+    Cargo,
+    PatsPond,
+    Peninsula,
+    HighFinance,
+    AnotherBrick,
+    OffTheCoast,
+    Cornfield,
+    Underground,
+    LastResort,
+    EnchantedGlade,
+    SunsetGulch,
+    PartyParade,
+    MushroomGortto,
+
+    GlacialTrail,
+    DarkDungeon,
+    Sanctuary,
+    Ravine,
+    FloodedValley,
+    Infernal,
+    BloodyPuddles,
+    Workshop,
+    Quad,
+    DarkCastle,
+    MuddyPuddles,
+    Ouch,
+    TrickyTracks
+}
+
+public enum StageDifficulty
+{
+    Easy,
+    Medium,
+    Hard
+}
+
+public enum StageMode
+{
+    Standard,
+    PrimaryOnly,
+    Deflation,
+    MilitaryOnly,
+    Apopalypse,
+    Reverse,
+    MagicOnly,
+    DoubleHpMoabs,
+    HalfCash,
+    AlternateBloonsRounds,
+    Impoppable,
+    CHIMPS
+}

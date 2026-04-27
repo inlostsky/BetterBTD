@@ -1,0 +1,12 @@
+<Solution>
+  <Project Path="../Fischless.GameCapture/Fischless.GameCapture.csproj">
+    <Platform Project="x64" />
+  </Project>
+  <Project Path="../Fischless.HotkeyCapture/Fischless.HotkeyCapture.csproj">
+    <Platform Project="x64" />
+  </Project>
+  <Project Path="../Fischless.WindowsInput/Fischless.WindowsInput.csproj">
+    <Platform Project="x64" />
+  </Project>
+  <Project Path="BetterBTD/BetterBTD.csproj" />
+</Solution>

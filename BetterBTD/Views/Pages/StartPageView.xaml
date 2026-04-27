@@ -1,0 +1,316 @@
+<Page x:Class="BetterBTD.Views.Pages.StartPageView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:controls="clr-namespace:BetterBTD.Views.Controls"
+      mc:Ignorable="d">
+    <StackPanel Margin="42,16,42,12">
+        <Border Height="200" CornerRadius="8">
+            <Border.ContextMenu>
+                <ContextMenu>
+                    <ui:MenuItem Header="{Binding ChangeBannerText}" Command="{Binding ChangeBannerImageCommand}" Icon="{ui:SymbolIcon Image24}" />
+                    <ui:MenuItem Header="{Binding ResetBannerText}" Command="{Binding ResetBannerImageCommand}" Icon="{ui:SymbolIcon ArrowCounterclockwise24}" />
+                </ContextMenu>
+            </Border.ContextMenu>
+            <Grid>
+                <Border ClipToBounds="True" CornerRadius="8">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#2A3E62" Offset="0" />
+                            <GradientStop Color="#1C2A42" Offset="0.6" />
+                            <GradientStop Color="#142033" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Border.OpacityMask>
+                        <LinearGradientBrush StartPoint="0,1" EndPoint="1,0">
+                            <GradientStop Color="Transparent" />
+                            <GradientStop Offset="0.7" Color="White" />
+                        </LinearGradientBrush>
+                    </Border.OpacityMask>
+                </Border>
+
+                <StackPanel Margin="52,0,0,26"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Bottom"
+                            Background="Transparent">
+                    <ui:TextBlock FontSize="30" FontWeight="SemiBold" Text="{Binding BannerTitle}" />
+                    <ui:TextBlock FontSize="15" Opacity="0.85" Text="{Binding BannerSubtitle}" />
+                    <ui:TextBlock Margin="0,6,0,0" Opacity="0.8">
+                        <Hyperlink Command="{Binding OpenTutorialCommand}"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   TextDecorations="None">
+                            <Run Text="{Binding BannerLinkText, Mode=OneWay}" />
+                            <Run Text="  ›" />
+                        </Hyperlink>
+                    </ui:TextBlock>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <ui:CardExpander Margin="0,12,0,12" ContentPadding="0" Icon="{ui:SymbolIcon Play24}">
+            <ui:CardExpander.Header>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding CaptureCardTitle}" TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1" Grid.Column="0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="{Binding CaptureCardDescription}"
+                                  TextWrapping="Wrap" />
+
+                    <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Margin="0,0,24,0" Orientation="Horizontal">
+                        <controls:TwoStateButton IsChecked="{Binding IsCapturerRunning, Mode=OneWay}"
+                                                 EnableCommand="{Binding StartCaptureCommand}"
+                                                 DisableCommand="{Binding StopCaptureCommand}"
+                                                 EnableContent="{Binding LaunchCaptureText}"
+                                                 DisableContent="{Binding StopCaptureText}"
+                                                 EnableIcon="{ui:SymbolIcon Play24}"
+                                                 DisableIcon="{ui:SymbolIcon Dismiss24}" />
+                    </StackPanel>
+                </Grid>
+            </ui:CardExpander.Header>
+
+            <StackPanel>
+                <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding CaptureModeTitle}" TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding CaptureModeDescription}" TextWrapping="Wrap" />
+                    <ComboBox Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Margin="0,0,36,0" Width="220" ItemsSource="{Binding CaptureModes}" SelectedItem="{Binding SelectedCaptureMode, Mode=TwoWay}" />
+                </Grid>
+
+                <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding TriggerIntervalTitle}" TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding TriggerIntervalDescription}" TextWrapping="Wrap" />
+                    <ui:NumberBox Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Width="120" Margin="0,0,36,0" Value="{Binding TriggerIntervalMs, Mode=TwoWay}" Minimum="10" Maximum="2000" SmallChange="10" />
+                </Grid>
+
+                <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding CaptureBitmapCacheTitle}" TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding CaptureBitmapCacheDescription}" TextWrapping="Wrap" />
+                    <ui:ToggleSwitch Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Margin="0,0,36,0" IsChecked="{Binding CaptureBitmapCacheEnabled, Mode=TwoWay}" />
+                </Grid>
+
+                <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding InferenceDeviceTitle}" TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding InferenceDeviceDescription}" TextWrapping="Wrap" />
+                    <ComboBox Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Margin="0,0,10,0" Width="160" ItemsSource="{Binding InferenceDevices}" SelectedItem="{Binding SelectedInferenceDevice, Mode=TwoWay}" />
+                    <ui:Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="2" Margin="0,0,36,0" Command="{Binding OpenHardwareAccelerationSettingsCommand}" Content="{Binding MoreText}" />
+                </Grid>
+
+                <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding CaptureTestTitle}" TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding CaptureTestDescription}" TextWrapping="Wrap" />
+                    <ui:Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Margin="0,0,36,0" Command="{Binding StartCaptureTestCommand}" Content="{Binding CaptureTestButtonText}" />
+                </Grid>
+
+                <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding ManualPickWindowTitle}" TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding ManualPickWindowDescription}" TextWrapping="Wrap" />
+                    <ui:Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Margin="0,0,36,0" Command="{Binding ManualPickWindowCommand}" Content="{Binding ManualPickWindowButtonText}" />
+                </Grid>
+
+                <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding AutoFixWin11Title}" TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding AutoFixWin11Description}" TextWrapping="Wrap" />
+                    <ui:ToggleSwitch Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Margin="0,0,10,0" IsChecked="{Binding AutoFixWin11BitBlt, Mode=TwoWay}" />
+                    <ui:Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="2" Margin="0,0,36,0" Command="{Binding OpenDisplayAdvancedGraphicsSettingsCommand}" Content="{Binding ManualSettingsText}" />
+                </Grid>
+            </StackPanel>
+        </ui:CardExpander>
+
+        <ui:CardExpander Margin="0,0,0,12" HorizontalAlignment="Stretch" ContentPadding="0" Icon="{ui:SymbolIcon LinkSquare24}">
+            <ui:CardExpander.Header>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding LinkedStartTitle}" TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding LinkedStartDescription}" TextWrapping="Wrap" />
+                    <ui:ToggleSwitch Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Margin="0,0,24,0" IsChecked="{Binding LinkedStartEnabled, Mode=TwoWay}" />
+                </Grid>
+            </ui:CardExpander.Header>
+
+            <StackPanel>
+                <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding InstallPathTitle}" TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding InstallPath}" TextWrapping="Wrap" />
+                    <ui:Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Margin="0,0,36,0" Command="{Binding SelectInstallPathCommand}" Content="{Binding BrowseText}" />
+                </Grid>
+
+                <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
+                <Grid Margin="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" VerticalAlignment="Top">
+                        <ui:TextBlock FontWeight="SemiBold" TextWrapping="Wrap">
+                            <Run Text="{Binding StartArgsTitle, Mode=OneWay}" />
+                            <ui:HyperlinkButton Margin="4,0,0,0" Padding="0" Command="{Binding OpenGameCommandLineDocumentCommand}" Cursor="Hand">
+                                <ui:HyperlinkButton.Content>
+                                    <TextBlock FontSize="11" Text="{Binding OpenDocText}" />
+                                </ui:HyperlinkButton.Content>
+                            </ui:HyperlinkButton>
+                        </ui:TextBlock>
+
+                        <ui:TextBlock Margin="0,4,0,0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding StartArgsDescription}" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <ui:TextBox Grid.Column="1"
+                                Width="300"
+                                Margin="0,0,36,0"
+                                VerticalAlignment="Top"
+                                PlaceholderText="-screen-width 1920"
+                                Text="{Binding StartArguments, Mode=TwoWay}"
+                                TextWrapping="Wrap"
+                                AcceptsReturn="True" />
+                </Grid>
+
+                <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding AutoEnterGameTitle}" TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding AutoEnterGameDescription}" TextWrapping="Wrap" />
+                    <ui:ToggleSwitch Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Margin="0,0,36,0" IsChecked="{Binding AutoEnterGameEnabled, Mode=TwoWay}" />
+                </Grid>
+
+                <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding StartWithCmdTitle}" TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding StartWithCmdDescription}" TextWrapping="Wrap" />
+                    <ui:ToggleSwitch Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Margin="0,0,36,0" IsChecked="{Binding StartGameWithCmd, Mode=TwoWay}" />
+                </Grid>
+
+                <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding RecordGameTimeTitle}" TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding RecordGameTimeDescription}" TextWrapping="Wrap" />
+                    <ui:ToggleSwitch Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Margin="0,0,36,0" IsChecked="{Binding RecordGameTimeEnabled, Mode=TwoWay}" />
+                </Grid>
+            </StackPanel>
+        </ui:CardExpander>
+    </StackPanel>
+</Page>

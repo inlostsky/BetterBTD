@@ -1,0 +1,49 @@
+<Page x:Class="BetterBTD.Views.Pages.LogsPageView"
+      x:Name="Root"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      mc:Ignorable="d">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Style="{StaticResource PageRootPanelStyle}">
+            <ui:CardControl Style="{StaticResource AppCardControlStyle}" Icon="{ui:SymbolIcon Document24}">
+                <ui:CardControl.Header>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Title}" Style="{StaticResource CardTitleTextStyle}" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Track runtime logs and diagnostics in real time." Margin="0,4,0,0" Style="{StaticResource CardDescriptionTextStyle}" />
+
+                        <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,24,0">
+                            <TextBlock Text="{Binding LiveModeText}" Margin="0,0,10,0" VerticalAlignment="Center" Style="{StaticResource CardDescriptionTextStyle}" />
+                            <ui:ToggleSwitch IsChecked="{Binding LiveModeEnabled, Mode=TwoWay}" />
+                        </StackPanel>
+                    </Grid>
+                </ui:CardControl.Header>
+            </ui:CardControl>
+
+            <ui:CardControl Style="{StaticResource AppCardControlStyle}" Icon="{ui:SymbolIcon Table24}">
+                <DataGrid ItemsSource="{Binding Entries}"
+                          AutoGenerateColumns="False"
+                          RowHeaderWidth="0"
+                          GridLinesVisibility="None"
+                          BorderThickness="0">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="{Binding DataContext.TimeHeader, ElementName=Root}" Binding="{Binding Time}" Width="120" />
+                        <DataGridTextColumn Header="{Binding DataContext.LevelHeader, ElementName=Root}" Binding="{Binding Level}" Width="100" />
+                        <DataGridTextColumn Header="{Binding DataContext.MessageHeader, ElementName=Root}" Binding="{Binding Message}" Width="*" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </ui:CardControl>
+        </StackPanel>
+    </ScrollViewer>
+</Page>
