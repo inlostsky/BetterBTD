@@ -36,39 +36,46 @@
                                        ItemsSource="{Binding DataContext.MonkeyTowerItems, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}"
                                        SelectedCascadingItem="{Binding SelectedMonkeyTower, Mode=TwoWay, Converter={StaticResource MonkeyTowerTypeToCascadingItemConverter}}" />
 
-                <TextBlock Style="{StaticResource CardDescriptionTextStyle}"
-                           Text="{Binding DataContext.PropertyCoordinateText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}" />
-                <Grid Margin="0,4,0,0">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+                <ui:CardExpander Margin="0,0,0,0"
+                                 ContentPadding="0"
+                                 IsExpanded="False">
+                    <ui:CardExpander.Header>
+                        <TextBlock Style="{StaticResource CardTitleTextStyle}"
+                                   Text="{Binding DataContext.PropertyCoordinateText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}" />
+                    </ui:CardExpander.Header>
 
-                    <TextBlock Grid.Row="0"
-                               Grid.Column="0"
-                               Margin="0,0,12,8"
-                               Style="{StaticResource CoordinateAxisLabelStyle}"
-                               Text="X" />
-                    <ui:NumberBox Grid.Row="0"
-                                  Grid.Column="1"
-                                  Margin="0,0,0,8"
-                                  Style="{StaticResource CoordinateNumberBoxStyle}"
-                                  Value="{Binding PositionX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <Grid Margin="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Row="1"
-                               Grid.Column="0"
-                               Margin="0,0,12,0"
-                               Style="{StaticResource CoordinateAxisLabelStyle}"
-                               Text="Y" />
-                    <ui:NumberBox Grid.Row="1"
-                                  Grid.Column="1"
-                                  Style="{StaticResource CoordinateNumberBoxStyle}"
-                                  Value="{Binding PositionY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                </Grid>
+                        <TextBlock Grid.Row="0"
+                                   Grid.Column="0"
+                                   Margin="0,0,12,8"
+                                   Style="{StaticResource CoordinateAxisLabelStyle}"
+                                   Text="X" />
+                        <ui:NumberBox Grid.Row="0"
+                                      Grid.Column="1"
+                                      Margin="0,0,0,8"
+                                      Style="{StaticResource CoordinateNumberBoxStyle}"
+                                      Value="{Binding PositionX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="0"
+                                   Margin="0,0,12,0"
+                                   Style="{StaticResource CoordinateAxisLabelStyle}"
+                                   Text="Y" />
+                        <ui:NumberBox Grid.Row="1"
+                                      Grid.Column="1"
+                                      Style="{StaticResource CoordinateNumberBoxStyle}"
+                                      Value="{Binding PositionY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                </ui:CardExpander>
             </StackPanel>
         </DataTemplate>
 
@@ -151,37 +158,46 @@
                                  Content="{Binding DataContext.PropertyNeedAbilityCoordinateText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}"
                                  IsChecked="{Binding RequiresAbilityCoordinate, Mode=TwoWay}" />
 
-                <Grid Visibility="{Binding ShowAbilityCoordinateInputs, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+                <ui:CardExpander ContentPadding="0"
+                                 IsExpanded="False"
+                                 Visibility="{Binding ShowAbilityCoordinateInputs, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <ui:CardExpander.Header>
+                        <TextBlock Style="{StaticResource CardTitleTextStyle}"
+                                   Text="{Binding DataContext.PropertyCoordinateText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}" />
+                    </ui:CardExpander.Header>
 
-                    <TextBlock Grid.Row="0"
-                               Grid.Column="0"
-                               Margin="0,0,12,8"
-                               Style="{StaticResource CoordinateAxisLabelStyle}"
-                               Text="X" />
-                    <ui:NumberBox Grid.Row="0"
-                                  Grid.Column="1"
-                                  Margin="0,0,0,8"
-                                  Style="{StaticResource CoordinateNumberBoxStyle}"
-                                  Value="{Binding AbilityCoordinateX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <Grid Margin="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Row="1"
-                               Grid.Column="0"
-                               Margin="0,0,12,0"
-                               Style="{StaticResource CoordinateAxisLabelStyle}"
-                               Text="Y" />
-                    <ui:NumberBox Grid.Row="1"
-                                  Grid.Column="1"
-                                  Style="{StaticResource CoordinateNumberBoxStyle}"
-                                  Value="{Binding AbilityCoordinateY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                </Grid>
+                        <TextBlock Grid.Row="0"
+                                   Grid.Column="0"
+                                   Margin="0,0,12,8"
+                                   Style="{StaticResource CoordinateAxisLabelStyle}"
+                                   Text="X" />
+                        <ui:NumberBox Grid.Row="0"
+                                      Grid.Column="1"
+                                      Margin="0,0,0,8"
+                                      Style="{StaticResource CoordinateNumberBoxStyle}"
+                                      Value="{Binding AbilityCoordinateX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="0"
+                                   Margin="0,0,12,0"
+                                   Style="{StaticResource CoordinateAxisLabelStyle}"
+                                   Text="Y" />
+                        <ui:NumberBox Grid.Row="1"
+                                      Grid.Column="1"
+                                      Style="{StaticResource CoordinateNumberBoxStyle}"
+                                      Value="{Binding AbilityCoordinateY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                </ui:CardExpander>
             </StackPanel>
         </DataTemplate>
 
@@ -199,37 +215,46 @@
                                  Content="{Binding DataContext.PropertyNeedCoordinateText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}"
                                  IsChecked="{Binding RequiresAbilityCoordinate, Mode=TwoWay}" />
 
-                <Grid Visibility="{Binding ShowPlacementCoordinateInputs, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+                <ui:CardExpander ContentPadding="0"
+                                 IsExpanded="False"
+                                 Visibility="{Binding ShowPlacementCoordinateInputs, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <ui:CardExpander.Header>
+                        <TextBlock Style="{StaticResource CardTitleTextStyle}"
+                                   Text="{Binding DataContext.PropertyCoordinateText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}" />
+                    </ui:CardExpander.Header>
 
-                    <TextBlock Grid.Row="0"
-                               Grid.Column="0"
-                               Margin="0,0,12,8"
-                               Style="{StaticResource CoordinateAxisLabelStyle}"
-                               Text="X" />
-                    <ui:NumberBox Grid.Row="0"
-                                  Grid.Column="1"
-                                  Margin="0,0,0,8"
-                                  Style="{StaticResource CoordinateNumberBoxStyle}"
-                                  Value="{Binding PositionX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <Grid Margin="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Row="1"
-                               Grid.Column="0"
-                               Margin="0,0,12,0"
-                               Style="{StaticResource CoordinateAxisLabelStyle}"
-                               Text="Y" />
-                    <ui:NumberBox Grid.Row="1"
-                                  Grid.Column="1"
-                                  Style="{StaticResource CoordinateNumberBoxStyle}"
-                                  Value="{Binding PositionY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                </Grid>
+                        <TextBlock Grid.Row="0"
+                                   Grid.Column="0"
+                                   Margin="0,0,12,8"
+                                   Style="{StaticResource CoordinateAxisLabelStyle}"
+                                   Text="X" />
+                        <ui:NumberBox Grid.Row="0"
+                                      Grid.Column="1"
+                                      Margin="0,0,0,8"
+                                      Style="{StaticResource CoordinateNumberBoxStyle}"
+                                      Value="{Binding PositionX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="0"
+                                   Margin="0,0,12,0"
+                                   Style="{StaticResource CoordinateAxisLabelStyle}"
+                                   Text="Y" />
+                        <ui:NumberBox Grid.Row="1"
+                                      Grid.Column="1"
+                                      Style="{StaticResource CoordinateNumberBoxStyle}"
+                                      Value="{Binding PositionY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                </ui:CardExpander>
             </StackPanel>
         </DataTemplate>
 
@@ -247,37 +272,46 @@
                                  Content="{Binding DataContext.PropertyNeedCoordinateText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}"
                                  IsChecked="{Binding RequiresAbilityCoordinate, Mode=TwoWay}" />
 
-                <Grid Visibility="{Binding ShowAbilityCoordinateInputs, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+                <ui:CardExpander ContentPadding="0"
+                                 IsExpanded="False"
+                                 Visibility="{Binding ShowAbilityCoordinateInputs, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <ui:CardExpander.Header>
+                        <TextBlock Style="{StaticResource CardTitleTextStyle}"
+                                   Text="{Binding DataContext.PropertyCoordinateText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}" />
+                    </ui:CardExpander.Header>
 
-                    <TextBlock Grid.Row="0"
-                               Grid.Column="0"
-                               Margin="0,0,12,8"
-                               Style="{StaticResource CoordinateAxisLabelStyle}"
-                               Text="X" />
-                    <ui:NumberBox Grid.Row="0"
-                                  Grid.Column="1"
-                                  Margin="0,0,0,8"
-                                  Style="{StaticResource CoordinateNumberBoxStyle}"
-                                  Value="{Binding AbilityCoordinateX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <Grid Margin="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Row="1"
-                               Grid.Column="0"
-                               Margin="0,0,12,0"
-                               Style="{StaticResource CoordinateAxisLabelStyle}"
-                               Text="Y" />
-                    <ui:NumberBox Grid.Row="1"
-                                  Grid.Column="1"
-                                  Style="{StaticResource CoordinateNumberBoxStyle}"
-                                  Value="{Binding AbilityCoordinateY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                </Grid>
+                        <TextBlock Grid.Row="0"
+                                   Grid.Column="0"
+                                   Margin="0,0,12,8"
+                                   Style="{StaticResource CoordinateAxisLabelStyle}"
+                                   Text="X" />
+                        <ui:NumberBox Grid.Row="0"
+                                      Grid.Column="1"
+                                      Margin="0,0,0,8"
+                                      Style="{StaticResource CoordinateNumberBoxStyle}"
+                                      Value="{Binding AbilityCoordinateX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="0"
+                                   Margin="0,0,12,0"
+                                   Style="{StaticResource CoordinateAxisLabelStyle}"
+                                   Text="Y" />
+                        <ui:NumberBox Grid.Row="1"
+                                      Grid.Column="1"
+                                      Style="{StaticResource CoordinateNumberBoxStyle}"
+                                      Value="{Binding AbilityCoordinateY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                </ui:CardExpander>
             </StackPanel>
         </DataTemplate>
 
@@ -342,40 +376,46 @@
 
                 <StackPanel Margin="0,10,0,0"
                             Visibility="{Binding ShowWaitCoordinateColor, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <TextBlock Style="{StaticResource CardDescriptionTextStyle}"
-                               Text="{Binding DataContext.PropertyCoordinateText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}" />
-                    <Grid Margin="0,4,0,0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
+                    <ui:CardExpander Margin="0,0,0,10"
+                                     ContentPadding="0"
+                                     IsExpanded="False">
+                        <ui:CardExpander.Header>
+                            <TextBlock Style="{StaticResource CardTitleTextStyle}"
+                                       Text="{Binding DataContext.PropertyCoordinateText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}" />
+                        </ui:CardExpander.Header>
 
-                        <TextBlock Grid.Row="0"
-                                   Grid.Column="0"
-                                   Margin="0,0,12,8"
-                                   Style="{StaticResource CoordinateAxisLabelStyle}"
-                                   Text="X" />
-                        <ui:NumberBox Grid.Row="0"
-                                      Grid.Column="1"
-                                      Margin="0,0,0,8"
-                                      Style="{StaticResource CoordinateNumberBoxStyle}"
-                                      Value="{Binding WaitColorCoordinateX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <Grid Margin="16">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
 
-                        <TextBlock Grid.Row="1"
-                                   Grid.Column="0"
-                                   Margin="0,0,12,0"
-                                   Style="{StaticResource CoordinateAxisLabelStyle}"
-                                   Text="Y" />
-                        <ui:NumberBox Grid.Row="1"
-                                      Grid.Column="1"
-                                      Margin="0,0,0,8"
-                                      Style="{StaticResource CoordinateNumberBoxStyle}"
-                                      Value="{Binding WaitColorCoordinateY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    </Grid>
+                            <TextBlock Grid.Row="0"
+                                       Grid.Column="0"
+                                       Margin="0,0,12,8"
+                                       Style="{StaticResource CoordinateAxisLabelStyle}"
+                                       Text="X" />
+                            <ui:NumberBox Grid.Row="0"
+                                          Grid.Column="1"
+                                          Margin="0,0,0,8"
+                                          Style="{StaticResource CoordinateNumberBoxStyle}"
+                                          Value="{Binding WaitColorCoordinateX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="0"
+                                       Margin="0,0,12,0"
+                                       Style="{StaticResource CoordinateAxisLabelStyle}"
+                                       Text="Y" />
+                            <ui:NumberBox Grid.Row="1"
+                                          Grid.Column="1"
+                                          Style="{StaticResource CoordinateNumberBoxStyle}"
+                                          Value="{Binding WaitColorCoordinateY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </Grid>
+                    </ui:CardExpander>
 
                     <TextBlock Style="{StaticResource CardDescriptionTextStyle}"
                                Text="{Binding DataContext.PropertyWaitColorHexText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}" />
@@ -414,39 +454,45 @@
                           ItemsSource="{Binding DataContext.MonkeyObjectOptions, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}"
                           SelectedValue="{Binding TargetMonkeyBindingId, Mode=TwoWay}" />
 
-                <TextBlock Style="{StaticResource CardDescriptionTextStyle}"
-                           Text="{Binding DataContext.PropertyCoordinateText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}" />
-                <Grid Margin="0,4,0,0">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+                <ui:CardExpander ContentPadding="0"
+                                 IsExpanded="False">
+                    <ui:CardExpander.Header>
+                        <TextBlock Style="{StaticResource CardTitleTextStyle}"
+                                   Text="{Binding DataContext.PropertyCoordinateText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}" />
+                    </ui:CardExpander.Header>
 
-                    <TextBlock Grid.Row="0"
-                               Grid.Column="0"
-                               Margin="0,0,12,8"
-                               Style="{StaticResource CoordinateAxisLabelStyle}"
-                               Text="X" />
-                    <ui:NumberBox Grid.Row="0"
-                                  Grid.Column="1"
-                                  Margin="0,0,0,8"
-                                  Style="{StaticResource CoordinateNumberBoxStyle}"
-                                  Value="{Binding PositionX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <Grid Margin="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Row="1"
-                               Grid.Column="0"
-                               Margin="0,0,12,0"
-                               Style="{StaticResource CoordinateAxisLabelStyle}"
-                               Text="Y" />
-                    <ui:NumberBox Grid.Row="1"
-                                  Grid.Column="1"
-                                  Style="{StaticResource CoordinateNumberBoxStyle}"
-                                  Value="{Binding PositionY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                </Grid>
+                        <TextBlock Grid.Row="0"
+                                   Grid.Column="0"
+                                   Margin="0,0,12,8"
+                                   Style="{StaticResource CoordinateAxisLabelStyle}"
+                                   Text="X" />
+                        <ui:NumberBox Grid.Row="0"
+                                      Grid.Column="1"
+                                      Margin="0,0,0,8"
+                                      Style="{StaticResource CoordinateNumberBoxStyle}"
+                                      Value="{Binding PositionX, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="0"
+                                   Margin="0,0,12,0"
+                                   Style="{StaticResource CoordinateAxisLabelStyle}"
+                                   Text="Y" />
+                        <ui:NumberBox Grid.Row="1"
+                                      Grid.Column="1"
+                                      Style="{StaticResource CoordinateNumberBoxStyle}"
+                                      Value="{Binding PositionY, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                </ui:CardExpander>
             </StackPanel>
         </DataTemplate>
 
@@ -514,6 +560,38 @@
                 <StackPanel Visibility="{Binding HasSelectedSequenceInstruction, Converter={StaticResource BoolToVisibilityConverter}}">
                     <ContentControl Content="{Binding SelectedSequenceInstruction}"
                                     ContentTemplateSelector="{StaticResource InstructionEditorTemplateSelector}" />
+
+                    <ui:CardExpander Margin="0,0,0,10"
+                                     ContentPadding="0"
+                                     IsExpanded="False">
+                        <ui:CardExpander.Header>
+                            <TextBlock Style="{StaticResource CardTitleTextStyle}"
+                                       Text="{Binding PropertyAdvancedText}" />
+                        </ui:CardExpander.Header>
+
+                        <Grid Margin="16">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Row="0"
+                                       Grid.Column="0"
+                                       Margin="0,0,16,0"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource CardDescriptionTextStyle}"
+                                       Text="{Binding PropertyIntervalToNextInstructionText}" />
+                            <ui:NumberBox Grid.Row="0"
+                                          Grid.Column="1"
+                                          Width="120"
+                                          Minimum="0"
+                                          SmallChange="10"
+                                          Value="{Binding SelectedSequenceInstruction.IntervalToNextInstructionMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </Grid>
+                    </ui:CardExpander>
 
                     <TextBlock Style="{StaticResource CardDescriptionTextStyle}"
                                Text="{Binding PropertyNotesText}" />

@@ -212,6 +212,8 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public string PropertyWaitColorHexText => _localizationService.T("Editor.Property.WaitColorHex");
     public string PropertyWaitColorToleranceText => _localizationService.T("Editor.Property.WaitColorTolerance");
     public string PropertyCommentContentText => _localizationService.T("Editor.Property.CommentContent");
+    public string PropertyAdvancedText => _localizationService.T("Editor.Property.Advanced");
+    public string PropertyIntervalToNextInstructionText => _localizationService.T("Editor.Property.IntervalToNextInstruction");
     public string NonExecutableInstructionHintText => _localizationService.T("Editor.Property.NonExecutableHint");
     public string PropertyNotesText => _localizationService.T("Editor.Property.Notes");
     public string DeleteSelectedInstructionText => _localizationService.T("Editor.Command.DeleteSelected");
@@ -1099,6 +1101,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
             WaitColorHex = source.WaitColorHex,
             WaitColorTolerance = source.WaitColorTolerance,
             CommentContent = source.CommentContent,
+            IntervalToNextInstructionMs = source.IntervalToNextInstructionMs,
             Notes = source.Notes
         };
     }
@@ -1667,6 +1670,8 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         OnPropertyChanged(nameof(PropertyWaitColorHexText));
         OnPropertyChanged(nameof(PropertyWaitColorToleranceText));
         OnPropertyChanged(nameof(PropertyCommentContentText));
+        OnPropertyChanged(nameof(PropertyAdvancedText));
+        OnPropertyChanged(nameof(PropertyIntervalToNextInstructionText));
         OnPropertyChanged(nameof(NonExecutableInstructionHintText));
         OnPropertyChanged(nameof(PropertyNotesText));
         OnPropertyChanged(nameof(DeleteSelectedInstructionText));

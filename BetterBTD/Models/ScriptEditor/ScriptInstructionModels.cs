@@ -112,6 +112,7 @@ public sealed class ScriptInstructionInstance : ObservableObject
     private string _waitColorHex = "#FFFFFF";
     private int _waitColorTolerance;
     private string _commentContent = string.Empty;
+    private int _intervalToNextInstructionMs = 100;
     private string _notes = string.Empty;
 
     public ScriptInstructionInstance(ScriptCommandType type, string nameKey, string descriptionKey)
@@ -367,6 +368,12 @@ public sealed class ScriptInstructionInstance : ObservableObject
     {
         get => _commentContent;
         set => SetProperty(ref _commentContent, value);
+    }
+
+    public int IntervalToNextInstructionMs
+    {
+        get => _intervalToNextInstructionMs;
+        set => SetProperty(ref _intervalToNextInstructionMs, value < 0 ? 0 : value);
     }
 
     public string Notes
