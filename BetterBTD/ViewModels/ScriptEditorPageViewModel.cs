@@ -21,6 +21,14 @@ namespace BetterBTD.ViewModels;
 
 public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
 {
+    private enum CoordinateSelectionTarget
+    {
+        None,
+        Position,
+        Ability,
+        WaitColor
+    }
+
     private const string ScriptFileExtension = ".btd";
     private const string ScriptFileDialogFilter = "BetterBTD Script (*.btd)|*.btd|JSON File (*.json)|*.json|All Files (*.*)|*.*";
 
@@ -51,6 +59,8 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     private bool _suppressHistoryTracking;
     private bool _isUpdatingSequenceInternals;
     private bool _pendingMonkeyObjectOptionsRebuild;
+    private CoordinateSelectionTarget _activeCoordinateSelectionTarget;
+    private ScriptInstructionInstance? _activeCoordinateSelectionInstruction;
     private string _persistedWorkspaceSnapshot = string.Empty;
     private List<ScriptInstructionInstance> _sequenceSnapshot = [];
 
@@ -83,6 +93,8 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         SaveScriptFileCommand = new RelayCommand(SaveScriptFile);
         SaveScriptFileAsCommand = new RelayCommand(SaveScriptFileAs);
         CreateNewScriptFileCommand = new RelayCommand(CreateNewScriptFile);
+        StartCoordinateSelectionCommand = new RelayCommand<string?>(StartCoordinateSelection);
+        CancelCoordinateSelectionCommand = new RelayCommand<string?>(_ => CancelCoordinateSelection());
 
         BuildMetadataOptions();
         BuildInstructionLibrary();
@@ -108,6 +120,8 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public IRelayCommand SaveScriptFileCommand { get; }
     public IRelayCommand SaveScriptFileAsCommand { get; }
     public IRelayCommand CreateNewScriptFileCommand { get; }
+    public IRelayCommand<string?> StartCoordinateSelectionCommand { get; }
+    public IRelayCommand<string?> CancelCoordinateSelectionCommand { get; }
 
     public ObservableCollection<LanguageOption> DifficultyOptions { get; } = [];
     public ObservableCollection<LanguageOption> ModeOptions { get; } = [];
@@ -215,6 +229,11 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
                 return;
             }
 
+            if (!ReferenceEquals(_activeCoordinateSelectionInstruction, value))
+            {
+                CancelCoordinateSelection();
+            }
+
             OnPropertyChanged(nameof(HasSelectedSequenceInstruction));
             OnPropertyChanged(nameof(ShowPropertiesEmptyState));
             OnPropertyChanged(nameof(ShowNonExecutableInstructionHint));
@@ -268,6 +287,8 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public string PropertiesEmptyText => _localizationService.T("Editor.Panel.Properties.Empty");
     public string PropertyMonkeyTowerText => _localizationService.T("Editor.Property.MonkeyTower");
     public string PropertyCoordinateText => _localizationService.T("Editor.Property.Coordinate");
+    public string CoordinateSelectButtonText => _localizationService.T("Editor.Property.SelectCoordinateButton");
+    public string CoordinateCancelButtonText => _localizationService.T("Editor.Property.CancelCoordinateButton");
     public string PropertyTargetMonkeyText => _localizationService.T("Editor.Property.TargetMonkey");
     public string PropertyUpgradePathText => _localizationService.T("Editor.Property.UpgradePath");
     public string PropertyUpgradeCountText => _localizationService.T("Editor.Property.UpgradeCount");
@@ -294,6 +315,9 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public string DeleteSelectedInstructionText => _localizationService.T("Editor.Command.DeleteSelected");
     public string CopySelectedInstructionText => _localizationService.T("Editor.Command.CopySelected");
     public string PasteInstructionText => _localizationService.T("Editor.Command.Paste");
+    public bool IsPositionCoordinateSelectionActive => IsCoordinateSelectionActive(CoordinateSelectionTarget.Position);
+    public bool IsAbilityCoordinateSelectionActive => IsCoordinateSelectionActive(CoordinateSelectionTarget.Ability);
+    public bool IsWaitColorCoordinateSelectionActive => IsCoordinateSelectionActive(CoordinateSelectionTarget.WaitColor);
 
     public ScriptDocument ExportScriptDocument()
     {
@@ -741,6 +765,12 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
             return;
         }
 
+        if (ReferenceEquals(instruction, _activeCoordinateSelectionInstruction) &&
+            !CanContinueCoordinateSelection(instruction, _activeCoordinateSelectionTarget))
+        {
+            CancelCoordinateSelection();
+        }
+
         if (string.Equals(e.PropertyName, nameof(ScriptInstructionInstance.TargetMonkeyBindingId), StringComparison.Ordinal))
         {
             SynchronizeTargetMonkeyObjectId(instruction);
@@ -791,6 +821,18 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         }
 
         _scriptEditorSequenceService.UpdateInstructionDisplayName(instruction, InstructionSequence, _localizationService);
+    }
+
+    private static bool CanContinueCoordinateSelection(ScriptInstructionInstance instruction, CoordinateSelectionTarget target)
+    {
+        return target switch
+        {
+            CoordinateSelectionTarget.Position => instruction.Type is ScriptCommandType.PlaceMonkey or ScriptCommandType.ModifyMonkeyCoordinate
+                || (instruction.Type == ScriptCommandType.PlaceHeroInventory && instruction.ShowPlacementCoordinateInputs),
+            CoordinateSelectionTarget.Ability => instruction.ShowAbilityCoordinateInputs,
+            CoordinateSelectionTarget.WaitColor => instruction.ShowWaitCoordinateColor,
+            _ => false
+        };
     }
 
     private void RebuildMonkeyObjectOptions()
@@ -1181,6 +1223,56 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         ReplaceCollection(InstructionLibrary, _scriptEditorInstructionService.CreateInstructionLibrary());
     }
 
+    private void StartCoordinateSelection(string? target)
+    {
+        var selectionTarget = ParseCoordinateSelectionTarget(target);
+        if (selectionTarget == CoordinateSelectionTarget.None || SelectedSequenceInstruction is null)
+        {
+            return;
+        }
+
+        _activeCoordinateSelectionInstruction = SelectedSequenceInstruction;
+        _activeCoordinateSelectionTarget = selectionTarget;
+        RaiseCoordinateSelectionStateProperties();
+    }
+
+    private void CancelCoordinateSelection()
+    {
+        if (_activeCoordinateSelectionInstruction is null && _activeCoordinateSelectionTarget == CoordinateSelectionTarget.None)
+        {
+            return;
+        }
+
+        _activeCoordinateSelectionInstruction = null;
+        _activeCoordinateSelectionTarget = CoordinateSelectionTarget.None;
+        RaiseCoordinateSelectionStateProperties();
+    }
+
+    private bool IsCoordinateSelectionActive(CoordinateSelectionTarget target)
+    {
+        return target != CoordinateSelectionTarget.None &&
+               ReferenceEquals(_activeCoordinateSelectionInstruction, SelectedSequenceInstruction) &&
+               _activeCoordinateSelectionTarget == target;
+    }
+
+    private static CoordinateSelectionTarget ParseCoordinateSelectionTarget(string? target)
+    {
+        return target?.Trim() switch
+        {
+            "Position" => CoordinateSelectionTarget.Position,
+            "Ability" => CoordinateSelectionTarget.Ability,
+            "WaitColor" => CoordinateSelectionTarget.WaitColor,
+            _ => CoordinateSelectionTarget.None
+        };
+    }
+
+    private void RaiseCoordinateSelectionStateProperties()
+    {
+        OnPropertyChanged(nameof(IsPositionCoordinateSelectionActive));
+        OnPropertyChanged(nameof(IsAbilityCoordinateSelectionActive));
+        OnPropertyChanged(nameof(IsWaitColorCoordinateSelectionActive));
+    }
+
     private void BuildScriptParameterOptions()
     {
         var options = _scriptEditorOptionService.CreateParameterOptions(_localizationService);
@@ -1252,6 +1344,8 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         OnPropertyChanged(nameof(PropertiesEmptyText));
         OnPropertyChanged(nameof(PropertyMonkeyTowerText));
         OnPropertyChanged(nameof(PropertyCoordinateText));
+        OnPropertyChanged(nameof(CoordinateSelectButtonText));
+        OnPropertyChanged(nameof(CoordinateCancelButtonText));
         OnPropertyChanged(nameof(PropertyTargetMonkeyText));
         OnPropertyChanged(nameof(PropertyUpgradePathText));
         OnPropertyChanged(nameof(PropertyUpgradeCountText));
