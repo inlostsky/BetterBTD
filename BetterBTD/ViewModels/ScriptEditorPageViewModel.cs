@@ -2,7 +2,10 @@ using System.Collections;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
+using System.Windows;
 using BetterBTD.Helpers;
 using BetterBTD.Models;
 using BetterBTD.Models.GameElements;
@@ -11,18 +14,29 @@ using BetterBTD.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using GongSolutions.Wpf.DragDrop;
+using Microsoft.Win32;
 using Wpf.Ui.Violeta.Controls;
 
 namespace BetterBTD.ViewModels;
 
 public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
 {
+    private const string ScriptFileExtension = ".btd";
+    private const string ScriptFileDialogFilter = "BetterBTD Script (*.btd)|*.btd|JSON File (*.json)|*.json|All Files (*.*)|*.*";
+
     private readonly LocalizationService _localizationService;
+    private readonly ScriptDocumentService _scriptDocumentService;
     private readonly List<ScriptInstructionInstance> _clipboardSequenceInstructions = [];
     private readonly Stack<List<ScriptInstructionInstance>> _undoHistory = [];
     private readonly Stack<List<ScriptInstructionInstance>> _redoHistory = [];
+    private readonly string _emptyWorkspaceSnapshot;
 
     private string _scriptText = string.Empty;
+    private string _scriptVersion = ScriptDocumentFormat.DefaultScriptVersion;
+    private string _scriptCategory = ScriptDocumentCategories.Collection;
+    private string _scriptName = string.Empty;
+    private string _scriptDescription = string.Empty;
+    private string _currentScriptFilePath = string.Empty;
     private GameMapType _selectedMap = GameMapType.MonkeyMeadow;
     private LanguageOption? _selectedDifficultyOption;
     private LanguageOption? _selectedModeOption;
@@ -33,11 +47,13 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     private bool _suppressHistoryTracking;
     private bool _isUpdatingSequenceInternals;
     private bool _pendingMonkeyObjectOptionsRebuild;
+    private string _persistedWorkspaceSnapshot = string.Empty;
     private List<ScriptInstructionInstance> _sequenceSnapshot = [];
 
     public ScriptEditorPageViewModel(LocalizationService localizationService)
     {
         _localizationService = localizationService;
+        _scriptDocumentService = ScriptDocumentService.Instance;
         _localizationService.LanguageChanged += (_, _) =>
         {
             BuildMetadataOptions();
@@ -55,6 +71,10 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         PasteSequenceInstructionsCommand = new RelayCommand<IList?>(PasteSequenceInstructions, CanPasteSequenceInstructions);
         UndoSequenceCommand = new RelayCommand(UndoSequence, CanUndoSequence);
         RedoSequenceCommand = new RelayCommand(RedoSequence, CanRedoSequence);
+        OpenScriptFileCommand = new RelayCommand(OpenScriptFile);
+        SaveScriptFileCommand = new RelayCommand(SaveScriptFile);
+        SaveScriptFileAsCommand = new RelayCommand(SaveScriptFileAs);
+        CreateNewScriptFileCommand = new RelayCommand(CreateNewScriptFile);
 
         BuildMetadataOptions();
         BuildInstructionLibrary();
@@ -62,6 +82,8 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         UpdateInstructionLocalization();
         RebuildMonkeyObjectOptions();
         _sequenceSnapshot = CaptureSequenceSnapshot();
+        _emptyWorkspaceSnapshot = CaptureWorkspaceSnapshot();
+        MarkWorkspaceAsPersisted();
         RefreshHistoryCommandState();
     }
 
@@ -74,6 +96,10 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public IRelayCommand<IList?> PasteSequenceInstructionsCommand { get; }
     public IRelayCommand UndoSequenceCommand { get; }
     public IRelayCommand RedoSequenceCommand { get; }
+    public IRelayCommand OpenScriptFileCommand { get; }
+    public IRelayCommand SaveScriptFileCommand { get; }
+    public IRelayCommand SaveScriptFileAsCommand { get; }
+    public IRelayCommand CreateNewScriptFileCommand { get; }
 
     public ObservableCollection<LanguageOption> DifficultyOptions { get; } = [];
     public ObservableCollection<LanguageOption> ModeOptions { get; } = [];
@@ -101,6 +127,44 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     {
         get => _scriptText;
         set => SetProperty(ref _scriptText, value);
+    }
+
+    public string ScriptVersion
+    {
+        get => _scriptVersion;
+        set => SetProperty(ref _scriptVersion, NormalizeScriptVersion(value));
+    }
+
+    public string ScriptCategory
+    {
+        get => _scriptCategory;
+        set => SetProperty(ref _scriptCategory, ScriptDocumentCategories.Normalize(value));
+    }
+
+    public string ScriptName
+    {
+        get => _scriptName;
+        set => SetProperty(ref _scriptName, value?.Trim() ?? string.Empty);
+    }
+
+    public string ScriptDescription
+    {
+        get => _scriptDescription;
+        set => SetProperty(ref _scriptDescription, value?.Trim() ?? string.Empty);
+    }
+
+    public string CurrentScriptFilePath
+    {
+        get => _currentScriptFilePath;
+        private set
+        {
+            if (!SetProperty(ref _currentScriptFilePath, value?.Trim() ?? string.Empty))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(CurrentFileText));
+        }
     }
 
     public GameMapType SelectedMap
@@ -168,7 +232,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public string FileSaveAsText => _localizationService.T("Editor.File.SaveAs");
     public string FileNewText => _localizationService.T("Editor.File.New");
     public string FileCloseText => _localizationService.T("Editor.File.Close");
-    public string CurrentFileText => _localizationService.T("Editor.File.Current");
+    public string CurrentFileText => BuildCurrentFileText();
 
     public string MetadataMapText => _localizationService.T("Editor.Metadata.Map");
     public string MetadataDifficultyText => _localizationService.T("Editor.Metadata.Difficulty");
@@ -219,6 +283,269 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public string DeleteSelectedInstructionText => _localizationService.T("Editor.Command.DeleteSelected");
     public string CopySelectedInstructionText => _localizationService.T("Editor.Command.CopySelected");
     public string PasteInstructionText => _localizationService.T("Editor.Command.Paste");
+
+    public ScriptDocument ExportScriptDocument()
+    {
+        return new ScriptDocument
+        {
+            Metadata = new ScriptMetadataDocument
+            {
+                ScriptVersion = NormalizeScriptVersion(ScriptVersion),
+                Category = ScriptDocumentCategories.Normalize(ScriptCategory),
+                Name = ScriptName,
+                Description = ScriptDescription,
+                Map = SelectedMap.ToString(),
+                Difficulty = SelectedDifficultyOption?.Code ?? StageDifficulty.Medium.ToString(),
+                Mode = SelectedModeOption?.Code ?? StageMode.Standard.ToString(),
+                Hero = SelectedHeroOption?.Code ?? HeroType.Quincy.ToString()
+            },
+            MonkeyObjects = BuildMonkeyObjectDocuments(),
+            Instructions = BuildInstructionDocuments()
+        };
+    }
+
+    public void ImportScriptDocument(ScriptDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        ApplyScriptMetadata(document.Metadata);
+
+        var monkeyObjectsByBindingId = document.MonkeyObjects
+            .Where(x => !string.IsNullOrWhiteSpace(x.BindingId))
+            .GroupBy(x => x.BindingId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+        var instructions = document.Instructions
+            .Select(x => CreateInstructionInstanceFromDocument(x, monkeyObjectsByBindingId))
+            .ToList();
+
+        ReplaceSequenceWithInstructions(instructions);
+        MarkWorkspaceAsPersisted();
+    }
+
+    public void SaveScriptDocument(string filePath)
+    {
+        _scriptDocumentService.Save(filePath, ExportScriptDocument());
+        CurrentScriptFilePath = filePath;
+        MarkWorkspaceAsPersisted();
+    }
+
+    public void LoadScriptDocument(string filePath)
+    {
+        var document = _scriptDocumentService.Load(filePath);
+        ImportScriptDocument(document);
+        CurrentScriptFilePath = filePath;
+    }
+
+    public void CreateNewScriptDocument()
+    {
+        ApplyScriptMetadata(new ScriptMetadataDocument());
+        ReplaceSequenceWithInstructions([]);
+        _clipboardSequenceInstructions.Clear();
+        CurrentScriptFilePath = string.Empty;
+        MarkWorkspaceAsPersisted();
+    }
+
+    private string BuildCurrentFileText()
+    {
+        var currentText = _localizationService.T("Editor.File.Current");
+        if (string.IsNullOrWhiteSpace(CurrentScriptFilePath))
+        {
+            return currentText;
+        }
+
+        var displayName = string.IsNullOrWhiteSpace(CurrentScriptFilePath)
+            ? BuildUntitledFileName()
+            : Path.GetFileName(CurrentScriptFilePath);
+
+        var separatorIndex = currentText.IndexOf('：');
+        if (separatorIndex >= 0)
+        {
+            return $"{currentText[..(separatorIndex + 1)]} {displayName}";
+        }
+
+        separatorIndex = currentText.IndexOf(':');
+        if (separatorIndex >= 0)
+        {
+            return $"{currentText[..(separatorIndex + 1)]} {displayName}";
+        }
+
+        return $"{currentText} {displayName}";
+    }
+
+    private static string BuildUntitledFileName()
+    {
+        return $"Untitled Script{ScriptFileExtension}";
+    }
+
+    private void MarkWorkspaceAsPersisted()
+    {
+        _persistedWorkspaceSnapshot = CaptureWorkspaceSnapshot();
+    }
+
+    private string CaptureWorkspaceSnapshot()
+    {
+        return JsonSerializer.Serialize(ExportScriptDocument());
+    }
+
+    private bool HasUnsavedChanges()
+    {
+        return !string.Equals(CaptureWorkspaceSnapshot(), _persistedWorkspaceSnapshot, StringComparison.Ordinal);
+    }
+
+    private bool IsWorkspaceEmpty()
+    {
+        return string.Equals(CaptureWorkspaceSnapshot(), _emptyWorkspaceSnapshot, StringComparison.Ordinal);
+    }
+
+    private bool ShouldPromptForUnsavedChanges()
+    {
+        return !IsWorkspaceEmpty() && HasUnsavedChanges();
+    }
+
+    private bool ConfirmUnsavedChanges(string promptKey)
+    {
+        if (!ShouldPromptForUnsavedChanges())
+        {
+            return true;
+        }
+
+        var result = System.Windows.MessageBox.Show(
+            _localizationService.T(promptKey),
+            _localizationService.T("Editor.File.UnsavedChanges.Title"),
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Warning);
+
+        return result switch
+        {
+            MessageBoxResult.Yes => TrySaveScriptFile(),
+            MessageBoxResult.No => true,
+            _ => false
+        };
+    }
+
+    private void OpenScriptFile()
+    {
+        if (!ConfirmUnsavedChanges("Editor.File.UnsavedChanges.OpenPrompt"))
+        {
+            return;
+        }
+
+        var dialog = new OpenFileDialog
+        {
+            Filter = ScriptFileDialogFilter,
+            DefaultExt = ScriptFileExtension,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            LoadScriptDocument(dialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                string.Format(_localizationService.T("Editor.File.OpenError.Message"), ex.Message),
+                _localizationService.T("Editor.File.OpenError.Title"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void SaveScriptFile()
+    {
+        _ = TrySaveScriptFile();
+    }
+
+    private void SaveScriptFileAs()
+    {
+        _ = TrySaveScriptFileAs();
+    }
+
+    private bool TrySaveScriptFile()
+    {
+        if (string.IsNullOrWhiteSpace(CurrentScriptFilePath))
+        {
+            return TrySaveScriptFileAs();
+        }
+
+        try
+        {
+            SaveScriptDocument(CurrentScriptFilePath);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ShowSaveError(ex);
+            return false;
+        }
+    }
+
+    private bool TrySaveScriptFileAs()
+    {
+        var dialog = new SaveFileDialog
+        {
+            Filter = ScriptFileDialogFilter,
+            DefaultExt = ScriptFileExtension,
+            AddExtension = true,
+            FileName = BuildDefaultSaveFileName()
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return false;
+        }
+
+        try
+        {
+            SaveScriptDocument(dialog.FileName);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ShowSaveError(ex);
+            return false;
+        }
+    }
+
+    private void CreateNewScriptFile()
+    {
+        if (!ConfirmUnsavedChanges("Editor.File.UnsavedChanges.NewPrompt"))
+        {
+            return;
+        }
+
+        CreateNewScriptDocument();
+    }
+
+    private void ShowSaveError(Exception ex)
+    {
+        System.Windows.MessageBox.Show(
+            string.Format(_localizationService.T("Editor.File.SaveError.Message"), ex.Message),
+            _localizationService.T("Editor.File.SaveError.Title"),
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
+    }
+
+    private string BuildDefaultSaveFileName()
+    {
+        if (!string.IsNullOrWhiteSpace(CurrentScriptFilePath))
+        {
+            return Path.GetFileName(CurrentScriptFilePath);
+        }
+
+        var baseName = string.IsNullOrWhiteSpace(ScriptName) ? "Untitled Script" : ScriptName;
+        foreach (var invalidChar in Path.GetInvalidFileNameChars())
+        {
+            baseName = baseName.Replace(invalidChar, '_');
+        }
+
+        return $"{baseName}{ScriptFileExtension}";
+    }
 
     public void DragOver(IDropInfo dropInfo)
     {
@@ -632,6 +959,11 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         return Enum.TryParse<ActivatedAbilityType>(value, out _);
     }
 
+    private static string NormalizeScriptVersion(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? ScriptDocumentFormat.DefaultScriptVersion : value.Trim();
+    }
+
     private static string NormalizePlaceSelectionCode(string? selectionCode)
     {
         if (string.IsNullOrWhiteSpace(selectionCode))
@@ -836,6 +1168,221 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
 
         UpdateInstructionDisplayName(instruction);
         return instruction;
+    }
+
+    private List<ScriptMonkeyObjectDocument> BuildMonkeyObjectDocuments()
+    {
+        var documents = new List<ScriptMonkeyObjectDocument>();
+        var placementOrder = 0;
+
+        foreach (var instruction in InstructionSequence.Where(x => x.Type == ScriptCommandType.PlaceMonkey))
+        {
+            placementOrder++;
+            documents.Add(new ScriptMonkeyObjectDocument
+            {
+                BindingId = instruction.MonkeyBindingId,
+                ObjectId = instruction.MonkeyObjectId,
+                SelectionCode = NormalizePlaceSelectionCode(instruction.SelectedMonkeyTower),
+                PlacementOrder = placementOrder
+            });
+        }
+
+        return documents;
+    }
+
+    private List<ScriptInstructionDocument> BuildInstructionDocuments()
+    {
+        return InstructionSequence.Select(instruction => new ScriptInstructionDocument
+        {
+            CommandType = instruction.Type.ToString(),
+            SelectedMonkeyTower = NormalizePlaceSelectionCode(instruction.SelectedMonkeyTower),
+            MonkeyBindingId = instruction.MonkeyBindingId,
+            MonkeyObjectId = instruction.MonkeyObjectId,
+            TargetMonkeyBindingId = instruction.TargetMonkeyBindingId,
+            TargetMonkeyObjectId = instruction.TargetMonkeyObjectId,
+            SelectedInventoryItem = instruction.SelectedInventoryItem,
+            SelectedActivatedAbility = instruction.SelectedActivatedAbility,
+            NextRoundAction = instruction.NextRoundAction,
+            WaitMode = instruction.WaitMode,
+            NextRoundSendCount = instruction.NextRoundSendCount,
+            WaitTimeMilliseconds = instruction.WaitTimeMilliseconds,
+            WaitGoldAmount = instruction.WaitGoldAmount,
+            WaitRoundCount = instruction.WaitRoundCount,
+            PositionX = instruction.PositionX,
+            PositionY = instruction.PositionY,
+            WaitColorCoordinateX = instruction.WaitColorCoordinateX,
+            WaitColorCoordinateY = instruction.WaitColorCoordinateY,
+            UpgradePath = instruction.UpgradePath.ToString(),
+            UpgradeCount = instruction.UpgradeCount,
+            SwitchDirection = instruction.SwitchDirection.ToString(),
+            SwitchCount = instruction.SwitchCount,
+            SelectedAbility = instruction.SelectedAbility.ToString(),
+            RequiresAbilityCoordinate = instruction.RequiresAbilityCoordinate,
+            AbilityCoordinateX = instruction.AbilityCoordinateX,
+            AbilityCoordinateY = instruction.AbilityCoordinateY,
+            WaitColorHex = instruction.WaitColorHex,
+            WaitColorTolerance = instruction.WaitColorTolerance,
+            CommentContent = instruction.CommentContent,
+            IntervalToNextInstructionMs = instruction.IntervalToNextInstructionMs,
+            Notes = instruction.Notes
+        }).ToList();
+    }
+
+    private void ApplyScriptMetadata(ScriptMetadataDocument? metadata)
+    {
+        metadata ??= new ScriptMetadataDocument();
+
+        ScriptVersion = NormalizeScriptVersion(metadata.ScriptVersion);
+        ScriptCategory = ScriptDocumentCategories.Normalize(metadata.Category);
+        ScriptName = metadata.Name;
+        ScriptDescription = metadata.Description;
+
+        SelectedMap = Enum.TryParse<GameMapType>(metadata.Map, true, out var map)
+            ? map
+            : GameMapType.MonkeyMeadow;
+
+        var difficultyCode = Enum.TryParse<StageDifficulty>(metadata.Difficulty, true, out var difficulty)
+            ? difficulty.ToString()
+            : StageDifficulty.Medium.ToString();
+        var modeCode = Enum.TryParse<StageMode>(metadata.Mode, true, out var mode)
+            ? mode.ToString()
+            : StageMode.Standard.ToString();
+        var heroCode = Enum.TryParse<HeroType>(metadata.Hero, true, out var hero)
+            ? hero.ToString()
+            : HeroType.Quincy.ToString();
+
+        SelectedDifficultyOption = DifficultyOptions.FirstOrDefault(x => string.Equals(x.Code, difficultyCode, StringComparison.OrdinalIgnoreCase))
+                                   ?? DifficultyOptions.FirstOrDefault();
+        SelectedModeOption = ModeOptions.FirstOrDefault(x => string.Equals(x.Code, modeCode, StringComparison.OrdinalIgnoreCase))
+                             ?? ModeOptions.FirstOrDefault();
+        SelectedHeroOption = HeroOptions.FirstOrDefault(x => string.Equals(x.Code, heroCode, StringComparison.OrdinalIgnoreCase))
+                             ?? HeroOptions.FirstOrDefault();
+    }
+
+    private ScriptInstructionInstance CreateInstructionInstanceFromDocument(
+        ScriptInstructionDocument document,
+        IReadOnlyDictionary<string, ScriptMonkeyObjectDocument> monkeyObjectsByBindingId)
+    {
+        if (!Enum.TryParse<ScriptCommandType>(document.CommandType, true, out var commandType))
+        {
+            throw new InvalidDataException($"Unsupported script command type '{document.CommandType}'.");
+        }
+
+        var template = InstructionLibrary.FirstOrDefault(x => x.Type == commandType)
+                       ?? throw new InvalidDataException($"Missing instruction template for '{commandType}'.");
+        var instruction = CreateInstructionInstance(template);
+        var placeMonkeySnapshot = ResolveMonkeyObjectSnapshot(document.MonkeyBindingId, monkeyObjectsByBindingId);
+
+        instruction.SelectedMonkeyTower = ResolveDocumentPlaceSelectionCode(document, placeMonkeySnapshot);
+        instruction.MonkeyBindingId = document.MonkeyBindingId;
+        instruction.MonkeyObjectId = ResolveDocumentMonkeyObjectId(document, placeMonkeySnapshot);
+        instruction.TargetMonkeyBindingId = document.TargetMonkeyBindingId;
+        instruction.TargetMonkeyObjectId = document.TargetMonkeyObjectId;
+        if (!string.IsNullOrWhiteSpace(document.SelectedInventoryItem))
+        {
+            instruction.SelectedInventoryItem = document.SelectedInventoryItem;
+        }
+
+        if (!string.IsNullOrWhiteSpace(document.SelectedActivatedAbility))
+        {
+            instruction.SelectedActivatedAbility = document.SelectedActivatedAbility;
+        }
+
+        instruction.NextRoundAction = string.IsNullOrWhiteSpace(document.NextRoundAction)
+            ? instruction.NextRoundAction
+            : document.NextRoundAction;
+        instruction.WaitMode = string.IsNullOrWhiteSpace(document.WaitMode)
+            ? instruction.WaitMode
+            : document.WaitMode;
+        instruction.NextRoundSendCount = document.NextRoundSendCount <= 0 ? instruction.NextRoundSendCount : document.NextRoundSendCount;
+        instruction.WaitTimeMilliseconds = document.WaitTimeMilliseconds < 0 ? instruction.WaitTimeMilliseconds : document.WaitTimeMilliseconds;
+        instruction.WaitGoldAmount = document.WaitGoldAmount;
+        instruction.WaitRoundCount = document.WaitRoundCount <= 0 ? instruction.WaitRoundCount : document.WaitRoundCount;
+        instruction.PositionX = document.PositionX;
+        instruction.PositionY = document.PositionY;
+        instruction.WaitColorCoordinateX = document.WaitColorCoordinateX;
+        instruction.WaitColorCoordinateY = document.WaitColorCoordinateY;
+        instruction.UpgradePath = Enum.TryParse<UpgradePathType>(document.UpgradePath, true, out var upgradePath)
+            ? upgradePath
+            : instruction.UpgradePath;
+        instruction.UpgradeCount = document.UpgradeCount <= 0 ? instruction.UpgradeCount : document.UpgradeCount;
+        instruction.SwitchDirection = Enum.TryParse<SwitchDirectionType>(document.SwitchDirection, true, out var switchDirection)
+            ? switchDirection
+            : instruction.SwitchDirection;
+        instruction.SwitchCount = document.SwitchCount <= 0 ? instruction.SwitchCount : document.SwitchCount;
+        instruction.SelectedAbility = Enum.TryParse<MonkeyAbilityType>(document.SelectedAbility, true, out var ability)
+            ? ability
+            : instruction.SelectedAbility;
+        instruction.RequiresAbilityCoordinate = document.RequiresAbilityCoordinate;
+        instruction.AbilityCoordinateX = document.AbilityCoordinateX;
+        instruction.AbilityCoordinateY = document.AbilityCoordinateY;
+        instruction.WaitColorHex = string.IsNullOrWhiteSpace(document.WaitColorHex) ? instruction.WaitColorHex : document.WaitColorHex;
+        instruction.WaitColorTolerance = document.WaitColorTolerance;
+        instruction.CommentContent = document.CommentContent;
+        instruction.IntervalToNextInstructionMs = document.IntervalToNextInstructionMs;
+        instruction.Notes = document.Notes;
+
+        UpdateInstructionDisplayName(instruction);
+        return instruction;
+    }
+
+    private void ReplaceSequenceWithInstructions(IEnumerable<ScriptInstructionInstance> instructions)
+    {
+        ArgumentNullException.ThrowIfNull(instructions);
+
+        _undoHistory.Clear();
+        _redoHistory.Clear();
+        _suppressHistoryTracking = true;
+        _pendingMonkeyObjectOptionsRebuild = false;
+        try
+        {
+            InstructionSequence.Clear();
+            foreach (var instruction in instructions)
+            {
+                InstructionSequence.Add(instruction);
+            }
+
+            SelectedSequenceInstruction = InstructionSequence.FirstOrDefault();
+        }
+        finally
+        {
+            _suppressHistoryTracking = false;
+            FlushPendingMonkeyObjectOptionsRebuild();
+        }
+
+        _sequenceSnapshot = CaptureSequenceSnapshot();
+        RefreshHistoryCommandState();
+    }
+
+    private static ScriptMonkeyObjectDocument? ResolveMonkeyObjectSnapshot(
+        string bindingId,
+        IReadOnlyDictionary<string, ScriptMonkeyObjectDocument> monkeyObjectsByBindingId)
+    {
+        return string.IsNullOrWhiteSpace(bindingId)
+            ? null
+            : monkeyObjectsByBindingId.GetValueOrDefault(bindingId);
+    }
+
+    private static string ResolveDocumentPlaceSelectionCode(
+        ScriptInstructionDocument document,
+        ScriptMonkeyObjectDocument? monkeyObject)
+    {
+        var selectionCode = string.IsNullOrWhiteSpace(document.SelectedMonkeyTower)
+            ? monkeyObject?.SelectionCode
+            : document.SelectedMonkeyTower;
+        return NormalizePlaceSelectionCode(selectionCode);
+    }
+
+    private static string ResolveDocumentMonkeyObjectId(
+        ScriptInstructionDocument document,
+        ScriptMonkeyObjectDocument? monkeyObject)
+    {
+        if (!string.IsNullOrWhiteSpace(document.MonkeyObjectId))
+        {
+            return document.MonkeyObjectId;
+        }
+
+        return monkeyObject?.ObjectId ?? string.Empty;
     }
 
     private static IReadOnlyList<ScriptInstructionTemplate> TryGetTemplates(object? data)
