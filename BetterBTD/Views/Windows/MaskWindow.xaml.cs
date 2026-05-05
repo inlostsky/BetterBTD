@@ -30,7 +30,7 @@ public partial class MaskWindow : Window
 
     public void ShowOverlay(NativeWindowBounds bounds, double scaleFactor, string targetWindowTitle)
     {
-        UpdateLayout(bounds, scaleFactor, targetWindowTitle);
+        UpdateLayout(bounds, scaleFactor);
         OverlaySurface.ScaleFactor = scaleFactor;
 
         if (!IsVisible)
@@ -49,7 +49,7 @@ public partial class MaskWindow : Window
         }
     }
 
-    private void UpdateLayout(NativeWindowBounds bounds, double scaleFactor, string targetWindowTitle)
+    private void UpdateLayout(NativeWindowBounds bounds, double scaleFactor)
     {
         var safeScaleFactor = scaleFactor <= 0 ? 1d : scaleFactor;
 
@@ -57,7 +57,6 @@ public partial class MaskWindow : Window
         Top = bounds.Top / safeScaleFactor;
         Width = bounds.Width / safeScaleFactor;
         Height = bounds.Height / safeScaleFactor;
-        StatusTextBlock.Text = $"Tracking {targetWindowTitle} ({bounds.Width}x{bounds.Height})";
     }
 
     public Guid RegisterRectangle(Rect bounds, Color strokeColor, double strokeThickness = 2, Color? fillColor = null, double cornerRadius = 0)

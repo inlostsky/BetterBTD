@@ -6,6 +6,8 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Threading;
 using BetterBTD.Helpers;
 using BetterBTD.Models;
 using BetterBTD.Models.GameElements;
@@ -31,9 +33,14 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
 
     private const string ScriptFileExtension = ".btd";
     private const string ScriptFileDialogFilter = "BetterBTD Script (*.btd)|*.btd|JSON File (*.json)|*.json|All Files (*.*)|*.*";
+    private static readonly Color CoordinateSelectionActiveColor = Color.FromRgb(87, 242, 135);
+    private static readonly Color CoordinateSelectionInactiveColor = Color.FromRgb(255, 176, 64);
+    private static readonly Color CoordinateSelectionLabelBackgroundColor = Color.FromArgb(220, 16, 24, 39);
 
     private readonly LocalizationService _localizationService;
     private readonly AppDialogService _appDialogService;
+    private readonly MaskWindowService _maskWindowService;
+    private readonly CoordinateTransformService _coordinateTransformService;
     private readonly ScriptDocumentService _scriptDocumentService;
     private readonly ScriptEditorInstructionService _scriptEditorInstructionService;
     private readonly ScriptEditorSequenceService _scriptEditorSequenceService;
@@ -41,6 +48,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     private readonly List<ScriptInstructionInstance> _clipboardSequenceInstructions = [];
     private readonly Stack<List<ScriptInstructionInstance>> _undoHistory = [];
     private readonly Stack<List<ScriptInstructionInstance>> _redoHistory = [];
+    private readonly DispatcherTimer _coordinateSelectionTimer;
     private readonly string _emptyWorkspaceSnapshot;
 
     private string _scriptText = string.Empty;
@@ -61,6 +69,8 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     private bool _pendingMonkeyObjectOptionsRebuild;
     private CoordinateSelectionTarget _activeCoordinateSelectionTarget;
     private ScriptInstructionInstance? _activeCoordinateSelectionInstruction;
+    private Guid? _coordinateSelectionAnchorId;
+    private bool _wasRightMouseButtonDown;
     private string _persistedWorkspaceSnapshot = string.Empty;
     private List<ScriptInstructionInstance> _sequenceSnapshot = [];
 
@@ -68,10 +78,17 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     {
         _localizationService = localizationService;
         _appDialogService = AppDialogService.Instance;
+        _maskWindowService = MaskWindowService.Instance;
+        _coordinateTransformService = CoordinateTransformService.Instance;
         _scriptDocumentService = ScriptDocumentService.Instance;
         _scriptEditorInstructionService = ScriptEditorInstructionService.Instance;
         _scriptEditorSequenceService = ScriptEditorSequenceService.Instance;
         _scriptEditorOptionService = ScriptEditorOptionService.Instance;
+        _coordinateSelectionTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(33)
+        };
+        _coordinateSelectionTimer.Tick += OnCoordinateSelectionTimerTick;
         _localizationService.LanguageChanged += (_, _) =>
         {
             BuildMetadataOptions();
@@ -1231,9 +1248,17 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
             return;
         }
 
+        if (!CanContinueCoordinateSelection(SelectedSequenceInstruction, selectionTarget))
+        {
+            return;
+        }
+
         _activeCoordinateSelectionInstruction = SelectedSequenceInstruction;
         _activeCoordinateSelectionTarget = selectionTarget;
+        _wasRightMouseButtonDown = NativeWindowHelper.IsRightMouseButtonDown();
         RaiseCoordinateSelectionStateProperties();
+        UpdateCoordinateSelectionPreview();
+        _coordinateSelectionTimer.Start();
     }
 
     private void CancelCoordinateSelection()
@@ -1243,6 +1268,9 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
             return;
         }
 
+        _coordinateSelectionTimer.Stop();
+        _wasRightMouseButtonDown = false;
+        ClearCoordinateSelectionPreview();
         _activeCoordinateSelectionInstruction = null;
         _activeCoordinateSelectionTarget = CoordinateSelectionTarget.None;
         RaiseCoordinateSelectionStateProperties();
@@ -1271,6 +1299,138 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         OnPropertyChanged(nameof(IsPositionCoordinateSelectionActive));
         OnPropertyChanged(nameof(IsAbilityCoordinateSelectionActive));
         OnPropertyChanged(nameof(IsWaitColorCoordinateSelectionActive));
+    }
+
+    private void OnCoordinateSelectionTimerTick(object? sender, EventArgs e)
+    {
+        UpdateCoordinateSelectionPreview();
+    }
+
+    private void UpdateCoordinateSelectionPreview()
+    {
+        if (_activeCoordinateSelectionInstruction is null ||
+            _activeCoordinateSelectionTarget == CoordinateSelectionTarget.None)
+        {
+            _coordinateSelectionTimer.Stop();
+            ClearCoordinateSelectionPreview();
+            return;
+        }
+
+        if (!CanContinueCoordinateSelection(_activeCoordinateSelectionInstruction, _activeCoordinateSelectionTarget))
+        {
+            CancelCoordinateSelection();
+            return;
+        }
+
+        if (!_maskWindowService.TryShowTargetOverlay(out var windowInfo))
+        {
+            return;
+        }
+
+        if (!NativeWindowHelper.TryGetCursorPosition(out var cursorPosition))
+        {
+            return;
+        }
+
+        var clientRelativePoint = windowInfo.ScreenToClient(cursorPosition);
+        var scriptRelativePoint = _coordinateTransformService.ToScriptCoordinate(clientRelativePoint, windowInfo);
+        var isInsideClientArea = windowInfo.ClientBounds.Contains(cursorPosition);
+
+        UpdateCoordinateSelectionAnchor(windowInfo, clientRelativePoint, scriptRelativePoint, isInsideClientArea);
+
+        var isRightMouseButtonDown = NativeWindowHelper.IsRightMouseButtonDown();
+        if (isRightMouseButtonDown && !_wasRightMouseButtonDown && isInsideClientArea)
+        {
+            CompleteCoordinateSelection(scriptRelativePoint.X, scriptRelativePoint.Y);
+            return;
+        }
+
+        _wasRightMouseButtonDown = isRightMouseButtonDown;
+    }
+
+    private void UpdateCoordinateSelectionAnchor(GameWindowInfo windowInfo, Point clientRelativePoint, Point scriptRelativePoint, bool isInsideTargetWindow)
+    {
+        var strokeColor = isInsideTargetWindow ? CoordinateSelectionActiveColor : CoordinateSelectionInactiveColor;
+        var labelOffsetX = clientRelativePoint.X > windowInfo.ClientWidth - 180 ? -158d : 14d;
+        var labelOffsetY = clientRelativePoint.Y < 52 ? 14d : -46d;
+        var label = string.Format(
+            _localizationService.T("Editor.Property.CoordinateSelectionLabel"),
+            scriptRelativePoint.X.ToString("0.##"),
+            scriptRelativePoint.Y.ToString("0.##"),
+            clientRelativePoint.X.ToString("0.##"),
+            clientRelativePoint.Y.ToString("0.##"));
+        if (_coordinateSelectionAnchorId is null)
+        {
+            _coordinateSelectionAnchorId = _maskWindowService.RegisterAnchor(
+                clientRelativePoint,
+                strokeColor,
+                strokeThickness: 2,
+                crosshairLength: 12,
+                gapRadius: 5,
+                ringRadius: 16,
+                label: label,
+                labelForegroundColor: Colors.White,
+                labelBackgroundColor: CoordinateSelectionLabelBackgroundColor);
+        }
+
+        _ = _maskWindowService.UpdateAnchor(_coordinateSelectionAnchorId.Value, anchor =>
+        {
+            anchor.Center = clientRelativePoint;
+            anchor.StrokeColor = strokeColor;
+            anchor.Label = label;
+            anchor.LabelFontSize = 14;
+            anchor.LabelForegroundColor = Colors.White;
+            anchor.LabelBackgroundColor = CoordinateSelectionLabelBackgroundColor;
+            anchor.LabelOffsetX = labelOffsetX;
+            anchor.LabelOffsetY = labelOffsetY;
+            anchor.LabelPadding = new Thickness(8, 5, 8, 5);
+            anchor.RingRadius = 16;
+            anchor.CrosshairLength = 12;
+            anchor.GapRadius = 5;
+        });
+    }
+
+    private void CompleteCoordinateSelection(double x, double y)
+    {
+        var instruction = _activeCoordinateSelectionInstruction;
+        var selectionTarget = _activeCoordinateSelectionTarget;
+        if (instruction is null || selectionTarget == CoordinateSelectionTarget.None)
+        {
+            CancelCoordinateSelection();
+            return;
+        }
+
+        ExecuteTrackedSequenceMutation(() =>
+        {
+            switch (selectionTarget)
+            {
+                case CoordinateSelectionTarget.Position:
+                    instruction.PositionX = x;
+                    instruction.PositionY = y;
+                    break;
+                case CoordinateSelectionTarget.Ability:
+                    instruction.AbilityCoordinateX = x;
+                    instruction.AbilityCoordinateY = y;
+                    break;
+                case CoordinateSelectionTarget.WaitColor:
+                    instruction.WaitColorCoordinateX = x;
+                    instruction.WaitColorCoordinateY = y;
+                    break;
+            }
+        });
+
+        CancelCoordinateSelection();
+    }
+
+    private void ClearCoordinateSelectionPreview()
+    {
+        if (_coordinateSelectionAnchorId is not { } anchorId)
+        {
+            return;
+        }
+
+        _ = _maskWindowService.RemoveElement(anchorId);
+        _coordinateSelectionAnchorId = null;
     }
 
     private void BuildScriptParameterOptions()

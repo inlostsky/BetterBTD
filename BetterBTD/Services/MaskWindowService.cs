@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Threading;
 using BetterBTD.Helpers;
+using BetterBTD.Models;
 using BetterBTD.Views.Windows;
 using BetterBTD.Views.Windows.Overlay;
 using System.Windows.Media;
@@ -12,6 +13,7 @@ public sealed class MaskWindowService
 {
     private static readonly Lazy<MaskWindowService> InstanceHolder = new(() => new MaskWindowService());
     private readonly TimeSpan _pollInterval = TimeSpan.FromMilliseconds(250);
+    private readonly GameWindowInfoService _gameWindowInfoService;
 
     private DispatcherTimer? _pollingTimer;
     private MaskWindow? _maskWindow;
@@ -19,6 +21,7 @@ public sealed class MaskWindowService
 
     private MaskWindowService()
     {
+        _gameWindowInfoService = GameWindowInfoService.Instance;
     }
 
     public static MaskWindowService Instance => InstanceHolder.Value;
@@ -27,7 +30,7 @@ public sealed class MaskWindowService
 
     public bool IsRunning => _isRunning;
 
-    public string TargetWindowTitle => ConfigurationService.Instance.Current.MaskWindowTargetTitle;
+    public string TargetWindowTitle => _gameWindowInfoService.TargetWindowTitle;
 
     public void Start()
     {
@@ -103,6 +106,21 @@ public sealed class MaskWindowService
     public void RefreshNow()
     {
         ExecuteOnUiThread(UpdateOverlayWindow);
+    }
+
+    public bool TryShowTargetOverlay(out NativeWindowBounds bounds, out double scaleFactor)
+    {
+        var result = ExecuteOnUiThread(TryShowTargetOverlayCore);
+        bounds = result.Bounds;
+        scaleFactor = result.ScaleFactor;
+        return result.Success;
+    }
+
+    public bool TryShowTargetOverlay(out GameWindowInfo windowInfo)
+    {
+        var result = ExecuteOnUiThread(TryShowTargetOverlayWindowCore);
+        windowInfo = result.WindowInfo;
+        return result.Success;
     }
 
     public Guid RegisterRectangle(Rect bounds, Color strokeColor, double strokeThickness = 2, Color? fillColor = null, double cornerRadius = 0)
@@ -236,22 +254,34 @@ public sealed class MaskWindowService
             return;
         }
 
-        var targetHandle = NativeWindowHelper.FindTopLevelWindow(TargetWindowTitle);
-        if (targetHandle == nint.Zero || !NativeWindowHelper.TryGetWindowBounds(targetHandle, out var bounds))
-        {
-            _maskWindow?.HideOverlay();
-            return;
-        }
-
-        _maskWindow ??= new MaskWindow();
-        var scaleFactor = NativeWindowHelper.GetWindowScaleFactor(targetHandle);
-        _maskWindow.ShowOverlay(bounds, scaleFactor, TargetWindowTitle);
+        _ = TryShowTargetOverlayWindowCore();
     }
 
     private MaskWindow EnsureMaskWindow()
     {
         _maskWindow ??= new MaskWindow();
         return _maskWindow;
+    }
+
+    private (bool Success, NativeWindowBounds Bounds, double ScaleFactor) TryShowTargetOverlayCore()
+    {
+        var result = TryShowTargetOverlayWindowCore();
+        return result.Success
+            ? (true, result.WindowInfo.ClientBounds, result.WindowInfo.ScaleFactor)
+            : (false, default, 1d);
+    }
+
+    private (bool Success, GameWindowInfo WindowInfo) TryShowTargetOverlayWindowCore()
+    {
+        if (!_gameWindowInfoService.TryGetTargetWindowInfo(out var windowInfo))
+        {
+            _maskWindow?.HideOverlay();
+            return (false, default);
+        }
+
+        _maskWindow ??= new MaskWindow();
+        _maskWindow.ShowOverlay(windowInfo.ClientBounds, windowInfo.ScaleFactor, windowInfo.Title);
+        return (true, windowInfo);
     }
 
     private static void ExecuteOnUiThread(Action action)
