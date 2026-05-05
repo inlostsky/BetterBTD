@@ -649,7 +649,8 @@
 
                     <ui:CardExpander Margin="0,0,0,10"
                                      ContentPadding="0"
-                                     IsExpanded="False">
+                                     IsExpanded="False"
+                                     Visibility="{Binding ShowAdvancedProperties, Converter={StaticResource BoolToVisibilityConverter}}">
                         <ui:CardExpander.Header>
                             <TextBlock Style="{StaticResource CardTitleTextStyle}"
                                        Text="{Binding PropertyAdvancedText}" />

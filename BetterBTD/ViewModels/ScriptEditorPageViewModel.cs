@@ -218,6 +218,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
             OnPropertyChanged(nameof(HasSelectedSequenceInstruction));
             OnPropertyChanged(nameof(ShowPropertiesEmptyState));
             OnPropertyChanged(nameof(ShowNonExecutableInstructionHint));
+            OnPropertyChanged(nameof(ShowAdvancedProperties));
         }
     }
 
@@ -226,6 +227,8 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public bool ShowPropertiesEmptyState => SelectedSequenceInstruction is null;
 
     public bool ShowNonExecutableInstructionHint => SelectedSequenceInstruction is { IsExecutable: false };
+
+    public bool ShowAdvancedProperties => SelectedSequenceInstruction?.Type is not ScriptCommandType.ModifyMonkeyCoordinate and not ScriptCommandType.Comment;
 
     public bool ShowSequenceEmptyState => InstructionSequence.Count == 0;
 
