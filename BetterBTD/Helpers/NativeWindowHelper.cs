@@ -9,6 +9,10 @@ public static class NativeWindowHelper
 {
     private const int VkRButton = 0x02;
     private const uint DwmwaExtendedFrameBounds = 9;
+    private const int SmXvirtualscreen = 76;
+    private const int SmYvirtualscreen = 77;
+    private const int SmCxvirtualscreen = 78;
+    private const int SmCyvirtualscreen = 79;
 
     public static nint FindTopLevelWindow(string title)
     {
@@ -163,6 +167,29 @@ public static class NativeWindowHelper
         return true;
     }
 
+    public static NativeWindowBounds GetVirtualScreenBounds()
+    {
+        var left = GetSystemMetrics(SmXvirtualscreen);
+        var top = GetSystemMetrics(SmYvirtualscreen);
+        var width = GetSystemMetrics(SmCxvirtualscreen);
+        var height = GetSystemMetrics(SmCyvirtualscreen);
+
+        if (width <= 0 || height <= 0)
+        {
+            return new NativeWindowBounds(0, 0, 1, 1);
+        }
+
+        return new NativeWindowBounds(left, top, width, height);
+    }
+
+    public static Point ToVirtualDesktopAbsoluteCoordinate(Point screenCoordinate)
+    {
+        var virtualScreenBounds = GetVirtualScreenBounds();
+        return new Point(
+            ScaleToAbsoluteCoordinate(screenCoordinate.X, virtualScreenBounds.Left, virtualScreenBounds.Width),
+            ScaleToAbsoluteCoordinate(screenCoordinate.Y, virtualScreenBounds.Top, virtualScreenBounds.Height));
+    }
+
     public static bool TryClientToScreen(nint hWnd, Point clientPoint, out Point screenPoint)
     {
         screenPoint = default;
@@ -276,8 +303,22 @@ public static class NativeWindowHelper
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int vKey);
 
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+
     [DllImport("dwmapi.dll")]
     private static extern int DwmGetWindowAttribute(nint hwnd, uint dwAttribute, out RECT pvAttribute, int cbAttribute);
+
+    private static double ScaleToAbsoluteCoordinate(double coordinate, double origin, double length)
+    {
+        if (length <= 1d)
+        {
+            return 0d;
+        }
+
+        var normalized = (coordinate - origin) * 65535d / (length - 1d);
+        return Math.Clamp(normalized, 0d, 65535d);
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT

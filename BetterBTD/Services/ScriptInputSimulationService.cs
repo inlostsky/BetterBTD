@@ -5,6 +5,7 @@ using System.Windows.Input;
 using BetterBTD.Core.Config;
 using BetterBTD.Core.Simulator;
 using BetterBTD.Core.Simulator.Extensions;
+using BetterBTD.Helpers;
 using BetterBTD.Models;
 using Fischless.WindowsInput;
 using InputMouseButton = Fischless.WindowsInput.MouseButton;
@@ -72,7 +73,7 @@ public sealed class ScriptInputSimulationService
 
     public void MoveMouseToScreenCoordinate(Point screenCoordinate)
     {
-        var absolutePoint = ToVirtualDesktopAbsoluteCoordinate(screenCoordinate);
+        var absolutePoint = NativeWindowHelper.ToVirtualDesktopAbsoluteCoordinate(screenCoordinate);
         Simulation.SendInput.Mouse.MoveMouseToPositionOnVirtualDesktop(absolutePoint.X, absolutePoint.Y);
     }
 
@@ -225,28 +226,5 @@ public sealed class ScriptInputSimulationService
 
         throw new InvalidOperationException(
             $"Target game window '{_gameWindowInfoService.TargetWindowTitle}' was not found or is not available.");
-    }
-
-    private static Point ToVirtualDesktopAbsoluteCoordinate(Point screenCoordinate)
-    {
-        var left = SystemParameters.VirtualScreenLeft;
-        var top = SystemParameters.VirtualScreenTop;
-        var width = Math.Max(1d, SystemParameters.VirtualScreenWidth);
-        var height = Math.Max(1d, SystemParameters.VirtualScreenHeight);
-
-        return new Point(
-            ScaleToAbsoluteCoordinate(screenCoordinate.X, left, width),
-            ScaleToAbsoluteCoordinate(screenCoordinate.Y, top, height));
-    }
-
-    private static double ScaleToAbsoluteCoordinate(double coordinate, double origin, double length)
-    {
-        if (length <= 1d)
-        {
-            return 0d;
-        }
-
-        var normalized = (coordinate - origin) * 65535d / (length - 1d);
-        return Math.Clamp(normalized, 0d, 65535d);
     }
 }

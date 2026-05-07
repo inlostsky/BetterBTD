@@ -13,7 +13,7 @@ public class MouseEventSimulator
 
     public void Move(Point screenPoint)
     {
-        var absolutePoint = ToVirtualDesktopAbsoluteCoordinate(screenPoint);
+        var absolutePoint = NativeWindowHelper.ToVirtualDesktopAbsoluteCoordinate(screenPoint);
         Simulation.SendInput.Mouse.MoveMouseToPositionOnVirtualDesktop(absolutePoint.X, absolutePoint.Y);
     }
 
@@ -90,28 +90,5 @@ public class MouseEventSimulator
         Thread.Sleep(20);
         LeftButtonUp();
         return true;
-    }
-
-    private static Point ToVirtualDesktopAbsoluteCoordinate(Point screenCoordinate)
-    {
-        var left = SystemParameters.VirtualScreenLeft;
-        var top = SystemParameters.VirtualScreenTop;
-        var width = Math.Max(1d, SystemParameters.VirtualScreenWidth);
-        var height = Math.Max(1d, SystemParameters.VirtualScreenHeight);
-
-        return new Point(
-            ScaleToAbsoluteCoordinate(screenCoordinate.X, left, width),
-            ScaleToAbsoluteCoordinate(screenCoordinate.Y, top, height));
-    }
-
-    private static double ScaleToAbsoluteCoordinate(double coordinate, double origin, double length)
-    {
-        if (length <= 1d)
-        {
-            return 0d;
-        }
-
-        var normalized = (coordinate - origin) * 65535d / (length - 1d);
-        return Math.Clamp(normalized, 0d, 65535d);
     }
 }
