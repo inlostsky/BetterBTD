@@ -22,7 +22,7 @@ def main(resolution: str = "720p"):
         image_range = range(3)
     else:
         window_size = "1920x1080"
-        image_range = range(3, 6)
+        image_range = range(3, 7)
     
     # 创建主窗口
     root = tk.Tk()

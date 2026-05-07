@@ -39,6 +39,34 @@ public interface IGameStageStateService
 {
     bool IsAvailable { get; }
 
+    Task<bool?> GetIsInLevelAsync(CancellationToken cancellationToken = default);
+
+    Task<int?> GetGoldAsync(CancellationToken cancellationToken = default);
+
+    Task<int?> GetRoundAsync(CancellationToken cancellationToken = default);
+
+    Task<bool?> GetRightUpgradeVisibleAsync(CancellationToken cancellationToken = default);
+
+    Task<int?> GetRightTopUpgradeLevelAsync(CancellationToken cancellationToken = default);
+
+    Task<int?> GetRightMiddleUpgradeLevelAsync(CancellationToken cancellationToken = default);
+
+    Task<int?> GetRightBottomUpgradeLevelAsync(CancellationToken cancellationToken = default);
+
+    Task<bool?> GetLeftUpgradeVisibleAsync(CancellationToken cancellationToken = default);
+
+    Task<int?> GetLeftTopUpgradeLevelAsync(CancellationToken cancellationToken = default);
+
+    Task<int?> GetLeftMiddleUpgradeLevelAsync(CancellationToken cancellationToken = default);
+
+    Task<int?> GetLeftBottomUpgradeLevelAsync(CancellationToken cancellationToken = default);
+
+    Task<bool?> GetIsPlacingMonkeyAsync(CancellationToken cancellationToken = default);
+
+    Task<bool?> GetCanPlaceHeroAsync(CancellationToken cancellationToken = default);
+
+    Task<string> GetStageTargetAsync(CancellationToken cancellationToken = default);
+
     Task<GameStageStateSnapshot?> CaptureSnapshotAsync(CancellationToken cancellationToken = default);
 }
 
