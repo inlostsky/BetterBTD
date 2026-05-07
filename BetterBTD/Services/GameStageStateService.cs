@@ -1,12 +1,17 @@
 using BetterBTD.Core.ScriptExecution.Runtime;
 using BetterBTD.Models.ScriptExecution;
 using OpenCvSharp;
+using OpenCvRect = OpenCvSharp.Rect;
+using OpenCvSize = OpenCvSharp.Size;
 
 namespace BetterBTD.Services;
 
 public sealed class GameStageStateService : IGameStageStateService
 {
     private static readonly Lazy<GameStageStateService> InstanceHolder = new(() => new GameStageStateService());
+    private static readonly OpenCvRect GoldReferenceRect = new(360, 20, 180, 50);
+    private static readonly OpenCvRect RoundReferenceRect = new(1370, 25, 195, 70);
+    private static readonly OpenCvSize Reference1080p = new(1920, 1080);
 
     private readonly GameCaptureService _gameCaptureService;
     private readonly GameTargetOcrService _gameTargetOcrService;
@@ -20,6 +25,23 @@ public sealed class GameStageStateService : IGameStageStateService
     public static GameStageStateService Instance => InstanceHolder.Value;
 
     public bool IsAvailable => _gameTargetOcrService.IsAvailable;
+
+    public (OpenCvRect GoldRegion, OpenCvRect RoundRegion) GetCaptureRegions(int frameWidth, int frameHeight)
+    {
+        if (frameWidth <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(frameWidth));
+        }
+
+        if (frameHeight <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(frameHeight));
+        }
+
+        return (
+            ScaleReferenceRect(GoldReferenceRect, frameWidth, frameHeight),
+            ScaleReferenceRect(RoundReferenceRect, frameWidth, frameHeight));
+    }
 
     public Task<GameStageStateSnapshot?> CaptureSnapshotAsync(CancellationToken cancellationToken = default)
     {
@@ -64,8 +86,13 @@ public sealed class GameStageStateService : IGameStageStateService
             return false;
         }
 
-        var hasGold = _gameTargetOcrService.TryReadGold(frame, out var gold);
-        var hasRound = _gameTargetOcrService.TryReadRound(frame, out var round);
+        var captureRegions = GetCaptureRegions(frame.Width, frame.Height);
+
+        using var goldCaptureRegion = new Mat(frame, captureRegions.GoldRegion);
+        using var roundCaptureRegion = new Mat(frame, captureRegions.RoundRegion);
+
+        var hasGold = _gameTargetOcrService.TryReadGold(goldCaptureRegion, frame.Width, frame.Height, out var gold);
+        var hasRound = _gameTargetOcrService.TryReadRound(roundCaptureRegion, frame.Width, frame.Height, out var round);
 
         snapshot = new GameStageStateSnapshot
         {
@@ -114,5 +141,20 @@ public sealed class GameStageStateService : IGameStageStateService
     {
         _ = frame;
         return null;
+    }
+
+    private static OpenCvRect ScaleReferenceRect(OpenCvRect referenceRect, int actualWidth, int actualHeight)
+    {
+        var x = (int)Math.Round(referenceRect.X / (double)Reference1080p.Width * actualWidth);
+        var y = (int)Math.Round(referenceRect.Y / (double)Reference1080p.Height * actualHeight);
+        var right = (int)Math.Round(referenceRect.Right / (double)Reference1080p.Width * actualWidth);
+        var bottom = (int)Math.Round(referenceRect.Bottom / (double)Reference1080p.Height * actualHeight);
+
+        x = Math.Clamp(x, 0, Math.Max(0, actualWidth - 1));
+        y = Math.Clamp(y, 0, Math.Max(0, actualHeight - 1));
+        right = Math.Clamp(right, x + 1, actualWidth);
+        bottom = Math.Clamp(bottom, y + 1, actualHeight);
+
+        return new OpenCvRect(x, y, right - x, bottom - y);
     }
 }

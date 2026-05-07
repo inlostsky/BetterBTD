@@ -10,17 +10,14 @@ namespace BetterBTD.Services;
 public sealed class GameTargetOcrService
 {
     private static readonly Lazy<GameTargetOcrService> InstanceHolder = new(() => new GameTargetOcrService());
-    private static readonly OpenCvRect GoldReferenceRect = new(360, 20, 180, 50);
-    private static readonly OpenCvRect RoundReferenceRect = new(1370, 25, 195, 70);
     private static readonly double[] GoldThresholds = [0.90d, 0.84d, 0.78d];
     private static readonly double[] RoundThresholds = [0.90d, 0.84d, 0.78d];
     private const double GoldOneScoreDelta = 0.04d;
     private const int GoldOneTopTolerance = 2;
-    private static readonly OpenCvSize Reference1080p = new(1920, 1080);
     private static readonly OpenCvSize Reference720p = new(1280, 720);
+    private static readonly OpenCvSize Reference1080p = new(1920, 1080);
 
     private readonly object _syncRoot = new();
-    private readonly GameCaptureService _gameCaptureService;
     private readonly TemplateMatchService _templateMatchService;
 
     private DigitTemplateRepository? _repository;
@@ -28,7 +25,6 @@ public sealed class GameTargetOcrService
 
     private GameTargetOcrService()
     {
-        _gameCaptureService = GameCaptureService.Instance;
         _templateMatchService = TemplateMatchService.Instance;
     }
 
@@ -36,8 +32,16 @@ public sealed class GameTargetOcrService
 
     public bool IsAvailable => TryEnsureRepository(out _);
 
-    public (OpenCvRect GoldRegion, OpenCvRect RoundRegion) GetCaptureRegions(int frameWidth, int frameHeight)
+    public bool TryReadGold(Mat captureRegion, int frameWidth, int frameHeight, out int gold)
     {
+        ArgumentNullException.ThrowIfNull(captureRegion);
+        gold = 0;
+
+        if (captureRegion.Empty())
+        {
+            return false;
+        }
+
         if (frameWidth <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(frameWidth));
@@ -48,53 +52,12 @@ public sealed class GameTargetOcrService
             throw new ArgumentOutOfRangeException(nameof(frameHeight));
         }
 
-        return (
-            ScaleReferenceRect(GoldReferenceRect, frameWidth, frameHeight),
-            ScaleReferenceRect(RoundReferenceRect, frameWidth, frameHeight));
-    }
-
-    public bool TryReadGold(out int gold)
-    {
-        gold = 0;
-
-        if (!_gameCaptureService.TryCaptureFrame(out var frame))
-        {
-            return false;
-        }
-
-        using (frame)
-        {
-            return TryReadGold(frame, out gold);
-        }
-    }
-
-    public bool TryReadRound(out int round)
-    {
-        round = 0;
-
-        if (!_gameCaptureService.TryCaptureFrame(out var frame))
-        {
-            return false;
-        }
-
-        using (frame)
-        {
-            return TryReadRound(frame, out round);
-        }
-    }
-
-    public bool TryReadGold(Mat frame, out int gold)
-    {
-        gold = 0;
-
         if (!TryEnsureRepository(out var repository))
         {
             return false;
         }
 
-        var captureRect = ScaleReferenceRect(GoldReferenceRect, frame.Width, frame.Height);
-        using var captureRegion = new Mat(frame, captureRect);
-        var templates = repository.GetDigitTemplates(OcrValueType.Gold, frame.Width, frame.Height);
+        var templates = repository.GetDigitTemplates(OcrValueType.Gold, frameWidth, frameHeight);
 
         if (!TryRecognizeDigits(captureRegion, templates, GoldThresholds, out var text))
         {
@@ -104,10 +67,10 @@ public sealed class GameTargetOcrService
         return int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out gold);
     }
 
-    private bool TryReadGold(Mat frame, out int gold, out string diagnostics)
+    private bool TryReadGold(Mat captureRegion, int frameWidth, int frameHeight, out int gold, out string diagnostics)
     {
+        ArgumentNullException.ThrowIfNull(captureRegion);
         gold = 0;
-        var captureRect = ScaleReferenceRect(GoldReferenceRect, frame.Width, frame.Height);
 
         if (!TryEnsureRepository(out var repository))
         {
@@ -115,39 +78,52 @@ public sealed class GameTargetOcrService
             return false;
         }
 
-        using var captureRegion = new Mat(frame, captureRect);
-        var templates = repository.GetDigitTemplates(OcrValueType.Gold, frame.Width, frame.Height);
-        var templateSelection = repository.GetSelectionDescription(frame.Width, frame.Height);
+        var templates = repository.GetDigitTemplates(OcrValueType.Gold, frameWidth, frameHeight);
+        var templateSelection = repository.GetSelectionDescription(frameWidth, frameHeight);
 
         if (!TryRecognizeDigits(captureRegion, templates, GoldThresholds, out var text, out var recognitionDiagnostics))
         {
-            diagnostics = $"Gold: failed | Region={FormatRect(captureRect)} | Templates={templateSelection} | {recognitionDiagnostics}";
+            diagnostics = $"Gold: failed | RegionSize={captureRegion.Width}x{captureRegion.Height} | Templates={templateSelection} | {recognitionDiagnostics}";
             return false;
         }
 
         if (!int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out gold))
         {
-            diagnostics = $"Gold: parse failed | Region={FormatRect(captureRect)} | Templates={templateSelection} | Text='{text}' | {recognitionDiagnostics}";
+            diagnostics = $"Gold: parse failed | RegionSize={captureRegion.Width}x{captureRegion.Height} | Templates={templateSelection} | Text='{text}' | {recognitionDiagnostics}";
             return false;
         }
 
-        diagnostics = $"Gold: success | Value={gold} | Region={FormatRect(captureRect)} | Templates={templateSelection} | Text='{text}' | {recognitionDiagnostics}";
+        diagnostics = $"Gold: success | Value={gold} | RegionSize={captureRegion.Width}x{captureRegion.Height} | Templates={templateSelection} | Text='{text}' | {recognitionDiagnostics}";
         return true;
     }
 
-    public bool TryReadRound(Mat frame, out int round)
+    public bool TryReadRound(Mat captureRegion, int frameWidth, int frameHeight, out int round)
     {
+        ArgumentNullException.ThrowIfNull(captureRegion);
         round = 0;
+
+        if (captureRegion.Empty())
+        {
+            return false;
+        }
+
+        if (frameWidth <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(frameWidth));
+        }
+
+        if (frameHeight <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(frameHeight));
+        }
 
         if (!TryEnsureRepository(out var repository))
         {
             return false;
         }
 
-        var captureRect = ScaleReferenceRect(RoundReferenceRect, frame.Width, frame.Height);
-        using var captureRegion = new Mat(frame, captureRect);
-        var digitTemplates = repository.GetDigitTemplates(OcrValueType.Round, frame.Width, frame.Height);
-        var slashTemplate = repository.GetSlashTemplate(frame.Width, frame.Height);
+        var digitTemplates = repository.GetDigitTemplates(OcrValueType.Round, frameWidth, frameHeight);
+        var slashTemplate = repository.GetSlashTemplate(frameWidth, frameHeight);
 
         if (!TryRecognizeRoundDigits(captureRegion, digitTemplates, slashTemplate, out var text))
         {
@@ -157,10 +133,10 @@ public sealed class GameTargetOcrService
         return int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out round);
     }
 
-    private bool TryReadRound(Mat frame, out int round, out string diagnostics)
+    private bool TryReadRound(Mat captureRegion, int frameWidth, int frameHeight, out int round, out string diagnostics)
     {
+        ArgumentNullException.ThrowIfNull(captureRegion);
         round = 0;
-        var captureRect = ScaleReferenceRect(RoundReferenceRect, frame.Width, frame.Height);
 
         if (!TryEnsureRepository(out var repository))
         {
@@ -168,24 +144,23 @@ public sealed class GameTargetOcrService
             return false;
         }
 
-        using var captureRegion = new Mat(frame, captureRect);
-        var digitTemplates = repository.GetDigitTemplates(OcrValueType.Round, frame.Width, frame.Height);
-        var slashTemplate = repository.GetSlashTemplate(frame.Width, frame.Height);
-        var templateSelection = repository.GetSelectionDescription(frame.Width, frame.Height);
+        var digitTemplates = repository.GetDigitTemplates(OcrValueType.Round, frameWidth, frameHeight);
+        var slashTemplate = repository.GetSlashTemplate(frameWidth, frameHeight);
+        var templateSelection = repository.GetSelectionDescription(frameWidth, frameHeight);
 
         if (!TryRecognizeRoundDigits(captureRegion, digitTemplates, slashTemplate, out var text, out var recognitionDiagnostics))
         {
-            diagnostics = $"Round: failed | Region={FormatRect(captureRect)} | Templates={templateSelection} | {recognitionDiagnostics}";
+            diagnostics = $"Round: failed | RegionSize={captureRegion.Width}x{captureRegion.Height} | Templates={templateSelection} | {recognitionDiagnostics}";
             return false;
         }
 
         if (!int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out round))
         {
-            diagnostics = $"Round: parse failed | Region={FormatRect(captureRect)} | Templates={templateSelection} | Text='{text}' | {recognitionDiagnostics}";
+            diagnostics = $"Round: parse failed | RegionSize={captureRegion.Width}x{captureRegion.Height} | Templates={templateSelection} | Text='{text}' | {recognitionDiagnostics}";
             return false;
         }
 
-        diagnostics = $"Round: success | Value={round} | Region={FormatRect(captureRect)} | Templates={templateSelection} | Text='{text}' | {recognitionDiagnostics}";
+        diagnostics = $"Round: success | Value={round} | RegionSize={captureRegion.Width}x{captureRegion.Height} | Templates={templateSelection} | Text='{text}' | {recognitionDiagnostics}";
         return true;
     }
 
@@ -564,21 +539,6 @@ public sealed class GameTargetOcrService
         var y = Math.Clamp(rect.Y, 0, height - 1);
         var right = Math.Clamp(rect.Right, x + 1, width);
         var bottom = Math.Clamp(rect.Bottom, y + 1, height);
-        return new OpenCvRect(x, y, right - x, bottom - y);
-    }
-
-    private static OpenCvRect ScaleReferenceRect(OpenCvRect referenceRect, int actualWidth, int actualHeight)
-    {
-        var x = (int)Math.Round(referenceRect.X / (double)Reference1080p.Width * actualWidth);
-        var y = (int)Math.Round(referenceRect.Y / (double)Reference1080p.Height * actualHeight);
-        var right = (int)Math.Round(referenceRect.Right / (double)Reference1080p.Width * actualWidth);
-        var bottom = (int)Math.Round(referenceRect.Bottom / (double)Reference1080p.Height * actualHeight);
-
-        x = Math.Clamp(x, 0, Math.Max(0, actualWidth - 1));
-        y = Math.Clamp(y, 0, Math.Max(0, actualHeight - 1));
-        right = Math.Clamp(right, x + 1, actualWidth);
-        bottom = Math.Clamp(bottom, y + 1, actualHeight);
-
         return new OpenCvRect(x, y, right - x, bottom - y);
     }
 

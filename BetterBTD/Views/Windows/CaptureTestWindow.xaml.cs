@@ -20,7 +20,6 @@ public partial class CaptureTestWindow : UiFluentWindow
 {
     private readonly LocalizationService _localizationService = LocalizationService.Instance;
     private readonly GameStageStateService _gameStageStateService = GameStageStateService.Instance;
-    private readonly GameTargetOcrService _gameTargetOcrService = GameTargetOcrService.Instance;
     private readonly CaptureTestStageStateDisplayService _captureTestStageStateDisplayService = CaptureTestStageStateDisplayService.Instance;
     private IGameCapture? _capture;
     private Size _cachedFrameSize;
@@ -271,7 +270,7 @@ public partial class CaptureTestWindow : UiFluentWindow
         }
 
         var overlayBounds = CalculateDisplayedFrameBounds(frameWidth, frameHeight, CaptureOverlayCanvas.ActualWidth, CaptureOverlayCanvas.ActualHeight);
-        var captureRegions = _gameTargetOcrService.GetCaptureRegions(frameWidth, frameHeight);
+        var captureRegions = _gameStageStateService.GetCaptureRegions(frameWidth, frameHeight);
 
         ApplyOverlayRegion(
             GoldRegionRectangle,
