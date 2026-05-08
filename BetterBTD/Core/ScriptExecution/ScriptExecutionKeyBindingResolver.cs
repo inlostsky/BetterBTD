@@ -70,6 +70,114 @@ public static class ScriptExecutionKeyBindingResolver
             $"upgrade hotkey for '{upgradePath}'");
     }
 
+    public static HotkeyBinding ResolveSwitchTargetHotkey(SwitchDirectionType switchDirection)
+    {
+        var generalBindings = ConfigurationService.Instance.Current.KeyBindings.General;
+
+        return EnsureBound(
+            switchDirection switch
+            {
+                SwitchDirectionType.Right => generalBindings.ChangeTargeting,
+                SwitchDirectionType.Left => generalBindings.ReverseChangeTargeting,
+                _ => throw new InvalidOperationException($"Unsupported switch direction '{switchDirection}'.")
+            },
+            $"target switching hotkey for '{switchDirection}'");
+    }
+
+    public static HotkeyBinding ResolveMonkeyAbilityHotkey(MonkeyAbilityType abilityType)
+    {
+        var generalBindings = ConfigurationService.Instance.Current.KeyBindings.General;
+
+        return EnsureBound(
+            abilityType switch
+            {
+                MonkeyAbilityType.Ability1 => generalBindings.MonkeySpecial,
+                MonkeyAbilityType.Ability2 => generalBindings.MonkeySpecial2,
+                _ => throw new InvalidOperationException($"Unsupported monkey ability '{abilityType}'.")
+            },
+            $"monkey ability hotkey for '{abilityType}'");
+    }
+
+    public static HotkeyBinding ResolveHeroHotkey()
+    {
+        return EnsureBound(
+            ConfigurationService.Instance.Current.KeyBindings.General.Hero,
+            "hero hotkey");
+    }
+
+    public static HotkeyBinding ResolveSellHotkey()
+    {
+        return EnsureBound(
+            ConfigurationService.Instance.Current.KeyBindings.General.Sell,
+            "sell hotkey");
+    }
+
+    public static HotkeyBinding ResolveHeroInventoryHotkey(InventoryType inventoryType)
+    {
+        var inventoryBindings = ConfigurationService.Instance.Current.KeyBindings.HeroInventory;
+
+        return EnsureBound(
+            inventoryType switch
+            {
+                InventoryType.Inventory1 => inventoryBindings.Inventory1,
+                InventoryType.Inventory2 => inventoryBindings.Inventory2,
+                InventoryType.Inventory3 => inventoryBindings.Inventory3,
+                InventoryType.Inventory4 => inventoryBindings.Inventory4,
+                InventoryType.Inventory5 => inventoryBindings.Inventory5,
+                InventoryType.Inventory6 => inventoryBindings.Inventory6,
+                InventoryType.Inventory7 => inventoryBindings.Inventory7,
+                InventoryType.Inventory8 => inventoryBindings.Inventory8,
+                InventoryType.Inventory9 => inventoryBindings.Inventory9,
+                InventoryType.Inventory10 => inventoryBindings.Inventory10,
+                InventoryType.Inventory11 => inventoryBindings.Inventory11,
+                InventoryType.Inventory12 => inventoryBindings.Inventory12,
+                InventoryType.Inventory13 => inventoryBindings.Inventory13,
+                InventoryType.Inventory14 => inventoryBindings.Inventory14,
+                InventoryType.Inventory15 => inventoryBindings.Inventory15,
+                InventoryType.Inventory16 => inventoryBindings.Inventory16,
+                _ => throw new InvalidOperationException($"Unsupported hero inventory '{inventoryType}'.")
+            },
+            $"hero inventory hotkey for '{inventoryType}'");
+    }
+
+    public static HotkeyBinding ResolveActivatedAbilityHotkey(ActivatedAbilityType abilityType)
+    {
+        var abilityBindings = ConfigurationService.Instance.Current.KeyBindings.Abilities;
+
+        return EnsureBound(
+            abilityType switch
+            {
+                ActivatedAbilityType.ActivatedAbility1 => abilityBindings.ActivatedAbility1,
+                ActivatedAbilityType.ActivatedAbility2 => abilityBindings.ActivatedAbility2,
+                ActivatedAbilityType.ActivatedAbility3 => abilityBindings.ActivatedAbility3,
+                ActivatedAbilityType.ActivatedAbility4 => abilityBindings.ActivatedAbility4,
+                ActivatedAbilityType.ActivatedAbility5 => abilityBindings.ActivatedAbility5,
+                ActivatedAbilityType.ActivatedAbility6 => abilityBindings.ActivatedAbility6,
+                ActivatedAbilityType.ActivatedAbility7 => abilityBindings.ActivatedAbility7,
+                ActivatedAbilityType.ActivatedAbility8 => abilityBindings.ActivatedAbility8,
+                ActivatedAbilityType.ActivatedAbility9 => abilityBindings.ActivatedAbility9,
+                ActivatedAbilityType.ActivatedAbility10 => abilityBindings.ActivatedAbility10,
+                ActivatedAbilityType.ActivatedAbility11 => abilityBindings.ActivatedAbility11,
+                ActivatedAbilityType.ActivatedAbility12 => abilityBindings.ActivatedAbility12,
+                _ => throw new InvalidOperationException($"Unsupported activated ability '{abilityType}'.")
+            },
+            $"activated ability hotkey for '{abilityType}'");
+    }
+
+    public static HotkeyBinding ResolveNextRoundHotkey(string nextRoundAction)
+    {
+        var generalBindings = ConfigurationService.Instance.Current.KeyBindings.General;
+
+        return EnsureBound(
+            nextRoundAction switch
+            {
+                "PlayFastForward" => generalBindings.PlayFastForward,
+                "SendNextRound" => generalBindings.SendNextRound,
+                _ => throw new InvalidOperationException($"Unsupported next round action '{nextRoundAction}'.")
+            },
+            $"next round hotkey for '{nextRoundAction}'");
+    }
+
     private static HotkeyBinding EnsureBound(HotkeyBinding hotkeyBinding, string description)
     {
         ArgumentNullException.ThrowIfNull(hotkeyBinding);

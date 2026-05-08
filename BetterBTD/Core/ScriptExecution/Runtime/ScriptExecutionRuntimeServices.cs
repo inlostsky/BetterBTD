@@ -33,6 +33,10 @@ public interface IScriptInputService
     void PressHotkey(HotkeyBinding hotkey);
 
     void PressKey(KeyId key);
+
+    void KeyDown(KeyId key);
+
+    void KeyUp(KeyId key);
 }
 
 public interface IGameStageStateService

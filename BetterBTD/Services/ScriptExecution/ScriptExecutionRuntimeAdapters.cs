@@ -85,4 +85,14 @@ public sealed class ScriptInputServiceAdapter : IScriptInputService
     {
         _scriptInputSimulationService.PressKey(key);
     }
+
+    public void KeyDown(KeyId key)
+    {
+        _scriptInputSimulationService.KeyDown(key);
+    }
+
+    public void KeyUp(KeyId key)
+    {
+        _scriptInputSimulationService.KeyUp(key);
+    }
 }

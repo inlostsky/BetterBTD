@@ -1,8 +1,11 @@
 using BetterBTD.Models.ScriptEditor;
 using BetterBTD.Models.ScriptExecution;
+using BetterBTD.Models.GameElements;
 using BetterBTD.Core.ScriptExecution;
 using BetterBTD.Core.Config;
 using BetterBTD.Services;
+using OpenCvSharp;
+using System.Windows.Input;
 using WpfPoint = System.Windows.Point;
 
 namespace BetterBTD.Core.ScriptExecution.Handlers;
@@ -389,10 +392,64 @@ public sealed class SwitchMonkeyTargetInstructionHandler : ScriptInstructionHand
 {
     public override ScriptCommandType CommandType => ScriptCommandType.SwitchMonkeyTarget;
 
-    public override Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
+    public override async Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
     {
-        // Placeholder for rotating targeting priorities on an existing monkey.
-        return Task.CompletedTask;
+        var instruction = context.Step.Instruction;
+        if (string.IsNullOrWhiteSpace(instruction.TargetMonkeyBindingId))
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "SwitchMonkeyTargetTarget",
+                "Switch target instruction is missing the target monkey binding ID.");
+        }
+
+        if (!context.State.TryGetMonkeyState(instruction.TargetMonkeyBindingId, out var monkeyState))
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "SwitchMonkeyTargetTarget",
+                $"Target monkey binding '{instruction.TargetMonkeyBindingId}' does not exist in runtime state.");
+        }
+
+        if (monkeyState.LastKnownCoordinate is null)
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "SwitchMonkeyTargetCoordinate",
+                $"Target monkey '{monkeyState.ObjectId}' does not have a known runtime coordinate.");
+        }
+
+        if (!Enum.TryParse<SwitchDirectionType>(instruction.SwitchDirection, true, out var switchDirection))
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "SwitchMonkeyTargetDirection",
+                $"Unsupported switch direction '{instruction.SwitchDirection}'.");
+        }
+
+        var targetCoordinate = monkeyState.LastKnownCoordinate.Value;
+        var switchHotkey = ScriptExecutionKeyBindingResolver.ResolveSwitchTargetHotkey(switchDirection);
+        var switchCount = Math.Max(1, instruction.SwitchCount);
+
+        await ScriptInstructionHandlerSupport
+            .EnsureUpgradePanelVisibleAsync(context, targetCoordinate, cancellationToken)
+            .ConfigureAwait(false);
+
+        await ScriptInstructionHandlerSupport
+            .PressHotkeyRepeatedAsync(
+                context,
+                switchHotkey,
+                switchCount,
+                "SwitchMonkeyTargetPress",
+                $"Switching '{monkeyState.ObjectId}' targeting {switchDirection} {switchCount} time(s).",
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        await ScriptExecutionOperations.CheckpointAsync(
+            context,
+            "SwitchMonkeyTargetSucceeded",
+            $"Switched '{monkeyState.ObjectId}' targeting {switchDirection} {switchCount} time(s).",
+            cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -400,10 +457,82 @@ public sealed class SetMonkeyAbilityInstructionHandler : ScriptInstructionHandle
 {
     public override ScriptCommandType CommandType => ScriptCommandType.SetMonkeyAbility;
 
-    public override Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
+    public override async Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
     {
-        // Placeholder for selecting a monkey ability and optionally targeting a coordinate.
-        return Task.CompletedTask;
+        var instruction = context.Step.Instruction;
+        if (string.IsNullOrWhiteSpace(instruction.TargetMonkeyBindingId))
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "SetMonkeyAbilityTarget",
+                "Set monkey ability instruction is missing the target monkey binding ID.");
+        }
+
+        if (!context.State.TryGetMonkeyState(instruction.TargetMonkeyBindingId, out var monkeyState))
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "SetMonkeyAbilityTarget",
+                $"Target monkey binding '{instruction.TargetMonkeyBindingId}' does not exist in runtime state.");
+        }
+
+        if (monkeyState.LastKnownCoordinate is null)
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "SetMonkeyAbilityCoordinate",
+                $"Target monkey '{monkeyState.ObjectId}' does not have a known runtime coordinate.");
+        }
+
+        if (!Enum.TryParse<MonkeyAbilityType>(instruction.SelectedAbility, true, out var abilityType))
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "SetMonkeyAbilityType",
+                $"Unsupported monkey ability '{instruction.SelectedAbility}'.");
+        }
+
+        var targetCoordinate = monkeyState.LastKnownCoordinate.Value;
+        var abilityHotkey = ScriptExecutionKeyBindingResolver.ResolveMonkeyAbilityHotkey(abilityType);
+
+        await ScriptInstructionHandlerSupport
+            .EnsureUpgradePanelVisibleAsync(context, targetCoordinate, cancellationToken)
+            .ConfigureAwait(false);
+
+        await ScriptExecutionOperations.CheckpointAsync(
+            context,
+            "SetMonkeyAbilityPress",
+            $"Sending monkey ability '{abilityType}' for '{monkeyState.ObjectId}'.",
+            cancellationToken).ConfigureAwait(false);
+
+        context.RuntimeServices.Input.PressHotkey(abilityHotkey);
+
+        if (instruction.RequiresAbilityCoordinate)
+        {
+            var abilityCoordinate = new WpfPoint(instruction.AbilityCoordinateX, instruction.AbilityCoordinateY);
+
+            await ScriptExecutionOperations.DelayAsync(
+                context,
+                60,
+                "SetMonkeyAbilityTargetingDelay",
+                cancellationToken).ConfigureAwait(false);
+
+            await ScriptExecutionOperations.CheckpointAsync(
+                context,
+                "SetMonkeyAbilityClick",
+                $"Clicking ability coordinate {ScriptInstructionHandlerSupport.FormatPoint(abilityCoordinate)}.",
+                cancellationToken).ConfigureAwait(false);
+
+            context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(abilityCoordinate, clickCount: 1);
+        }
+
+        await ScriptExecutionOperations.CheckpointAsync(
+            context,
+            "SetMonkeyAbilitySucceeded",
+            instruction.RequiresAbilityCoordinate
+                ? $"Applied monkey ability '{abilityType}' for '{monkeyState.ObjectId}' with target coordinate."
+                : $"Applied monkey ability '{abilityType}' for '{monkeyState.ObjectId}'.",
+            cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -411,10 +540,53 @@ public sealed class SellMonkeyInstructionHandler : ScriptInstructionHandlerBase
 {
     public override ScriptCommandType CommandType => ScriptCommandType.SellMonkey;
 
-    public override Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
+    public override async Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
     {
-        // Placeholder for selecting a monkey and sending the sell action.
-        return Task.CompletedTask;
+        var instruction = context.Step.Instruction;
+        if (string.IsNullOrWhiteSpace(instruction.TargetMonkeyBindingId))
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "SellMonkeyTarget",
+                "Sell monkey instruction is missing the target monkey binding ID.");
+        }
+
+        if (!context.State.TryGetMonkeyState(instruction.TargetMonkeyBindingId, out var monkeyState))
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "SellMonkeyTarget",
+                $"Target monkey binding '{instruction.TargetMonkeyBindingId}' does not exist in runtime state.");
+        }
+
+        if (monkeyState.LastKnownCoordinate is null)
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "SellMonkeyCoordinate",
+                $"Target monkey '{monkeyState.ObjectId}' does not have a known runtime coordinate.");
+        }
+
+        var targetCoordinate = monkeyState.LastKnownCoordinate.Value;
+        var sellHotkey = ScriptExecutionKeyBindingResolver.ResolveSellHotkey();
+
+        await ScriptInstructionHandlerSupport
+            .EnsureUpgradePanelVisibleAsync(context, targetCoordinate, cancellationToken)
+            .ConfigureAwait(false);
+
+        await ScriptExecutionOperations.CheckpointAsync(
+            context,
+            "SellMonkeyPress",
+            $"Selling '{monkeyState.ObjectId}'.",
+            cancellationToken).ConfigureAwait(false);
+
+        context.RuntimeServices.Input.PressHotkey(sellHotkey);
+
+        await ScriptExecutionOperations.CheckpointAsync(
+            context,
+            "SellMonkeySucceeded",
+            $"Sent sell hotkey for '{monkeyState.ObjectId}'.",
+            cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -422,10 +594,68 @@ public sealed class PlaceHeroInventoryInstructionHandler : ScriptInstructionHand
 {
     public override ScriptCommandType CommandType => ScriptCommandType.PlaceHeroInventory;
 
-    public override Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
+    public override async Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
     {
-        // Placeholder for selecting hero inventory and placing the item at a target coordinate.
-        return Task.CompletedTask;
+        var instruction = context.Step.Instruction;
+        if (!Enum.TryParse<InventoryType>(instruction.SelectedInventoryItem, true, out var inventoryType))
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "PlaceHeroInventoryType",
+                $"Unsupported hero inventory '{instruction.SelectedInventoryItem}'.");
+        }
+
+        var heroHotkey = ScriptExecutionKeyBindingResolver.ResolveHeroHotkey();
+        var inventoryHotkey = ScriptExecutionKeyBindingResolver.ResolveHeroInventoryHotkey(inventoryType);
+
+        await ScriptExecutionOperations.CheckpointAsync(
+            context,
+            "PlaceHeroInventoryHero",
+            "Opening hero panel.",
+            cancellationToken).ConfigureAwait(false);
+
+        context.RuntimeServices.Input.PressHotkey(heroHotkey);
+
+        await ScriptExecutionOperations.DelayAsync(
+            context,
+            60,
+            "PlaceHeroInventoryHeroDelay",
+            cancellationToken).ConfigureAwait(false);
+
+        await ScriptExecutionOperations.CheckpointAsync(
+            context,
+            "PlaceHeroInventorySelect",
+            $"Selecting hero inventory '{inventoryType}'.",
+            cancellationToken).ConfigureAwait(false);
+
+        context.RuntimeServices.Input.PressHotkey(inventoryHotkey);
+
+        if (instruction.RequiresAbilityCoordinate)
+        {
+            var targetCoordinate = new WpfPoint(instruction.PositionX, instruction.PositionY);
+
+            await ScriptExecutionOperations.DelayAsync(
+                context,
+                60,
+                "PlaceHeroInventoryTargetingDelay",
+                cancellationToken).ConfigureAwait(false);
+
+            await ScriptExecutionOperations.CheckpointAsync(
+                context,
+                "PlaceHeroInventoryClick",
+                $"Clicking inventory target coordinate {ScriptInstructionHandlerSupport.FormatPoint(targetCoordinate)}.",
+                cancellationToken).ConfigureAwait(false);
+
+            context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(targetCoordinate, clickCount: 1);
+        }
+
+        await ScriptExecutionOperations.CheckpointAsync(
+            context,
+            "PlaceHeroInventorySucceeded",
+            instruction.RequiresAbilityCoordinate
+                ? $"Used hero inventory '{inventoryType}' with target coordinate."
+                : $"Used hero inventory '{inventoryType}'.",
+            cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -433,10 +663,53 @@ public sealed class ActivateAbilityInstructionHandler : ScriptInstructionHandler
 {
     public override ScriptCommandType CommandType => ScriptCommandType.ActivateAbility;
 
-    public override Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
+    public override async Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
     {
-        // Placeholder for triggering a global activated ability and optional target click.
-        return Task.CompletedTask;
+        var instruction = context.Step.Instruction;
+        if (!Enum.TryParse<ActivatedAbilityType>(instruction.SelectedActivatedAbility, true, out var abilityType))
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "ActivateAbilityType",
+                $"Unsupported activated ability '{instruction.SelectedActivatedAbility}'.");
+        }
+
+        var abilityHotkey = ScriptExecutionKeyBindingResolver.ResolveActivatedAbilityHotkey(abilityType);
+
+        await ScriptExecutionOperations.CheckpointAsync(
+            context,
+            "ActivateAbilityPress",
+            $"Activating global ability '{abilityType}'.",
+            cancellationToken).ConfigureAwait(false);
+
+        context.RuntimeServices.Input.PressHotkey(abilityHotkey);
+
+        if (instruction.RequiresAbilityCoordinate)
+        {
+            var targetCoordinate = new WpfPoint(instruction.AbilityCoordinateX, instruction.AbilityCoordinateY);
+
+            await ScriptExecutionOperations.DelayAsync(
+                context,
+                60,
+                "ActivateAbilityTargetingDelay",
+                cancellationToken).ConfigureAwait(false);
+
+            await ScriptExecutionOperations.CheckpointAsync(
+                context,
+                "ActivateAbilityClick",
+                $"Clicking activated ability target coordinate {ScriptInstructionHandlerSupport.FormatPoint(targetCoordinate)}.",
+                cancellationToken).ConfigureAwait(false);
+
+            context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(targetCoordinate, clickCount: 1);
+        }
+
+        await ScriptExecutionOperations.CheckpointAsync(
+            context,
+            "ActivateAbilitySucceeded",
+            instruction.RequiresAbilityCoordinate
+                ? $"Activated global ability '{abilityType}' with target coordinate."
+                : $"Activated global ability '{abilityType}'.",
+            cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -477,21 +750,266 @@ public sealed class NextRoundInstructionHandler : ScriptInstructionHandlerBase
 {
     public override ScriptCommandType CommandType => ScriptCommandType.NextRound;
 
-    public override Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
+    public override async Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
     {
-        // Placeholder for fast-forward / next-round actions.
-        return Task.CompletedTask;
+        var instruction = context.Step.Instruction;
+        var nextRoundAction = string.IsNullOrWhiteSpace(instruction.NextRoundAction)
+            ? "PlayFastForward"
+            : instruction.NextRoundAction.Trim();
+        var nextRoundHotkey = ScriptExecutionKeyBindingResolver.ResolveNextRoundHotkey(nextRoundAction);
+
+        switch (nextRoundAction)
+        {
+            case "SendNextRound":
+            {
+                var sendCount = Math.Max(1, instruction.NextRoundSendCount);
+
+                await ScriptInstructionHandlerSupport
+                    .PressHotkeyRepeatedAsync(
+                        context,
+                        nextRoundHotkey,
+                        sendCount,
+                        "NextRoundSend",
+                        $"Sending next round {sendCount} time(s).",
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                await ScriptExecutionOperations.CheckpointAsync(
+                    context,
+                    "NextRoundSucceeded",
+                    $"Sent next round {sendCount} time(s).",
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            }
+            case "PlayFastForward":
+            {
+                await ScriptExecutionOperations.CheckpointAsync(
+                    context,
+                    "NextRoundPress",
+                    "Toggling play/fast forward.",
+                    cancellationToken).ConfigureAwait(false);
+
+                context.RuntimeServices.Input.PressHotkey(nextRoundHotkey);
+
+                await ScriptExecutionOperations.CheckpointAsync(
+                    context,
+                    "NextRoundSucceeded",
+                    "Sent play/fast forward hotkey.",
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            }
+            default:
+                throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                    context,
+                    "NextRoundAction",
+                    $"Unsupported next round action '{instruction.NextRoundAction}'.");
+        }
     }
 }
 
 public sealed class WaitInstructionHandler : ScriptInstructionHandlerBase
 {
+    private const int ReferenceWidth = 1920;
+    private const int ReferenceHeight = 1080;
+    private const int IndefiniteWaitTimeoutMilliseconds = int.MaxValue;
+    private const int WaitPollIntervalMilliseconds = 100;
+
     public override ScriptCommandType CommandType => ScriptCommandType.Wait;
 
-    public override Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
+    public override async Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
     {
-        // Placeholder for wait conditions backed by OCR and capture services.
-        return Task.CompletedTask;
+        var instruction = context.Step.Instruction;
+        var waitMode = instruction.WaitMode;
+
+        switch (waitMode)
+        {
+            case nameof(WaitModeType.Time):
+                await ScriptExecutionOperations.DelayAsync(
+                    context,
+                    instruction.WaitTimeMilliseconds,
+                    "WaitTime",
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            case nameof(WaitModeType.Gold):
+                await ScriptExecutionOperations.WaitUntilAsync(
+                    context,
+                    new ScriptWaitOptions
+                    {
+                        TimeoutMilliseconds = IndefiniteWaitTimeoutMilliseconds,
+                        PollIntervalMilliseconds = WaitPollIntervalMilliseconds,
+                        Description = $"gold >= {instruction.WaitGoldAmount}"
+                    },
+                    async token =>
+                    {
+                        var gold = await context.RuntimeServices.GameStageState
+                            .GetGoldAsync(token)
+                            .ConfigureAwait(false);
+                        return gold.HasValue && gold.Value >= instruction.WaitGoldAmount;
+                    },
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            case nameof(WaitModeType.Round):
+                await ScriptExecutionOperations.WaitUntilAsync(
+                    context,
+                    new ScriptWaitOptions
+                    {
+                        TimeoutMilliseconds = IndefiniteWaitTimeoutMilliseconds,
+                        PollIntervalMilliseconds = WaitPollIntervalMilliseconds,
+                        Description = $"round >= {instruction.WaitRoundCount}"
+                    },
+                    async token =>
+                    {
+                        var round = await context.RuntimeServices.GameStageState
+                            .GetRoundAsync(token)
+                            .ConfigureAwait(false);
+                        return round.HasValue && round.Value >= instruction.WaitRoundCount;
+                    },
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            case nameof(WaitModeType.CoordinateColor):
+            {
+                if (!TryParseRgbHex(instruction.WaitColorHex, out var expectedR, out var expectedG, out var expectedB))
+                {
+                    throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                        context,
+                        "WaitColorHex",
+                        $"Unsupported wait color '{instruction.WaitColorHex}'. Expected format '#RRGGBB'.");
+                }
+
+                var targetCoordinate = new WpfPoint(instruction.WaitColorCoordinateX, instruction.WaitColorCoordinateY);
+                await ScriptExecutionOperations.WaitUntilAsync(
+                    context,
+                    new ScriptWaitOptions
+                    {
+                        TimeoutMilliseconds = IndefiniteWaitTimeoutMilliseconds,
+                        PollIntervalMilliseconds = WaitPollIntervalMilliseconds,
+                        Description = $"color at {ScriptInstructionHandlerSupport.FormatPoint(targetCoordinate)} matches {instruction.WaitColorHex}"
+                    },
+                    token => WaitForCoordinateColorMatchAsync(
+                        context,
+                        targetCoordinate,
+                        expectedR,
+                        expectedG,
+                        expectedB,
+                        instruction.WaitColorTolerance,
+                        token),
+                    cancellationToken).ConfigureAwait(false);
+                break;
+            }
+            default:
+                throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                    context,
+                    "WaitMode",
+                    $"Unsupported wait mode '{waitMode}'.");
+        }
+    }
+
+    private static Task<bool> WaitForCoordinateColorMatchAsync(
+        ScriptInstructionExecutionContext context,
+        WpfPoint scriptCoordinate,
+        int expectedR,
+        int expectedG,
+        int expectedB,
+        int tolerance,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!context.RuntimeServices.Capture.TryCaptureFrame(out _, out var frame))
+        {
+            return Task.FromResult(false);
+        }
+
+        using (frame)
+        {
+            if (frame.Empty())
+            {
+                return Task.FromResult(false);
+            }
+
+            var x = ScaleScriptCoordinate(scriptCoordinate.X, ReferenceWidth, frame.Width);
+            var y = ScaleScriptCoordinate(scriptCoordinate.Y, ReferenceHeight, frame.Height);
+            var (actualR, actualG, actualB) = ReadPixel(frame, x, y);
+
+            var isMatch =
+                Math.Abs(actualR - expectedR) <= tolerance &&
+                Math.Abs(actualG - expectedG) <= tolerance &&
+                Math.Abs(actualB - expectedB) <= tolerance;
+
+            return Task.FromResult(isMatch);
+        }
+    }
+
+    private static (int R, int G, int B) ReadPixel(Mat frame, int x, int y)
+    {
+        return frame.Channels() switch
+        {
+            1 => ReadGrayPixel(frame, x, y),
+            3 => ReadBgrPixel(frame, x, y),
+            4 => ReadBgraPixel(frame, x, y),
+            _ => throw new NotSupportedException($"Unsupported frame channel count '{frame.Channels()}'.")
+        };
+    }
+
+    private static (int R, int G, int B) ReadGrayPixel(Mat frame, int x, int y)
+    {
+        var value = frame.At<byte>(y, x);
+        return (value, value, value);
+    }
+
+    private static (int R, int G, int B) ReadBgrPixel(Mat frame, int x, int y)
+    {
+        var value = frame.At<Vec3b>(y, x);
+        return (value.Item2, value.Item1, value.Item0);
+    }
+
+    private static (int R, int G, int B) ReadBgraPixel(Mat frame, int x, int y)
+    {
+        var value = frame.At<Vec4b>(y, x);
+        return (value.Item2, value.Item1, value.Item0);
+    }
+
+    private static int ScaleScriptCoordinate(double coordinate, int referenceSize, int actualSize)
+    {
+        if (actualSize <= 0)
+        {
+            return 0;
+        }
+
+        var scaled = (int)Math.Round(coordinate / referenceSize * actualSize);
+        return Math.Clamp(scaled, 0, actualSize - 1);
+    }
+
+    private static bool TryParseRgbHex(string? value, out int r, out int g, out int b)
+    {
+        r = 0;
+        g = 0;
+        b = 0;
+
+        var text = string.IsNullOrWhiteSpace(value)
+            ? string.Empty
+            : value.Trim();
+        if (text.StartsWith('#'))
+        {
+            text = text[1..];
+        }
+
+        if (text.Length != 6)
+        {
+            return false;
+        }
+
+        if (!int.TryParse(text[..2], System.Globalization.NumberStyles.HexNumber, null, out r) ||
+            !int.TryParse(text.Substring(2, 2), System.Globalization.NumberStyles.HexNumber, null, out g) ||
+            !int.TryParse(text.Substring(4, 2), System.Globalization.NumberStyles.HexNumber, null, out b))
+        {
+            r = 0;
+            g = 0;
+            b = 0;
+            return false;
+        }
+
+        return true;
     }
 }
 
@@ -525,6 +1043,8 @@ internal enum UpgradePanelSide
 
 internal static class ScriptInstructionHandlerSupport
 {
+    private const int RepeatedHotkeyIntervalMilliseconds = 60;
+
     private static readonly (double OffsetX, double OffsetY)[] PlacementOffsets =
     [
         (0d, 0d),
@@ -747,6 +1267,69 @@ internal static class ScriptInstructionHandlerSupport
             cancellationToken).ConfigureAwait(false);
     }
 
+    public static async Task PressHotkeyRepeatedAsync(
+        ScriptInstructionExecutionContext context,
+        HotkeyBinding hotkey,
+        int repeatCount,
+        string checkpoint,
+        string description,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(hotkey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(checkpoint);
+
+        var effectiveRepeatCount = Math.Max(1, repeatCount);
+        var effectiveDescription = string.IsNullOrWhiteSpace(description)
+            ? $"Sending hotkey '{hotkey.DisplayName}'."
+            : description;
+        var modifierKeys = ExpandModifierKeys(hotkey.Modifiers);
+
+        try
+        {
+            if (modifierKeys.Count > 0)
+            {
+                await ScriptExecutionOperations.CheckpointAsync(
+                    context,
+                    $"{checkpoint}ModifiersDown",
+                    $"{effectiveDescription} Holding modifiers '{hotkey.DisplayName}'.",
+                    cancellationToken).ConfigureAwait(false);
+
+                foreach (var modifierKey in modifierKeys)
+                {
+                    context.RuntimeServices.Input.KeyDown(modifierKey);
+                }
+            }
+
+            for (var index = 0; index < effectiveRepeatCount; index++)
+            {
+                await ScriptExecutionOperations.CheckpointAsync(
+                    context,
+                    checkpoint,
+                    $"{effectiveDescription} Press {index + 1}/{effectiveRepeatCount}.",
+                    cancellationToken).ConfigureAwait(false);
+
+                context.RuntimeServices.Input.PressKey(hotkey.Key);
+
+                if (index < effectiveRepeatCount - 1)
+                {
+                    await ScriptExecutionOperations.DelayAsync(
+                        context,
+                        RepeatedHotkeyIntervalMilliseconds,
+                        $"{checkpoint}Interval",
+                        cancellationToken).ConfigureAwait(false);
+                }
+            }
+        }
+        finally
+        {
+            for (var index = modifierKeys.Count - 1; index >= 0; index--)
+            {
+                context.RuntimeServices.Input.KeyUp(modifierKeys[index]);
+            }
+        }
+    }
+
     private static IEnumerable<WpfPoint> BuildOffsetCoordinates(
         WpfPoint baseCoordinate,
         IReadOnlyList<(double OffsetX, double OffsetY)> offsets)
@@ -755,5 +1338,32 @@ internal static class ScriptInstructionHandlerSupport
         {
             yield return new WpfPoint(baseCoordinate.X + offsetX, baseCoordinate.Y + offsetY);
         }
+    }
+
+    private static List<KeyId> ExpandModifierKeys(ModifierKeys modifiers)
+    {
+        var keys = new List<KeyId>(4);
+
+        if (modifiers.HasFlag(ModifierKeys.Control))
+        {
+            keys.Add(KeyId.LeftCtrl);
+        }
+
+        if (modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            keys.Add(KeyId.LeftShift);
+        }
+
+        if (modifiers.HasFlag(ModifierKeys.Alt))
+        {
+            keys.Add(KeyId.LeftAlt);
+        }
+
+        if (modifiers.HasFlag(ModifierKeys.Windows))
+        {
+            keys.Add(KeyId.LeftWin);
+        }
+
+        return keys;
     }
 }

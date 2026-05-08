@@ -15,6 +15,7 @@ using BetterBTD.Models.GameElements;
 using BetterBTD.Models.ScriptEditor;
 using BetterBTD.Models.ScriptExecution;
 using BetterBTD.Services;
+using BetterBTD.Views.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using GongSolutions.Wpf.DragDrop;
@@ -80,6 +81,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     private bool _isScriptExecutionRunning;
     private List<ScriptInstructionInstance> _sequenceSnapshot = [];
     private CancellationTokenSource? _scriptExecutionCancellationTokenSource;
+    private ScriptExecutionWindow? _scriptExecutionWindow;
 
     public ScriptEditorPageViewModel(LocalizationService localizationService)
     {
@@ -121,8 +123,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         CreateNewScriptFileCommand = new RelayCommand(CreateNewScriptFile);
         StartCoordinateSelectionCommand = new RelayCommand<string?>(StartCoordinateSelection);
         CancelCoordinateSelectionCommand = new RelayCommand<string?>(_ => CancelCoordinateSelection());
-        RunScriptCommand = new AsyncRelayCommand(RunScriptAsync, CanRunScript);
-        StopScriptExecutionCommand = new RelayCommand(StopScriptExecution, CanStopScriptExecution);
+        RunScriptCommand = new AsyncRelayCommand(RunScriptAsync);
 
         BuildMetadataOptions();
         BuildInstructionLibrary();
@@ -151,7 +152,6 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public IRelayCommand<string?> StartCoordinateSelectionCommand { get; }
     public IRelayCommand<string?> CancelCoordinateSelectionCommand { get; }
     public IAsyncRelayCommand RunScriptCommand { get; }
-    public IRelayCommand StopScriptExecutionCommand { get; }
 
     public ObservableCollection<LanguageOption> DifficultyOptions { get; } = [];
     public ObservableCollection<LanguageOption> ModeOptions { get; } = [];
@@ -308,6 +308,9 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public string ScriptCategoryBlackBorderText => _localizationService.T("Editor.Category.BlackBorder");
     public string ScriptCategoryRaceText => _localizationService.T("Editor.Category.Race");
 
+    public string DebugOpenRuntimeText => _localizationService.LanguageCode.Equals("en-US", StringComparison.OrdinalIgnoreCase)
+        ? "Open Runtime"
+        : "打开运行界面";
     public string DebugRunText => _localizationService.T("Editor.Debug.Run");
     public string DebugStepText => _localizationService.T("Editor.Debug.Step");
     public string DebugStopText => _localizationService.T("Editor.Debug.Stop");
@@ -324,7 +327,6 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
             }
 
             RunScriptCommand.NotifyCanExecuteChanged();
-            StopScriptExecutionCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -617,6 +619,9 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
 
     private async Task RunScriptAsync()
     {
+        OpenScriptExecutionWindow();
+        await Task.CompletedTask;
+#if false
         if (IsScriptExecutionRunning)
         {
             return;
@@ -638,6 +643,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
             return;
         }
 
+        var executionSequenceSnapshot = CaptureSequenceSnapshot();
         ScriptTaskFlow taskFlow;
         try
         {
@@ -656,8 +662,35 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         _scriptExecutionCancellationTokenSource?.Dispose();
         _scriptExecutionCancellationTokenSource = new CancellationTokenSource();
         IsScriptExecutionRunning = true;
-        SetScriptExecutionStatus("正在启动脚本执行...");
-        _scriptTaskFlowExecutor.ProgressChanged += OnScriptExecutionProgressChanged;
+        var runtimeWindowViewModel = new ScriptExecutionWindowViewModel(
+            _localizationService,
+            ResolveExecutionScriptDisplayName(),
+            taskFlow.SourceFilePath,
+            executionSequenceSnapshot,
+            StopScriptExecution);
+        var runtimeWindow = new ScriptExecutionWindow(runtimeWindowViewModel);
+        if (Application.Current?.MainWindow is Window owner && owner != runtimeWindow)
+        {
+            runtimeWindow.Owner = owner;
+        }
+
+        runtimeWindow.Show();
+        runtimeWindowViewModel.MarkStarting();
+
+        EventHandler<ScriptExecutionProgressSnapshot> progressHandler = (_, snapshot) =>
+        {
+            if (Application.Current?.Dispatcher is null || Application.Current.Dispatcher.CheckAccess())
+            {
+                runtimeWindowViewModel.ApplyProgressSnapshot(snapshot);
+                return;
+            }
+
+            _ = Application.Current.Dispatcher.InvokeAsync(
+                () => runtimeWindowViewModel.ApplyProgressSnapshot(snapshot),
+                DispatcherPriority.Background);
+        };
+
+        _scriptTaskFlowExecutor.ProgressChanged += progressHandler;
 
         try
         {
@@ -665,28 +698,25 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
                 .ExecuteAsync(taskFlow, cancellationToken: _scriptExecutionCancellationTokenSource.Token)
                 .ConfigureAwait(true);
 
-            ApplyExecutionResult(result);
+            runtimeWindowViewModel.ApplyResult(result);
         }
         catch (Exception ex)
         {
-            SetScriptExecutionStatus($"脚本执行异常：{ex.Message}");
-            ShowMessageDialog(
-                _localizationService.T("Editor.Debug.Run"),
-                $"脚本执行异常。\n\n{ex.Message}");
+            runtimeWindowViewModel.ApplyUnexpectedException(ex);
         }
         finally
         {
-            _scriptTaskFlowExecutor.ProgressChanged -= OnScriptExecutionProgressChanged;
+            _scriptTaskFlowExecutor.ProgressChanged -= progressHandler;
             _scriptExecutionCancellationTokenSource?.Dispose();
             _scriptExecutionCancellationTokenSource = null;
             IsScriptExecutionRunning = false;
         }
+#endif
     }
 
     private void StopScriptExecution()
     {
         _scriptExecutionCancellationTokenSource?.Cancel();
-        SetScriptExecutionStatus("正在请求停止脚本执行...");
     }
 
     private void ShowSaveError(Exception ex)
@@ -709,24 +739,6 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     private bool CanRunScript()
     {
         return !IsScriptExecutionRunning;
-    }
-
-    private bool CanStopScriptExecution()
-    {
-        return IsScriptExecutionRunning;
-    }
-
-    private void OnScriptExecutionProgressChanged(object? sender, ScriptExecutionProgressSnapshot snapshot)
-    {
-        if (Application.Current?.Dispatcher?.CheckAccess() == true)
-        {
-            SetScriptExecutionStatus(BuildExecutionStatusText(snapshot));
-            return;
-        }
-
-        _ = Application.Current?.Dispatcher?.InvokeAsync(
-            () => SetScriptExecutionStatus(BuildExecutionStatusText(snapshot)),
-            DispatcherPriority.Background);
     }
 
     private void ApplyExecutionResult(ScriptExecutionResult result)
@@ -783,6 +795,163 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         {
             OnPropertyChanged(nameof(ScriptExecutionStatus));
         }
+    }
+
+    private string ResolveExecutionScriptDisplayName()
+    {
+        if (!string.IsNullOrWhiteSpace(ScriptName))
+        {
+            return ScriptName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(CurrentScriptFilePath))
+        {
+            return Path.GetFileNameWithoutExtension(CurrentScriptFilePath);
+        }
+
+        return _localizationService.T("Editor.Runtime.UntitledScript");
+    }
+
+    private void OpenScriptExecutionWindow()
+    {
+        if (_scriptExecutionWindow is not null)
+        {
+            if (IsScriptExecutionRunning)
+            {
+                ActivateExecutionWindow(_scriptExecutionWindow);
+                return;
+            }
+
+            _scriptExecutionWindow.Close();
+        }
+
+        var executionSequenceSnapshot = CaptureSequenceSnapshot();
+        var scriptDocumentSnapshot = ExportScriptDocument();
+        var sourceFilePath = string.IsNullOrWhiteSpace(CurrentScriptFilePath) ? "[Unsaved Script]" : CurrentScriptFilePath;
+
+        var runtimeWindowViewModel = new ScriptExecutionWindowViewModel(
+            _localizationService,
+            ResolveExecutionScriptDisplayName(),
+            sourceFilePath,
+            executionSequenceSnapshot,
+            viewModel => StartScriptExecutionAsync(viewModel, scriptDocumentSnapshot, sourceFilePath),
+            StopScriptExecution);
+        var runtimeWindow = new ScriptExecutionWindow(runtimeWindowViewModel);
+        runtimeWindow.Closed += OnScriptExecutionWindowClosed;
+
+        if (Application.Current?.MainWindow is Window owner && owner != runtimeWindow)
+        {
+            runtimeWindow.Owner = owner;
+        }
+
+        _scriptExecutionWindow = runtimeWindow;
+        runtimeWindow.Show();
+        ActivateExecutionWindow(runtimeWindow);
+    }
+
+    private async Task StartScriptExecutionAsync(
+        ScriptExecutionWindowViewModel runtimeWindowViewModel,
+        ScriptDocument scriptDocumentSnapshot,
+        string sourceFilePath)
+    {
+        ArgumentNullException.ThrowIfNull(runtimeWindowViewModel);
+        ArgumentNullException.ThrowIfNull(scriptDocumentSnapshot);
+
+        if (IsScriptExecutionRunning)
+        {
+            return;
+        }
+
+        if (_scriptTaskFlowExecutor.IsRunning)
+        {
+            ShowMessageDialog(
+                _localizationService.T("Editor.Debug.Run"),
+                _localizationService.LanguageCode.Equals("en-US", StringComparison.OrdinalIgnoreCase)
+                    ? "Another script task is already running. A new execution cannot be started right now."
+                    : "已有脚本任务正在运行，当前不能启动新的执行。");
+            return;
+        }
+
+        ScriptTaskFlow taskFlow;
+        try
+        {
+            taskFlow = _scriptTaskFlowService.Build(scriptDocumentSnapshot, sourceFilePath);
+        }
+        catch (Exception ex)
+        {
+            ShowMessageDialog(
+                _localizationService.T("Editor.Debug.Run"),
+                _localizationService.LanguageCode.Equals("en-US", StringComparison.OrdinalIgnoreCase)
+                    ? $"Failed to build the execution task.\n\n{ex.Message}"
+                    : $"构建执行任务失败。\n\n{ex.Message}");
+            return;
+        }
+
+        _scriptExecutionCancellationTokenSource?.Dispose();
+        _scriptExecutionCancellationTokenSource = new CancellationTokenSource();
+        IsScriptExecutionRunning = true;
+        runtimeWindowViewModel.MarkStarting();
+
+        EventHandler<ScriptExecutionProgressSnapshot> progressHandler = (_, snapshot) =>
+        {
+            if (Application.Current?.Dispatcher is null || Application.Current.Dispatcher.CheckAccess())
+            {
+                runtimeWindowViewModel.ApplyProgressSnapshot(snapshot);
+                return;
+            }
+
+            _ = Application.Current.Dispatcher.InvokeAsync(
+                () => runtimeWindowViewModel.ApplyProgressSnapshot(snapshot),
+                DispatcherPriority.Background);
+        };
+
+        _scriptTaskFlowExecutor.ProgressChanged += progressHandler;
+
+        try
+        {
+            var result = await _scriptTaskFlowExecutor
+                .ExecuteAsync(taskFlow, cancellationToken: _scriptExecutionCancellationTokenSource.Token)
+                .ConfigureAwait(true);
+
+            runtimeWindowViewModel.ApplyResult(result);
+        }
+        catch (Exception ex)
+        {
+            runtimeWindowViewModel.ApplyUnexpectedException(ex);
+        }
+        finally
+        {
+            _scriptTaskFlowExecutor.ProgressChanged -= progressHandler;
+            _scriptExecutionCancellationTokenSource?.Dispose();
+            _scriptExecutionCancellationTokenSource = null;
+            IsScriptExecutionRunning = false;
+        }
+    }
+
+    private void OnScriptExecutionWindowClosed(object? sender, EventArgs e)
+    {
+        if (sender is not ScriptExecutionWindow window)
+        {
+            return;
+        }
+
+        window.Closed -= OnScriptExecutionWindowClosed;
+
+        if (ReferenceEquals(_scriptExecutionWindow, window))
+        {
+            _scriptExecutionWindow = null;
+        }
+    }
+
+    private static void ActivateExecutionWindow(Window window)
+    {
+        if (window.WindowState == WindowState.Minimized)
+        {
+            window.WindowState = WindowState.Normal;
+        }
+
+        _ = window.Activate();
+        _ = window.Focus();
     }
 
     private string BuildDefaultSaveFileName()
@@ -1689,6 +1858,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         OnPropertyChanged(nameof(ScriptCategoryCollectionText));
         OnPropertyChanged(nameof(ScriptCategoryBlackBorderText));
         OnPropertyChanged(nameof(ScriptCategoryRaceText));
+        OnPropertyChanged(nameof(DebugOpenRuntimeText));
         OnPropertyChanged(nameof(DebugRunText));
         OnPropertyChanged(nameof(DebugStepText));
         OnPropertyChanged(nameof(DebugStopText));

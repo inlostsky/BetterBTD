@@ -1,0 +1,534 @@
+using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Media;
+using BetterBTD.Models.ScriptEditor;
+using BetterBTD.Models.ScriptExecution;
+using BetterBTD.Services;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+
+namespace BetterBTD.ViewModels;
+
+public sealed class ScriptExecutionWindowViewModel : ObservableObject
+{
+    private static readonly Brush PendingStateBrush = CreateBrush("#FF8A93A6");
+    private static readonly Brush RunningStateBrush = CreateBrush("#FF57A6FF");
+    private static readonly Brush CompletedStateBrush = CreateBrush("#FF49B675");
+    private static readonly Brush FailedStateBrush = CreateBrush("#FFE35D6A");
+    private static readonly Brush CancelledStateBrush = CreateBrush("#FFE8A344");
+    private static readonly Brush PendingCardBrush = CreateBrush("#1A8A93A6");
+    private static readonly Brush RunningCardBrush = CreateBrush("#1857A6FF");
+    private static readonly Brush CompletedCardBrush = CreateBrush("#1649B675");
+    private static readonly Brush FailedCardBrush = CreateBrush("#1AE35D6A");
+    private static readonly Brush CancelledCardBrush = CreateBrush("#1AE8A344");
+    private static readonly Brush PendingTitleBrush = CreateBrush("#FF8F9CAF");
+    private static readonly Brush RunningTitleBrush = CreateBrush("#FFF3F6FB");
+    private static readonly Brush CompletedTitleBrush = CreateBrush("#FFD6DDEA");
+    private static readonly Brush FailedTitleBrush = CreateBrush("#FFFFB2BA");
+    private static readonly Brush CancelledTitleBrush = CreateBrush("#FFFFD39A");
+
+    private readonly LocalizationService _localizationService;
+    private readonly Func<ScriptExecutionWindowViewModel, Task> _startExecutionAsync;
+    private readonly Action _requestStop;
+
+    private string _windowTitle = string.Empty;
+    private string _scriptDisplayName = string.Empty;
+    private string _scriptSourcePath = string.Empty;
+    private string _statusText = string.Empty;
+    private string _currentInstructionText = string.Empty;
+    private bool _isRunning;
+
+    private string _lastLoggedSignature = string.Empty;
+
+    public ScriptExecutionWindowViewModel(
+        LocalizationService localizationService,
+        string scriptDisplayName,
+        string scriptSourcePath,
+        IReadOnlyList<ScriptInstructionInstance> instructions,
+        Func<ScriptExecutionWindowViewModel, Task> startExecutionAsync,
+        Action requestStop)
+    {
+        _localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
+        _startExecutionAsync = startExecutionAsync ?? throw new ArgumentNullException(nameof(startExecutionAsync));
+        _requestStop = requestStop ?? throw new ArgumentNullException(nameof(requestStop));
+
+        _scriptDisplayName = string.IsNullOrWhiteSpace(scriptDisplayName)
+            ? _localizationService.T("Editor.Runtime.UntitledScript")
+            : scriptDisplayName;
+        _scriptSourcePath = string.IsNullOrWhiteSpace(scriptSourcePath)
+            ? "[Unsaved Script]"
+            : scriptSourcePath;
+        _windowTitle = $"{_localizationService.T("Editor.Runtime.WindowTitle")} - {_scriptDisplayName}";
+        _statusText = _localizationService.T("Editor.Runtime.NotStarted");
+        _currentInstructionText = _localizationService.T("Editor.Runtime.NotStarted");
+
+        StartCommand = new AsyncRelayCommand(StartExecutionAsync, CanStartExecution);
+        StopCommand = new RelayCommand(StopExecution, CanStopExecution);
+
+        ArgumentNullException.ThrowIfNull(instructions);
+        for (var index = 0; index < instructions.Count; index++)
+        {
+            var instruction = instructions[index];
+            Steps.Add(new ScriptExecutionStepItem(
+                index,
+                string.IsNullOrWhiteSpace(instruction.DisplayName) ? instruction.Type.ToString() : instruction.DisplayName,
+                string.IsNullOrWhiteSpace(instruction.Description) ? instruction.Type.ToString() : instruction.Description));
+        }
+
+        SetAllStepsToPending();
+    }
+
+    public ObservableCollection<ScriptExecutionStepItem> Steps { get; } = [];
+
+    public ObservableCollection<string> LogLines { get; } = [];
+
+    public IAsyncRelayCommand StartCommand { get; }
+
+    public IRelayCommand StopCommand { get; }
+
+    public string WindowTitle
+    {
+        get => _windowTitle;
+        private set => SetProperty(ref _windowTitle, value);
+    }
+
+    public string ScriptDisplayName
+    {
+        get => _scriptDisplayName;
+        private set => SetProperty(ref _scriptDisplayName, value);
+    }
+
+    public string ScriptSourcePath
+    {
+        get => _scriptSourcePath;
+        private set => SetProperty(ref _scriptSourcePath, value);
+    }
+
+    public string StatusText
+    {
+        get => _statusText;
+        private set => SetProperty(ref _statusText, value);
+    }
+
+    public string CurrentInstructionText
+    {
+        get => _currentInstructionText;
+        private set => SetProperty(ref _currentInstructionText, value);
+    }
+
+    public bool IsRunning
+    {
+        get => _isRunning;
+        private set
+        {
+            if (!SetProperty(ref _isRunning, value))
+            {
+                return;
+            }
+
+            StartCommand.NotifyCanExecuteChanged();
+            StopCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    public string SequenceTitle => _localizationService.T("Editor.Runtime.Sequence");
+
+    public string OutputTitle => _localizationService.T("Editor.Runtime.Output");
+
+    public string StatusTitle => _localizationService.T("Editor.Runtime.Status");
+
+    public string SourceLabelText => _localizationService.T("Editor.Runtime.Source");
+
+    public string CurrentInstructionLabel => _localizationService.T("Editor.Runtime.CurrentInstruction");
+
+    public string StatusDetailLabel => _localizationService.T("Editor.Runtime.StatusDetail");
+
+    public string StartText => _localizationService.T("Editor.Debug.Run");
+
+    public string StopText => _localizationService.T("Editor.Debug.Stop");
+
+    public void MarkStarting()
+    {
+        _lastLoggedSignature = string.Empty;
+        SetAllStepsToPending();
+        IsRunning = true;
+        StatusText = _localizationService.T("Editor.Runtime.Starting");
+        CurrentInstructionText = _localizationService.T("Editor.Runtime.WaitingInstruction");
+        AppendLog(StatusText);
+    }
+
+    public void ApplyProgressSnapshot(ScriptExecutionProgressSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        IsRunning = snapshot.RunState is ScriptExecutionRunState.Running
+            or ScriptExecutionRunState.PauseRequested
+            or ScriptExecutionRunState.Paused;
+
+        UpdateStepsFromProgress(snapshot);
+        StatusText = BuildStatusText(snapshot);
+        CurrentInstructionText = BuildCurrentInstructionText(snapshot);
+        AppendProgressLog(snapshot);
+    }
+
+    public void ApplyResult(ScriptExecutionResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        IsRunning = false;
+        UpdateStepsFromResult(result);
+
+        var finalText = result.Status switch
+        {
+            ScriptExecutionStatus.Completed => string.Format(
+                _localizationService.T("Editor.Runtime.Completed"),
+                result.ExecutedStepCount,
+                result.LastCompletedStepIndex + 1),
+            ScriptExecutionStatus.Cancelled => string.Format(
+                _localizationService.T("Editor.Runtime.Cancelled"),
+                result.ExecutedStepCount,
+                result.LastCompletedStepIndex + 1),
+            ScriptExecutionStatus.Failed => BuildFailureText(result),
+            _ => _localizationService.T("Editor.Runtime.UnknownResult")
+        };
+
+        StatusText = finalText;
+        CurrentInstructionText = finalText;
+        AppendLog(finalText);
+    }
+
+    public void ApplyUnexpectedException(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        IsRunning = false;
+        StatusText = string.Format(_localizationService.T("Editor.Runtime.UnexpectedError"), exception.Message);
+        CurrentInstructionText = StatusText;
+        AppendLog(StatusText);
+    }
+
+    public void HandleWindowClosing()
+    {
+        if (IsRunning)
+        {
+            StopExecution();
+        }
+    }
+
+    private string BuildFailureText(ScriptExecutionResult result)
+    {
+        var failure = result.Failure;
+        if (failure is null)
+        {
+            return string.Format(
+                _localizationService.T("Editor.Runtime.FailedSimple"),
+                result.Exception?.Message ?? _localizationService.T("Editor.Runtime.UnknownError"));
+        }
+
+        return string.Format(
+            _localizationService.T("Editor.Runtime.FailedDetailed"),
+            failure.StepIndex + 1,
+            failure.CommandType,
+            failure.Checkpoint,
+            failure.Attempt,
+            failure.Message);
+    }
+
+    private void StopExecution()
+    {
+        _requestStop();
+        StatusText = _localizationService.T("Editor.Runtime.StopRequested");
+        CurrentInstructionText = StatusText;
+        AppendLog(StatusText);
+    }
+
+    private async Task StartExecutionAsync()
+    {
+        await _startExecutionAsync(this);
+    }
+
+    private bool CanStartExecution()
+    {
+        return !IsRunning && Steps.Count > 0;
+    }
+
+    private bool CanStopExecution()
+    {
+        return IsRunning;
+    }
+
+    private void UpdateStepsFromProgress(ScriptExecutionProgressSnapshot snapshot)
+    {
+        for (var index = 0; index < Steps.Count; index++)
+        {
+            if (index <= snapshot.LastCompletedStepIndex)
+            {
+                ApplyStepVisual(
+                    Steps[index],
+                    _localizationService.T("Editor.Runtime.Step.Completed"),
+                    CompletedStateBrush,
+                    CompletedCardBrush,
+                    isCurrent: false,
+                    CompletedTitleBrush);
+                continue;
+            }
+
+            if (index == snapshot.CurrentStepIndex)
+            {
+                ApplyStepVisual(
+                    Steps[index],
+                    ResolveRunningStepState(snapshot.RunState),
+                    RunningStateBrush,
+                    RunningCardBrush,
+                    isCurrent: true,
+                    RunningTitleBrush);
+                continue;
+            }
+
+            ApplyStepVisual(
+                Steps[index],
+                _localizationService.T("Editor.Runtime.Step.Pending"),
+                PendingStateBrush,
+                PendingCardBrush,
+                isCurrent: false,
+                PendingTitleBrush);
+        }
+    }
+
+    private void UpdateStepsFromResult(ScriptExecutionResult result)
+    {
+        for (var index = 0; index < Steps.Count; index++)
+        {
+            if (index <= result.LastCompletedStepIndex)
+            {
+                ApplyStepVisual(
+                    Steps[index],
+                    _localizationService.T("Editor.Runtime.Step.Completed"),
+                    CompletedStateBrush,
+                    CompletedCardBrush,
+                    isCurrent: false,
+                    CompletedTitleBrush);
+                continue;
+            }
+
+            if (result.Status == ScriptExecutionStatus.Failed &&
+                result.Failure is not null &&
+                index == result.Failure.StepIndex)
+            {
+                ApplyStepVisual(
+                    Steps[index],
+                    _localizationService.T("Editor.Runtime.Step.Failed"),
+                    FailedStateBrush,
+                    FailedCardBrush,
+                    isCurrent: false,
+                    FailedTitleBrush);
+                continue;
+            }
+
+            if (result.Status == ScriptExecutionStatus.Cancelled &&
+                index == Math.Clamp(result.LastCompletedStepIndex + 1, 0, Math.Max(0, Steps.Count - 1)) &&
+                result.LastCompletedStepIndex < Steps.Count - 1)
+            {
+                ApplyStepVisual(
+                    Steps[index],
+                    _localizationService.T("Editor.Runtime.Step.Cancelled"),
+                    CancelledStateBrush,
+                    CancelledCardBrush,
+                    isCurrent: false,
+                    CancelledTitleBrush);
+                continue;
+            }
+
+            ApplyStepVisual(
+                Steps[index],
+                _localizationService.T("Editor.Runtime.Step.Pending"),
+                PendingStateBrush,
+                PendingCardBrush,
+                isCurrent: false,
+                PendingTitleBrush);
+        }
+    }
+
+    private void SetAllStepsToPending()
+    {
+        foreach (var step in Steps)
+        {
+            ApplyStepVisual(
+                step,
+                _localizationService.T("Editor.Runtime.Step.Pending"),
+                PendingStateBrush,
+                PendingCardBrush,
+                isCurrent: false,
+                PendingTitleBrush);
+        }
+    }
+
+    private void ApplyStepVisual(
+        ScriptExecutionStepItem step,
+        string stateText,
+        Brush stateBrush,
+        Brush cardBrush,
+        bool isCurrent,
+        Brush titleBrush)
+    {
+        step.StateText = stateText;
+        step.StateBrush = stateBrush;
+        step.CardBorderBrush = stateBrush;
+        step.CardBackgroundBrush = cardBrush;
+        step.IsCurrent = isCurrent;
+        step.TitleBrush = titleBrush;
+        step.TitleWeight = isCurrent ? FontWeights.SemiBold : FontWeights.Normal;
+    }
+
+    private string BuildStatusText(ScriptExecutionProgressSnapshot snapshot)
+    {
+        var checkpointText = string.IsNullOrWhiteSpace(snapshot.CurrentCheckpoint)
+            ? _localizationService.T("Editor.Runtime.None")
+            : snapshot.CurrentCheckpoint;
+        var messageText = string.IsNullOrWhiteSpace(snapshot.Message)
+            ? _localizationService.T("Editor.Runtime.None")
+            : snapshot.Message;
+
+        return string.Format(
+            _localizationService.T("Editor.Runtime.StatusTemplate"),
+            snapshot.RunState,
+            checkpointText,
+            snapshot.CurrentAttempt,
+            messageText);
+    }
+
+    private string BuildCurrentInstructionText(ScriptExecutionProgressSnapshot snapshot)
+    {
+        if (snapshot.CurrentStepIndex < 0 || snapshot.CurrentStepIndex >= Steps.Count)
+        {
+            return _localizationService.T("Editor.Runtime.WaitingInstruction");
+        }
+
+        var step = Steps[snapshot.CurrentStepIndex];
+        return step.Title;
+    }
+
+    private string ResolveRunningStepState(ScriptExecutionRunState runState)
+    {
+        return runState switch
+        {
+            ScriptExecutionRunState.PauseRequested => _localizationService.T("Editor.Runtime.Step.PauseRequested"),
+            ScriptExecutionRunState.Paused => _localizationService.T("Editor.Runtime.Step.Paused"),
+            _ => _localizationService.T("Editor.Runtime.Step.Running")
+        };
+    }
+
+    private void AppendProgressLog(ScriptExecutionProgressSnapshot snapshot)
+    {
+        var signature = $"{snapshot.RunState}|{snapshot.CurrentStepIndex}|{snapshot.CurrentCommandType}|{snapshot.CurrentCheckpoint}|{snapshot.CurrentAttempt}|{snapshot.Message}";
+        if (string.Equals(signature, _lastLoggedSignature, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastLoggedSignature = signature;
+
+        var stepText = snapshot.CurrentStepIndex >= 0
+            ? $"#{snapshot.CurrentStepIndex + 1:000}"
+            : _localizationService.T("Editor.Runtime.NoStep");
+        var commandText = string.IsNullOrWhiteSpace(snapshot.CurrentCommandType)
+            ? _localizationService.T("Editor.Runtime.None")
+            : snapshot.CurrentCommandType;
+        var checkpointText = string.IsNullOrWhiteSpace(snapshot.CurrentCheckpoint)
+            ? _localizationService.T("Editor.Runtime.None")
+            : snapshot.CurrentCheckpoint;
+        var attemptText = snapshot.CurrentAttempt > 0
+            ? $" | attempt {snapshot.CurrentAttempt}"
+            : string.Empty;
+        var messageText = string.IsNullOrWhiteSpace(snapshot.Message)
+            ? string.Empty
+            : $" | {snapshot.Message}";
+
+        AppendLog($"{snapshot.RunState} | {stepText} | {commandText} | {checkpointText}{attemptText}{messageText}");
+    }
+
+    private void AppendLog(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return;
+        }
+
+        LogLines.Add($"[{DateTime.Now:HH:mm:ss}] {message}");
+    }
+
+    private static Brush CreateBrush(string hex)
+    {
+        var brush = (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
+        brush.Freeze();
+        return brush;
+    }
+}
+
+public sealed class ScriptExecutionStepItem : ObservableObject
+{
+    private string _stateText = string.Empty;
+    private Brush _stateBrush = Brushes.Transparent;
+    private Brush _cardBorderBrush = Brushes.Transparent;
+    private Brush _cardBackgroundBrush = Brushes.Transparent;
+    private bool _isCurrent;
+    private Brush _titleBrush = Brushes.White;
+    private FontWeight _titleWeight = FontWeights.Normal;
+
+    public ScriptExecutionStepItem(int index, string title, string description)
+    {
+        Index = index;
+        Title = title;
+        Description = description;
+    }
+
+    public int Index { get; }
+
+    public string StepNumberText => $"#{Index + 1:000}";
+
+    public string Title { get; }
+
+    public string Description { get; }
+
+    public string StateText
+    {
+        get => _stateText;
+        set => SetProperty(ref _stateText, value);
+    }
+
+    public Brush StateBrush
+    {
+        get => _stateBrush;
+        set => SetProperty(ref _stateBrush, value);
+    }
+
+    public Brush CardBorderBrush
+    {
+        get => _cardBorderBrush;
+        set => SetProperty(ref _cardBorderBrush, value);
+    }
+
+    public Brush CardBackgroundBrush
+    {
+        get => _cardBackgroundBrush;
+        set => SetProperty(ref _cardBackgroundBrush, value);
+    }
+
+    public bool IsCurrent
+    {
+        get => _isCurrent;
+        set => SetProperty(ref _isCurrent, value);
+    }
+
+    public Brush TitleBrush
+    {
+        get => _titleBrush;
+        set => SetProperty(ref _titleBrush, value);
+    }
+
+    public FontWeight TitleWeight
+    {
+        get => _titleWeight;
+        set => SetProperty(ref _titleWeight, value);
+    }
+}

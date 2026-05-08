@@ -16,9 +16,6 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
@@ -60,30 +57,17 @@
                        Icon="{ui:SymbolIcon ArrowRedo24}"
                        Command="{Binding RedoSequenceCommand}" />
 
-            <TextBlock Grid.Column="6"
-                       Margin="0,0,12,0"
-                       VerticalAlignment="Center"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Text="{Binding ScriptExecutionStatus}"
-                       TextTrimming="CharacterEllipsis" />
-
-            <TextBlock Grid.Column="7"
+            <TextBlock Grid.Column="5"
                        Margin="0,0,12,0"
                        VerticalAlignment="Center"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                        Text="{Binding CurrentFileText}" />
 
-            <ui:Button Grid.Column="8"
+            <ui:Button Grid.Column="6"
                        Appearance="Primary"
-                       Content="{Binding DebugRunText}"
+                       Content="{Binding DebugOpenRuntimeText}"
                        Command="{Binding RunScriptCommand}"
-                       Icon="{ui:SymbolIcon Play24}" />
-            <ui:Button Grid.Column="9"
-                       Margin="8,0,0,0"
-                       Appearance="Secondary"
-                       Content="{Binding DebugStopText}"
-                       Command="{Binding StopScriptExecutionCommand}"
-                       Icon="{ui:SymbolIcon Stop24}" />
+                       Icon="{ui:SymbolIcon PlayCircle24}" />
         </Grid>
     </ui:CardControl>
 </UserControl>
