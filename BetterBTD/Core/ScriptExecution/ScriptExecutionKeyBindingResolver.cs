@@ -12,6 +12,11 @@ public static class ScriptExecutionKeyBindingResolver
         var normalizedSelectionCode = ScriptEditorInstructionService.NormalizePlaceSelectionCode(selectionCode);
         var keyBindings = ConfigurationService.Instance.Current.KeyBindings;
 
+        if (ScriptEditorInstructionService.IsHeroSelectionCode(normalizedSelectionCode))
+        {
+            return EnsureBound(keyBindings.General.Hero, "hero placement hotkey");
+        }
+
         if (ScriptEditorInstructionService.TryParseTowerSelection(normalizedSelectionCode, out var towerType))
         {
             return EnsureBound(
@@ -45,11 +50,6 @@ public static class ScriptExecutionKeyBindingResolver
                     _ => throw new InvalidOperationException($"Unsupported tower placement selection '{towerType}'.")
                 },
                 $"placement hotkey for '{towerType}'");
-        }
-
-        if (ScriptEditorInstructionService.TryParseHeroSelection(normalizedSelectionCode, out _))
-        {
-            return EnsureBound(keyBindings.General.Hero, "hero placement hotkey");
         }
 
         throw new InvalidOperationException($"Unsupported placement selection code '{selectionCode}'.");

@@ -4,7 +4,6 @@ using System.Windows;
 using System.Windows.Input;
 using BetterBTD.Core.Config;
 using BetterBTD.Core.Simulator;
-using BetterBTD.Core.Simulator.Extensions;
 using BetterBTD.Helpers;
 using BetterBTD.Models;
 using Fischless.WindowsInput;
@@ -18,20 +17,27 @@ public sealed class ScriptInputSimulationService
     private const int DefaultClickHoldMilliseconds = 50;
     private const int DefaultDoubleClickIntervalMilliseconds = 80;
 
-    private readonly CoordinateTransformService _coordinateTransformService;
-    private readonly GameWindowInfoService _gameWindowInfoService;
+    private readonly IScriptInputSimulationEnvironment _environment;
+    private readonly IInputSimulationCommandDispatcher _dispatcher;
 
     private ScriptInputSimulationService()
+        : this(new ScriptInputSimulationEnvironment(), new InputSimulationCommandDispatcher())
     {
-        _coordinateTransformService = CoordinateTransformService.Instance;
-        _gameWindowInfoService = GameWindowInfoService.Instance;
+    }
+
+    internal ScriptInputSimulationService(
+        IScriptInputSimulationEnvironment environment,
+        IInputSimulationCommandDispatcher dispatcher)
+    {
+        _environment = environment ?? throw new ArgumentNullException(nameof(environment));
+        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
     }
 
     public static ScriptInputSimulationService Instance => InstanceHolder.Value;
 
     public bool TryGetTargetWindowInfo(out GameWindowInfo windowInfo)
     {
-        return _gameWindowInfoService.TryGetTargetWindowInfo(out windowInfo);
+        return _environment.TryGetTargetWindowInfo(out windowInfo);
     }
 
     public bool TryConvertScriptToScreenCoordinate(Point scriptCoordinate, out Point screenCoordinate)
@@ -53,7 +59,7 @@ public sealed class ScriptInputSimulationService
 
     public Point ConvertScriptToScreenCoordinate(Point scriptCoordinate, GameWindowInfo windowInfo)
     {
-        return _coordinateTransformService.ToScreenCoordinate(scriptCoordinate, windowInfo);
+        return _environment.ConvertScriptToScreenCoordinate(scriptCoordinate, windowInfo);
     }
 
     public void MoveMouseToScriptCoordinate(double x, double y)
@@ -73,8 +79,8 @@ public sealed class ScriptInputSimulationService
 
     public void MoveMouseToScreenCoordinate(Point screenCoordinate)
     {
-        var absolutePoint = NativeWindowHelper.ToVirtualDesktopAbsoluteCoordinate(screenCoordinate);
-        Simulation.SendInput.Mouse.MoveMouseToPositionOnVirtualDesktop(absolutePoint.X, absolutePoint.Y);
+        var absolutePoint = _environment.ToVirtualDesktopAbsoluteCoordinate(screenCoordinate);
+        _dispatcher.Dispatch(InputSimulationCommandBuilder.BuildMoveMouseToVirtualDesktop(absolutePoint.X, absolutePoint.Y));
     }
 
     public void ClickMouseAtScriptCoordinate(
@@ -121,110 +127,118 @@ public sealed class ScriptInputSimulationService
         int clickCount = 1,
         int holdMilliseconds = DefaultClickHoldMilliseconds)
     {
-        var effectiveClickCount = Math.Max(1, clickCount);
-        var effectiveHoldMilliseconds = Math.Max(0, holdMilliseconds);
-
-        for (var index = 0; index < effectiveClickCount; index++)
-        {
-            MouseDown(button);
-
-            if (effectiveHoldMilliseconds > 0)
-            {
-                Thread.Sleep(effectiveHoldMilliseconds);
-            }
-
-            MouseUp(button);
-
-            if (index < effectiveClickCount - 1)
-            {
-                Thread.Sleep(DefaultDoubleClickIntervalMilliseconds);
-            }
-        }
+        _dispatcher.Dispatch(InputSimulationCommandBuilder.BuildClickMouse(
+            button,
+            clickCount,
+            holdMilliseconds,
+            DefaultDoubleClickIntervalMilliseconds));
     }
 
     public void MouseDown(InputMouseButton button = InputMouseButton.LeftButton)
     {
-        switch (button)
-        {
-            case InputMouseButton.LeftButton:
-                Simulation.SendInput.Mouse.LeftButtonDown();
-                break;
-            case InputMouseButton.MiddleButton:
-                Simulation.SendInput.Mouse.MiddleButtonDown();
-                break;
-            case InputMouseButton.RightButton:
-                Simulation.SendInput.Mouse.RightButtonDown();
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(button), button, "Unsupported mouse button.");
-        }
+        _dispatcher.Dispatch(
+        [
+            new InputSimulationCommand
+            {
+                Type = InputSimulationCommandType.MouseButtonDown,
+                MouseButton = button
+            }
+        ]);
     }
 
     public void MouseUp(InputMouseButton button = InputMouseButton.LeftButton)
     {
-        switch (button)
-        {
-            case InputMouseButton.LeftButton:
-                Simulation.SendInput.Mouse.LeftButtonUp();
-                break;
-            case InputMouseButton.MiddleButton:
-                Simulation.SendInput.Mouse.MiddleButtonUp();
-                break;
-            case InputMouseButton.RightButton:
-                Simulation.SendInput.Mouse.RightButtonUp();
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(button), button, "Unsupported mouse button.");
-        }
+        _dispatcher.Dispatch(
+        [
+            new InputSimulationCommand
+            {
+                Type = InputSimulationCommandType.MouseButtonUp,
+                MouseButton = button
+            }
+        ]);
     }
 
     public void PressKey(KeyId key)
     {
-        Simulation.SendInput.SimulateKey(key);
+        _dispatcher.Dispatch(InputSimulationCommandBuilder.BuildSimulateKey(key));
     }
 
     public void KeyDown(KeyId key)
     {
-        Simulation.SendInput.SimulateKey(key, KeyType.KeyDown);
+        _dispatcher.Dispatch(InputSimulationCommandBuilder.BuildSimulateKey(key, Core.Simulator.Extensions.KeyType.KeyDown));
     }
 
     public void KeyUp(KeyId key)
     {
-        Simulation.SendInput.SimulateKey(key, KeyType.KeyUp);
+        _dispatcher.Dispatch(InputSimulationCommandBuilder.BuildSimulateKey(key, Core.Simulator.Extensions.KeyType.KeyUp));
     }
 
     public void HoldKey(KeyId key)
     {
-        Simulation.SendInput.SimulateKey(key, KeyType.Hold);
+        _dispatcher.Dispatch(InputSimulationCommandBuilder.BuildSimulateKey(key, Core.Simulator.Extensions.KeyType.Hold));
     }
 
     public void PressHotkey(HotkeyBinding hotkey)
     {
         ArgumentNullException.ThrowIfNull(hotkey);
-        Simulation.SendInput.SimulateHotkey(hotkey);
+        _dispatcher.Dispatch(InputSimulationCommandBuilder.BuildSimulateHotkey(hotkey));
     }
 
     public void PressCombination(ModifierKeys modifiers, params KeyId[] keys)
     {
         ArgumentNullException.ThrowIfNull(keys);
-        Simulation.SendInput.SimulateCombination(modifiers, keys);
+        _dispatcher.Dispatch(InputSimulationCommandBuilder.BuildSimulateCombination(modifiers, keys));
     }
 
     public void PressCombination(IEnumerable<KeyId> modifierKeys, IEnumerable<KeyId> keys)
     {
         ArgumentNullException.ThrowIfNull(modifierKeys);
         ArgumentNullException.ThrowIfNull(keys);
-        Simulation.SendInput.SimulateCombination(modifierKeys, keys);
+        _dispatcher.Dispatch(InputSimulationCommandBuilder.BuildSimulateCombination(modifierKeys, keys));
     }
 
     private GameWindowInfo GetRequiredTargetWindowInfo()
     {
-        if (_gameWindowInfoService.TryGetTargetWindowInfo(out var windowInfo))
+        if (_environment.TryGetTargetWindowInfo(out var windowInfo))
         {
             return windowInfo;
         }
 
         throw new InvalidOperationException(
-            $"Target game window '{_gameWindowInfoService.TargetWindowTitle}' was not found or is not available.");
+            $"Target game window '{_environment.TargetWindowTitle}' was not found or is not available.");
+    }
+}
+
+internal interface IScriptInputSimulationEnvironment
+{
+    string TargetWindowTitle { get; }
+
+    bool TryGetTargetWindowInfo(out GameWindowInfo windowInfo);
+
+    Point ConvertScriptToScreenCoordinate(Point scriptCoordinate, GameWindowInfo windowInfo);
+
+    Point ToVirtualDesktopAbsoluteCoordinate(Point screenCoordinate);
+}
+
+internal sealed class ScriptInputSimulationEnvironment : IScriptInputSimulationEnvironment
+{
+    private readonly CoordinateTransformService _coordinateTransformService = CoordinateTransformService.Instance;
+    private readonly GameWindowInfoService _gameWindowInfoService = GameWindowInfoService.Instance;
+
+    public string TargetWindowTitle => _gameWindowInfoService.TargetWindowTitle;
+
+    public bool TryGetTargetWindowInfo(out GameWindowInfo windowInfo)
+    {
+        return _gameWindowInfoService.TryGetTargetWindowInfo(out windowInfo);
+    }
+
+    public Point ConvertScriptToScreenCoordinate(Point scriptCoordinate, GameWindowInfo windowInfo)
+    {
+        return _coordinateTransformService.ToScreenCoordinate(scriptCoordinate, windowInfo);
+    }
+
+    public Point ToVirtualDesktopAbsoluteCoordinate(Point screenCoordinate)
+    {
+        return NativeWindowHelper.ToVirtualDesktopAbsoluteCoordinate(screenCoordinate);
     }
 }

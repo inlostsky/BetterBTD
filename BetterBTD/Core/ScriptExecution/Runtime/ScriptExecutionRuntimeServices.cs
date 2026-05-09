@@ -69,6 +69,14 @@ public interface IGameStageStateService
 
     Task<bool?> GetCanPlaceHeroAsync(CancellationToken cancellationToken = default);
 
+    Task<bool> IsCoordinateColorMatchAsync(
+        WpfPoint scriptCoordinate,
+        int expectedR,
+        int expectedG,
+        int expectedB,
+        int tolerance,
+        CancellationToken cancellationToken = default);
+
     Task<string> GetStageTargetAsync(CancellationToken cancellationToken = default);
 
     Task<GameStageStateSnapshot?> CaptureSnapshotAsync(CancellationToken cancellationToken = default);

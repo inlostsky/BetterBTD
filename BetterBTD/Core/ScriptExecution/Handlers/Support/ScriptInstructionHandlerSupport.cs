@@ -1,0 +1,334 @@
+using BetterBTD.Core.Config;
+using BetterBTD.Models.ScriptEditor;
+using BetterBTD.Models.ScriptExecution;
+using System.Windows.Input;
+using WpfPoint = System.Windows.Point;
+
+namespace BetterBTD.Core.ScriptExecution.Handlers;
+
+internal static class ScriptInstructionHandlerSupport
+{
+    private const int RepeatedHotkeyIntervalMilliseconds = 60;
+
+    private static readonly (double OffsetX, double OffsetY)[] PlacementOffsets =
+    [
+        (0d, 0d),
+        (4d, 0d),
+        (-4d, 0d),
+        (0d, 4d),
+        (0d, -4d),
+        (8d, 0d),
+        (-8d, 0d),
+        (0d, 8d),
+        (0d, -8d),
+        (6d, 6d),
+        (-6d, 6d),
+        (6d, -6d),
+        (-6d, -6d)
+    ];
+
+    private static readonly (double OffsetX, double OffsetY)[] SelectionOffsets =
+    [
+        (0d, 0d),
+        (3d, 0d),
+        (-3d, 0d),
+        (0d, 3d),
+        (0d, -3d),
+        (6d, 0d),
+        (-6d, 0d),
+        (0d, 6d),
+        (0d, -6d)
+    ];
+
+    public static IEnumerable<WpfPoint> BuildPlacementSearchCoordinates(WpfPoint requestedCoordinate)
+    {
+        return BuildOffsetCoordinates(requestedCoordinate, PlacementOffsets);
+    }
+
+    public static bool IsPlacementModeActive(GameStageStateSnapshot? snapshot)
+    {
+        return snapshot?.IsPlacingMonkey == true;
+    }
+
+    public static UpgradePanelSide? ResolveVisibleUpgradePanelSide(GameStageStateSnapshot? snapshot)
+    {
+        if (snapshot?.RightUpgradePanel.IsVisible == true)
+        {
+            return UpgradePanelSide.Right;
+        }
+
+        if (snapshot?.LeftUpgradePanel.IsVisible == true)
+        {
+            return UpgradePanelSide.Left;
+        }
+
+        return null;
+    }
+
+    public static int? GetUpgradeLevel(
+        GameStageStateSnapshot snapshot,
+        UpgradePanelSide panelSide,
+        UpgradePathType upgradePath)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        var panelState = panelSide == UpgradePanelSide.Right
+            ? snapshot.RightUpgradePanel
+            : snapshot.LeftUpgradePanel;
+
+        return upgradePath switch
+        {
+            UpgradePathType.Top => panelState.TopPathLevel,
+            UpgradePathType.Middle => panelState.MiddlePathLevel,
+            UpgradePathType.Bottom => panelState.BottomPathLevel,
+            _ => null
+        };
+    }
+
+    public static bool IsHeroObjectKey(string? objectKey)
+    {
+        return !string.IsNullOrWhiteSpace(objectKey) &&
+               objectKey.StartsWith("Hero:", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsWaitTimeout(ScriptExecutionException exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return string.Equals(exception.Checkpoint, "WaitTimedOut", StringComparison.Ordinal);
+    }
+
+    public static string FormatPoint(WpfPoint point)
+    {
+        return $"({point.X:0.##}, {point.Y:0.##})";
+    }
+
+    public static ScriptExecutionException CreateExecutionException(
+        ScriptInstructionExecutionContext context,
+        string checkpoint,
+        string message,
+        int attempt = 0,
+        Exception? innerException = null)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentException.ThrowIfNullOrWhiteSpace(checkpoint);
+
+        return new ScriptExecutionException(
+            message,
+            context.Step.Index,
+            context.Step.CommandType.ToString(),
+            checkpoint,
+            attempt,
+            innerException);
+    }
+
+    public static async Task CancelPlacementModeIfActiveAsync(
+        ScriptInstructionExecutionContext context,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var snapshot = await context.RuntimeServices.GameStageState
+            .CaptureSnapshotAsync(cancellationToken)
+            .ConfigureAwait(false);
+        if (!IsPlacementModeActive(snapshot))
+        {
+            return;
+        }
+
+        await ScriptExecutionOperations.CheckpointAsync(
+            context,
+            "PlaceMonkeyCancel",
+            "Placement mode is already active. Sending Escape to reset it.",
+            cancellationToken).ConfigureAwait(false);
+
+        context.RuntimeServices.Input.PressKey(KeyId.Escape);
+
+        try
+        {
+            await ScriptExecutionOperations.WaitUntilAsync(
+                context,
+                new ScriptWaitOptions
+                {
+                    TimeoutMilliseconds = 700,
+                    PollIntervalMilliseconds = 100,
+                    Description = "placement mode reset"
+                },
+                async innerToken =>
+                {
+                    var currentSnapshot = await context.RuntimeServices.GameStageState
+                        .CaptureSnapshotAsync(innerToken)
+                        .ConfigureAwait(false);
+                    return currentSnapshot?.IsPlacingMonkey == false;
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (ScriptExecutionException ex) when (IsWaitTimeout(ex))
+        {
+        }
+    }
+
+    public static async Task<GameStageStateSnapshot> EnsureUpgradePanelVisibleAsync(
+        ScriptInstructionExecutionContext context,
+        WpfPoint targetCoordinate,
+        CancellationToken cancellationToken)
+    {
+        return await ScriptExecutionOperations.RetryAsync(
+            context,
+            new ScriptRetryOptions
+            {
+                MaxAttempts = 3,
+                DelayBetweenAttemptsMilliseconds = 150,
+                Description = $"Open upgrade panel at {FormatPoint(targetCoordinate)}"
+            },
+            async (attempt, token) =>
+            {
+                foreach (var selectionCoordinate in BuildOffsetCoordinates(targetCoordinate, SelectionOffsets))
+                {
+                    await ScriptExecutionOperations.CheckpointAsync(
+                        context,
+                        "UpgradeMonkeySelect",
+                        $"Selection attempt {attempt}: clicking {FormatPoint(selectionCoordinate)}.",
+                        token).ConfigureAwait(false);
+
+                    context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(selectionCoordinate, clickCount: 1);
+
+                    GameStageStateSnapshot? visibleSnapshot = null;
+                    try
+                    {
+                        await ScriptExecutionOperations.WaitUntilAsync(
+                            context,
+                            new ScriptWaitOptions
+                            {
+                                TimeoutMilliseconds = 700,
+                                PollIntervalMilliseconds = 100,
+                                Description = "upgrade panel visible"
+                            },
+                            async innerToken =>
+                            {
+                                visibleSnapshot = await context.RuntimeServices.GameStageState
+                                    .CaptureSnapshotAsync(innerToken)
+                                    .ConfigureAwait(false);
+                                return ResolveVisibleUpgradePanelSide(visibleSnapshot).HasValue;
+                            },
+                            token).ConfigureAwait(false);
+                    }
+                    catch (ScriptExecutionException ex) when (IsWaitTimeout(ex))
+                    {
+                    }
+
+                    if (ResolveVisibleUpgradePanelSide(visibleSnapshot).HasValue)
+                    {
+                        return visibleSnapshot!;
+                    }
+                }
+
+                throw CreateExecutionException(
+                    context,
+                    "UpgradeMonkeySelect",
+                    $"Failed to open the upgrade panel near {FormatPoint(targetCoordinate)}.",
+                    attempt);
+            },
+            snapshot => ResolveVisibleUpgradePanelSide(snapshot).HasValue,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public static async Task PressHotkeyRepeatedAsync(
+        ScriptInstructionExecutionContext context,
+        HotkeyBinding hotkey,
+        int repeatCount,
+        string checkpoint,
+        string description,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(hotkey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(checkpoint);
+
+        var effectiveRepeatCount = Math.Max(1, repeatCount);
+        var effectiveDescription = string.IsNullOrWhiteSpace(description)
+            ? $"Sending hotkey '{hotkey.DisplayName}'."
+            : description;
+        var modifierKeys = ExpandModifierKeys(hotkey.Modifiers);
+
+        try
+        {
+            if (modifierKeys.Count > 0)
+            {
+                await ScriptExecutionOperations.CheckpointAsync(
+                    context,
+                    $"{checkpoint}ModifiersDown",
+                    $"{effectiveDescription} Holding modifiers '{hotkey.DisplayName}'.",
+                    cancellationToken).ConfigureAwait(false);
+
+                foreach (var modifierKey in modifierKeys)
+                {
+                    context.RuntimeServices.Input.KeyDown(modifierKey);
+                }
+            }
+
+            for (var index = 0; index < effectiveRepeatCount; index++)
+            {
+                await ScriptExecutionOperations.CheckpointAsync(
+                    context,
+                    checkpoint,
+                    $"{effectiveDescription} Press {index + 1}/{effectiveRepeatCount}.",
+                    cancellationToken).ConfigureAwait(false);
+
+                context.RuntimeServices.Input.PressKey(hotkey.Key);
+
+                if (index < effectiveRepeatCount - 1)
+                {
+                    await ScriptExecutionOperations.DelayAsync(
+                        context,
+                        RepeatedHotkeyIntervalMilliseconds,
+                        $"{checkpoint}Interval",
+                        cancellationToken).ConfigureAwait(false);
+                }
+            }
+        }
+        finally
+        {
+            for (var index = modifierKeys.Count - 1; index >= 0; index--)
+            {
+                context.RuntimeServices.Input.KeyUp(modifierKeys[index]);
+            }
+        }
+    }
+
+    private static IEnumerable<WpfPoint> BuildOffsetCoordinates(
+        WpfPoint baseCoordinate,
+        IReadOnlyList<(double OffsetX, double OffsetY)> offsets)
+    {
+        foreach (var (offsetX, offsetY) in offsets)
+        {
+            yield return new WpfPoint(baseCoordinate.X + offsetX, baseCoordinate.Y + offsetY);
+        }
+    }
+
+    private static List<KeyId> ExpandModifierKeys(ModifierKeys modifiers)
+    {
+        var keys = new List<KeyId>(4);
+
+        if (modifiers.HasFlag(ModifierKeys.Control))
+        {
+            keys.Add(KeyId.LeftCtrl);
+        }
+
+        if (modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            keys.Add(KeyId.LeftShift);
+        }
+
+        if (modifiers.HasFlag(ModifierKeys.Alt))
+        {
+            keys.Add(KeyId.LeftAlt);
+        }
+
+        if (modifiers.HasFlag(ModifierKeys.Windows))
+        {
+            keys.Add(KeyId.LeftWin);
+        }
+
+        return keys;
+    }
+}

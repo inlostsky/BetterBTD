@@ -36,6 +36,7 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
     private string _scriptSourcePath = string.Empty;
     private string _statusText = string.Empty;
     private string _currentInstructionText = string.Empty;
+    private string _logText = string.Empty;
     private bool _isRunning;
 
     private string _lastLoggedSignature = string.Empty;
@@ -114,6 +115,12 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
     {
         get => _currentInstructionText;
         private set => SetProperty(ref _currentInstructionText, value);
+    }
+
+    public string LogText
+    {
+        get => _logText;
+        private set => SetProperty(ref _logText, value);
     }
 
     public bool IsRunning
@@ -454,7 +461,11 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
             return;
         }
 
-        LogLines.Add($"[{DateTime.Now:HH:mm:ss}] {message}");
+        var line = $"[{DateTime.Now:HH:mm:ss}] {message}";
+        LogLines.Add(line);
+        LogText = string.IsNullOrEmpty(LogText)
+            ? line
+            : $"{LogText}{Environment.NewLine}{line}";
     }
 
     private static Brush CreateBrush(string hex)

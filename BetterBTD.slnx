@@ -9,4 +9,5 @@
     <Platform Project="x64" />
   </Project>
   <Project Path="BetterBTD/BetterBTD.csproj" />
+  <Project Path="BetterBTD.Tests/BetterBTD.Tests.csproj" />
 </Solution>

@@ -3,6 +3,7 @@ using BetterBTD.Core.ScriptExecution.Runtime;
 using BetterBTD.Models;
 using BetterBTD.Models.ScriptExecution;
 using OpenCvSharp;
+using WpfPoint = System.Windows.Point;
 using OpenCvPoint = OpenCvSharp.Point;
 using OpenCvRect = OpenCvSharp.Rect;
 using OpenCvSize = OpenCvSharp.Size;
@@ -230,6 +231,24 @@ public sealed class GameStageStateService : IGameStageStateService
         return CaptureInLevelValueAsync(static frame => DetectCanPlaceHero(frame), default(bool?), cancellationToken);
     }
 
+    public Task<bool> IsCoordinateColorMatchAsync(
+        WpfPoint scriptCoordinate,
+        int expectedR,
+        int expectedG,
+        int expectedB,
+        int tolerance,
+        CancellationToken cancellationToken = default)
+    {
+        return CaptureFrameValueAsync(
+            frame => IsCoordinateColorMatch(
+                frame,
+                scriptCoordinate,
+                new ReferenceColor(expectedR, expectedG, expectedB),
+                tolerance),
+            false,
+            cancellationToken);
+    }
+
     public Task<string> GetStageTargetAsync(CancellationToken cancellationToken = default)
     {
         return CaptureFrameValueAsync(static _ => string.Empty, string.Empty, cancellationToken);
@@ -390,6 +409,25 @@ public sealed class GameStageStateService : IGameStageStateService
     {
         return IsColorMatch(frame, new ReferencePoint(1757, 272), HeroAvailable, DefaultColorTolerance) &&
                IsColorMatch(frame, new ReferencePoint(1670, 274), HeroAvailable, DefaultColorTolerance);
+    }
+
+    private static bool IsCoordinateColorMatch(
+        Mat frame,
+        WpfPoint scriptCoordinate,
+        ReferenceColor expectedColor,
+        int tolerance)
+    {
+        if (frame.Empty())
+        {
+            return false;
+        }
+
+        var actualPoint = ScaleScriptPoint(scriptCoordinate, frame.Width, frame.Height);
+        var actualColor = ReadPixel(frame, actualPoint.X, actualPoint.Y);
+
+        return Math.Abs(actualColor.R - expectedColor.R) <= tolerance &&
+               Math.Abs(actualColor.G - expectedColor.G) <= tolerance &&
+               Math.Abs(actualColor.B - expectedColor.B) <= tolerance;
     }
 
     private int? ReadGold(Mat frame)
@@ -565,9 +603,26 @@ public sealed class GameStageStateService : IGameStageStateService
         };
     }
 
+    private static ReferenceColor ReadPixel(Mat frame, int x, int y)
+    {
+        return frame.Channels() switch
+        {
+            1 => ReadGrayPixel(frame, x, y),
+            3 => ReadBgrPixel(frame, x, y),
+            4 => ReadBgraPixel(frame, x, y),
+            _ => throw new NotSupportedException($"Unsupported frame channel count: {frame.Channels()}.")
+        };
+    }
+
     private static ReferenceColor ReadGrayPixel(Mat frame, ReferencePoint point)
     {
         var value = frame.At<byte>(point.Y, point.X);
+        return new ReferenceColor(value, value, value);
+    }
+
+    private static ReferenceColor ReadGrayPixel(Mat frame, int x, int y)
+    {
+        var value = frame.At<byte>(y, x);
         return new ReferenceColor(value, value, value);
     }
 
@@ -577,9 +632,21 @@ public sealed class GameStageStateService : IGameStageStateService
         return new ReferenceColor(value.Item2, value.Item1, value.Item0);
     }
 
+    private static ReferenceColor ReadBgrPixel(Mat frame, int x, int y)
+    {
+        var value = frame.At<Vec3b>(y, x);
+        return new ReferenceColor(value.Item2, value.Item1, value.Item0);
+    }
+
     private static ReferenceColor ReadBgraPixel(Mat frame, ReferencePoint point)
     {
         var value = frame.At<Vec4b>(point.Y, point.X);
+        return new ReferenceColor(value.Item2, value.Item1, value.Item0);
+    }
+
+    private static ReferenceColor ReadBgraPixel(Mat frame, int x, int y)
+    {
+        var value = frame.At<Vec4b>(y, x);
         return new ReferenceColor(value.Item2, value.Item1, value.Item0);
     }
 
@@ -590,6 +657,13 @@ public sealed class GameStageStateService : IGameStageStateService
             ScaleReferenceCoordinate(referencePoint.Y, Reference1080p.Height, actualHeight));
     }
 
+    private static OpenCvPoint ScaleScriptPoint(WpfPoint scriptCoordinate, int actualWidth, int actualHeight)
+    {
+        return new OpenCvPoint(
+            ScaleScriptCoordinate(scriptCoordinate.X, Reference1080p.Width, actualWidth),
+            ScaleScriptCoordinate(scriptCoordinate.Y, Reference1080p.Height, actualHeight));
+    }
+
     private static int ScaleReferenceCoordinate(int coordinate, int referenceSize, int actualSize)
     {
         if (actualSize <= 0)
@@ -598,6 +672,17 @@ public sealed class GameStageStateService : IGameStageStateService
         }
 
         var scaled = (int)Math.Round(coordinate / (double)referenceSize * actualSize);
+        return Math.Clamp(scaled, 0, Math.Max(0, actualSize - 1));
+    }
+
+    private static int ScaleScriptCoordinate(double coordinate, int referenceSize, int actualSize)
+    {
+        if (actualSize <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(actualSize));
+        }
+
+        var scaled = (int)Math.Round(coordinate / referenceSize * actualSize);
         return Math.Clamp(scaled, 0, Math.Max(0, actualSize - 1));
     }
 

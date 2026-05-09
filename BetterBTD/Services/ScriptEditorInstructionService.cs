@@ -383,6 +383,12 @@ public sealed class ScriptEditorInstructionService
         return $"Tower:{selectionCode}";
     }
 
+    public static bool IsHeroSelectionCode(string? selectionCode)
+    {
+        return !string.IsNullOrWhiteSpace(selectionCode) &&
+               NormalizePlaceSelectionCode(selectionCode).StartsWith("Hero:", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static bool TryParseTowerSelection(string selectionCode, out MonkeyTowerType towerType)
     {
         towerType = default;

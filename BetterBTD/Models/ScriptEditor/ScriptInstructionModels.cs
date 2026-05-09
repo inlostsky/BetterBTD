@@ -24,7 +24,7 @@ public static class ScriptCommandTypeExtensions
 {
     public static bool IsExecutable(this ScriptCommandType type)
     {
-        return type is not ScriptCommandType.ModifyMonkeyCoordinate and not ScriptCommandType.Comment;
+        return type is not ScriptCommandType.Comment;
     }
 }
 
