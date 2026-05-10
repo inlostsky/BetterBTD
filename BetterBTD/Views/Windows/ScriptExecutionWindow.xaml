@@ -13,7 +13,8 @@
                  ExtendsContentIntoTitleBar="True"
                  WindowBackdropType="Mica"
                  WindowCornerPreference="Round"
-                 WindowStartupLocation="CenterOwner">
+                 WindowStartupLocation="CenterOwner"
+                 PreviewKeyDown="OnPreviewKeyDown">
     <ui:FluentWindow.Resources>
         <Thickness x:Key="WindowContentPadding">16,12,16,16</Thickness>
         <SolidColorBrush x:Key="RunningIndicatorBrush" Color="#FF5A66" />

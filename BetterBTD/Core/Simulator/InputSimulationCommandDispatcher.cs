@@ -200,15 +200,7 @@ internal sealed class InputSimulationCommandDispatcher : IInputSimulationCommand
                 }
                 else
                 {
-                    var vk = key.ToVK();
-                    if (InputBuilder.IsExtendedKey(vk))
-                    {
-                        Simulation.SendInput.Keyboard.KeyPress(false, vk);
-                    }
-                    else
-                    {
-                        Simulation.SendInput.Keyboard.KeyPress(vk);
-                    }
+                    KeyboardInputUtilities.KeyPress(Simulation.SendInput.Keyboard, key);
                 }
 
                 break;
@@ -284,15 +276,7 @@ internal sealed class InputSimulationCommandDispatcher : IInputSimulationCommand
                 }
                 else
                 {
-                    var vk = key.ToVK();
-                    if (InputBuilder.IsExtendedKey(vk))
-                    {
-                        Simulation.SendInput.Keyboard.KeyDown(false, vk);
-                    }
-                    else
-                    {
-                        Simulation.SendInput.Keyboard.KeyDown(vk);
-                    }
+                    KeyboardInputUtilities.KeyDown(Simulation.SendInput.Keyboard, key);
                 }
 
                 break;
@@ -368,15 +352,7 @@ internal sealed class InputSimulationCommandDispatcher : IInputSimulationCommand
                 }
                 else
                 {
-                    var vk = key.ToVK();
-                    if (InputBuilder.IsExtendedKey(vk))
-                    {
-                        Simulation.SendInput.Keyboard.KeyUp(false, vk);
-                    }
-                    else
-                    {
-                        Simulation.SendInput.Keyboard.KeyUp(vk);
-                    }
+                    KeyboardInputUtilities.KeyUp(Simulation.SendInput.Keyboard, key);
                 }
 
                 break;

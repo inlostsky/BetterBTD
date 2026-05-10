@@ -1,3 +1,4 @@
+using BetterBTD.Core.Config;
 using BetterBTD.Models.ScriptEditor;
 using BetterBTD.Models.ScriptExecution;
 using WpfPoint = System.Windows.Point;
@@ -6,6 +7,9 @@ namespace BetterBTD.Core.ScriptExecution.Handlers;
 
 public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBase
 {
+    internal const int UpgradePanelDetectionTimeoutMilliseconds = 10 * 60 * 1000;
+    internal const int DefaultUpgradeAttemptIntervalMilliseconds = 200;
+
     public override ScriptCommandType CommandType => ScriptCommandType.UpgradeMonkey;
 
     public override async Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
@@ -27,162 +31,216 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
                 $"Target monkey binding '{instruction.TargetMonkeyBindingId}' does not exist in runtime state.");
         }
 
-        if (ScriptInstructionHandlerSupport.IsHeroObjectKey(monkeyState.ObjectId) ||
-            ScriptInstructionHandlerSupport.IsHeroObjectKey(instruction.TargetMonkeyObjectId))
-        {
-            throw ScriptInstructionHandlerSupport.CreateExecutionException(
-                context,
-                "UpgradeMonkeyHeroUnsupported",
-                "Hero upgrades are not yet supported because the runtime cannot verify hero upgrade success.");
-        }
-
-        if (monkeyState.LastKnownCoordinate is null)
-        {
-            throw ScriptInstructionHandlerSupport.CreateExecutionException(
-                context,
-                "UpgradeMonkeyCoordinate",
-                $"Target monkey '{monkeyState.ObjectId}' does not have a known runtime coordinate.");
-        }
-
-        if (!Enum.TryParse<UpgradePathType>(instruction.UpgradePath, true, out var upgradePath))
-        {
-            throw ScriptInstructionHandlerSupport.CreateExecutionException(
-                context,
-                "UpgradeMonkeyPath",
-                $"Unsupported upgrade path '{instruction.UpgradePath}'.");
-        }
-
-        var targetCoordinate = monkeyState.LastKnownCoordinate.Value;
+        var isHeroTarget = ScriptInstructionHandlerSupport.IsHeroObjectKey(monkeyState.ObjectId) ||
+                           ScriptInstructionHandlerSupport.IsHeroObjectKey(instruction.TargetMonkeyObjectId);
+        var upgradePath = ResolveUpgradePath(context, instruction, isHeroTarget);
         var upgradeHotkey = ScriptExecutionKeyBindingResolver.ResolveUpgradeHotkey(upgradePath);
         var upgradeCount = Math.Max(1, instruction.UpgradeCount);
+        var upgradeDetectionEnabled = instruction.UpgradeDetectionEnabled ?? true;
+        var upgradeAttemptIntervalMilliseconds = instruction.UpgradeAttemptIntervalMilliseconds ?? DefaultUpgradeAttemptIntervalMilliseconds;
 
-        for (var upgradeIndex = 1; upgradeIndex <= upgradeCount; upgradeIndex++)
+        if (isHeroTarget)
         {
-            var panelSnapshot = await ScriptInstructionHandlerSupport
-                .EnsureUpgradePanelVisibleAsync(context, targetCoordinate, cancellationToken)
-                .ConfigureAwait(false);
-            var panelSide = ScriptInstructionHandlerSupport.ResolveVisibleUpgradePanelSide(panelSnapshot);
-            if (!panelSide.HasValue)
-            {
-                throw ScriptInstructionHandlerSupport.CreateExecutionException(
-                    context,
-                    "UpgradeMonkeyPanel",
-                    "Failed to detect the upgrade panel for the selected monkey.");
-            }
+            var heroHotkey = ScriptExecutionKeyBindingResolver.ResolveHeroHotkey();
 
-            var currentLevel = ScriptInstructionHandlerSupport.GetUpgradeLevel(
-                panelSnapshot,
-                panelSide.Value,
-                upgradePath);
-            if (!currentLevel.HasValue)
-            {
-                throw ScriptInstructionHandlerSupport.CreateExecutionException(
-                    context,
-                    "UpgradeMonkeyPanel",
-                    $"Failed to read the current '{instruction.UpgradePath}' path level.");
-            }
-
-            if (currentLevel.Value >= 5)
-            {
-                throw ScriptInstructionHandlerSupport.CreateExecutionException(
-                    context,
-                    "UpgradeMonkeyLevelCap",
-                    $"The '{instruction.UpgradePath}' path is already at level 5.");
-            }
-
-            var expectedLevel = currentLevel.Value + 1;
-
-            await ScriptExecutionOperations.RetryAsync(
+            await ScriptExecutionOperations.CheckpointAsync(
                 context,
-                new ScriptRetryOptions
-                {
-                    MaxAttempts = 3,
-                    DelayBetweenAttemptsMilliseconds = 150,
-                    Description = $"Upgrade '{monkeyState.ObjectId}' {instruction.UpgradePath} to level {expectedLevel}"
-                },
-                async (attempt, token) =>
-                {
-                    var beforePressSnapshot = await ScriptInstructionHandlerSupport
-                        .EnsureUpgradePanelVisibleAsync(context, targetCoordinate, token)
-                        .ConfigureAwait(false);
-                    var visiblePanelSide = ScriptInstructionHandlerSupport.ResolveVisibleUpgradePanelSide(beforePressSnapshot);
-                    if (!visiblePanelSide.HasValue)
-                    {
-                        throw ScriptInstructionHandlerSupport.CreateExecutionException(
-                            context,
-                            "UpgradeMonkeyPanel",
-                            "Failed to restore the upgrade panel before sending the upgrade hotkey.",
-                            attempt);
-                    }
+                "UpgradeMonkeyHeroSelect",
+                $"Selecting hero '{monkeyState.ObjectId}' with hotkey '{heroHotkey.DisplayName}'.",
+                cancellationToken).ConfigureAwait(false);
 
-                    var beforePressLevel = ScriptInstructionHandlerSupport.GetUpgradeLevel(
-                        beforePressSnapshot,
-                        visiblePanelSide.Value,
-                        upgradePath);
-                    if (!beforePressLevel.HasValue)
-                    {
-                        throw ScriptInstructionHandlerSupport.CreateExecutionException(
-                            context,
-                            "UpgradeMonkeyPanel",
-                            $"Failed to read the '{instruction.UpgradePath}' path level before upgrading.",
-                            attempt);
-                    }
+            context.RuntimeServices.Input.PressHotkey(heroHotkey);
 
-                    if (beforePressLevel.Value >= expectedLevel)
-                    {
-                        return true;
-                    }
-
-                    await ScriptExecutionOperations.CheckpointAsync(
-                        context,
-                        "UpgradeMonkeyPress",
-                        $"Upgrade {upgradeIndex}/{upgradeCount}, attempt {attempt}: sending '{instruction.UpgradePath}' upgrade hotkey '{upgradeHotkey.DisplayName}'.",
-                        token).ConfigureAwait(false);
-
-                    context.RuntimeServices.Input.PressHotkey(upgradeHotkey);
-
-                    await ScriptExecutionOperations.WaitUntilAsync(
-                        context,
-                        new ScriptWaitOptions
-                        {
-                            TimeoutMilliseconds = 900,
-                            PollIntervalMilliseconds = 100,
-                            Description = $"upgrade path reach level {expectedLevel}"
-                        },
-                        async innerToken =>
-                        {
-                            var afterPressSnapshot = await context.RuntimeServices.GameStageState
-                                .CaptureSnapshotAsync(innerToken)
-                                .ConfigureAwait(false);
-                            if (afterPressSnapshot is null)
-                            {
-                                return false;
-                            }
-
-                            var afterPressPanelSide = ScriptInstructionHandlerSupport.ResolveVisibleUpgradePanelSide(afterPressSnapshot);
-                            if (!afterPressPanelSide.HasValue)
-                            {
-                                return false;
-                            }
-
-                            var afterPressLevel = ScriptInstructionHandlerSupport.GetUpgradeLevel(
-                                afterPressSnapshot,
-                                afterPressPanelSide.Value,
-                                upgradePath);
-                            return afterPressLevel.HasValue && afterPressLevel.Value >= expectedLevel;
-                        },
-                        token).ConfigureAwait(false);
-
-                    await ScriptExecutionOperations.CheckpointAsync(
-                        context,
-                        "UpgradeMonkeySucceeded",
-                        $"Upgrade {upgradeIndex}/{upgradeCount}: '{instruction.UpgradePath}' reached level {expectedLevel}.",
-                        token).ConfigureAwait(false);
-
-                    return true;
-                },
-                static success => success,
+            await ScriptInstructionHandlerSupport.PressHotkeyRepeatedAsync(
+                context,
+                upgradeHotkey,
+                upgradeCount,
+                "UpgradeMonkeyHeroPress",
+                $"Upgrading hero '{monkeyState.ObjectId}' without runtime verification.",
+                upgradeAttemptIntervalMilliseconds,
                 cancellationToken).ConfigureAwait(false);
         }
+        else
+        {
+            if (monkeyState.LastKnownCoordinate is null)
+            {
+                throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                    context,
+                    "UpgradeMonkeyCoordinate",
+                    $"Target monkey '{monkeyState.ObjectId}' does not have a known runtime coordinate.");
+            }
+
+            await UpgradeTowerAsync(
+                context,
+                instruction,
+                monkeyState,
+                monkeyState.LastKnownCoordinate.Value,
+                upgradePath,
+                upgradeHotkey,
+                upgradeCount,
+                upgradeDetectionEnabled,
+                upgradeAttemptIntervalMilliseconds,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        await ScriptInstructionHandlerSupport
+            .CloseUpgradePanelAsync(context, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static UpgradePathType ResolveUpgradePath(
+        ScriptInstructionExecutionContext context,
+        ScriptInstructionDocument instruction,
+        bool isHeroTarget)
+    {
+        if (Enum.TryParse<UpgradePathType>(instruction.UpgradePath, true, out var upgradePath))
+        {
+            return upgradePath;
+        }
+
+        if (isHeroTarget && string.IsNullOrWhiteSpace(instruction.UpgradePath))
+        {
+            return UpgradePathType.Top;
+        }
+
+        throw ScriptInstructionHandlerSupport.CreateExecutionException(
+            context,
+            "UpgradeMonkeyPath",
+            $"Unsupported upgrade path '{instruction.UpgradePath}'.");
+    }
+
+    private static async Task UpgradeTowerAsync(
+        ScriptInstructionExecutionContext context,
+        ScriptInstructionDocument instruction,
+        ScriptMonkeyRuntimeState monkeyState,
+        WpfPoint targetCoordinate,
+        UpgradePathType upgradePath,
+        HotkeyBinding upgradeHotkey,
+        int upgradeCount,
+        bool upgradeDetectionEnabled,
+        int upgradeAttemptIntervalMilliseconds,
+        CancellationToken cancellationToken)
+    {
+        if (!upgradeDetectionEnabled)
+        {
+            await ScriptExecutionOperations.CheckpointAsync(
+                context,
+                "UpgradeMonkeySelect",
+                $"Selecting '{monkeyState.ObjectId}' at {ScriptInstructionHandlerSupport.FormatPoint(targetCoordinate)} without upgrade detection.",
+                cancellationToken).ConfigureAwait(false);
+
+            context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(targetCoordinate, clickCount: 1);
+
+            await ScriptExecutionOperations.DelayAsync(
+                context,
+                upgradeAttemptIntervalMilliseconds,
+                "UpgradeMonkeySelectDelay",
+                cancellationToken).ConfigureAwait(false);
+
+            await ScriptInstructionHandlerSupport.PressHotkeyRepeatedAsync(
+                context,
+                upgradeHotkey,
+                upgradeCount,
+                "UpgradeMonkeyPress",
+                $"Upgrading '{monkeyState.ObjectId}' without runtime verification.",
+                upgradeAttemptIntervalMilliseconds,
+                cancellationToken).ConfigureAwait(false);
+
+            return;
+        }
+
+        var panelSnapshot = await ScriptInstructionHandlerSupport.WaitForUpgradePanelVisibleAsync(
+            context,
+            targetCoordinate,
+            UpgradePanelDetectionTimeoutMilliseconds,
+            upgradeAttemptIntervalMilliseconds,
+            cancellationToken).ConfigureAwait(false);
+
+        var currentLevel = GetRequiredUpgradeLevel(context, instruction, panelSnapshot, upgradePath);
+        if (currentLevel >= 5)
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "UpgradeMonkeyLevelCap",
+                $"The '{instruction.UpgradePath}' path is already at level 5.");
+        }
+
+        var targetLevel = currentLevel + upgradeCount;
+        if (targetLevel > 5)
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "UpgradeMonkeyLevelCap",
+                $"Cannot upgrade '{instruction.UpgradePath}' from level {currentLevel} by {upgradeCount} because level 5 is the maximum.");
+        }
+
+        while (currentLevel < targetLevel)
+        {
+            await ScriptExecutionOperations.CheckpointAsync(
+                context,
+                "UpgradeMonkeyPress",
+                $"Upgrading '{monkeyState.ObjectId}' {instruction.UpgradePath}: current level {currentLevel}, target level {targetLevel}. Sending '{upgradeHotkey.DisplayName}'.",
+                cancellationToken).ConfigureAwait(false);
+
+            context.RuntimeServices.Input.PressHotkey(upgradeHotkey);
+
+            await ScriptExecutionOperations.DelayAsync(
+                context,
+                upgradeAttemptIntervalMilliseconds,
+                "UpgradeMonkeyPressInterval",
+                cancellationToken).ConfigureAwait(false);
+
+            panelSnapshot = await context.RuntimeServices.GameStageState
+                .CaptureSnapshotAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (ScriptInstructionHandlerSupport.ResolveVisibleUpgradePanelSide(panelSnapshot) is null)
+            {
+                panelSnapshot = await ScriptInstructionHandlerSupport.WaitForUpgradePanelVisibleAsync(
+                    context,
+                    targetCoordinate,
+                    UpgradePanelDetectionTimeoutMilliseconds,
+                    upgradeAttemptIntervalMilliseconds,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            currentLevel = GetRequiredUpgradeLevel(context, instruction, panelSnapshot, upgradePath);
+        }
+
+        await ScriptExecutionOperations.CheckpointAsync(
+            context,
+            "UpgradeMonkeySucceeded",
+            $"'{instruction.UpgradePath}' reached level {targetLevel} for '{monkeyState.ObjectId}'.",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static int GetRequiredUpgradeLevel(
+        ScriptInstructionExecutionContext context,
+        ScriptInstructionDocument instruction,
+        GameStageStateSnapshot? panelSnapshot,
+        UpgradePathType upgradePath)
+    {
+        var panelSide = ScriptInstructionHandlerSupport.ResolveVisibleUpgradePanelSide(panelSnapshot);
+        if (!panelSide.HasValue || panelSnapshot is null)
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "UpgradeMonkeyPanel",
+                "Failed to detect the upgrade panel for the selected monkey.");
+        }
+
+        var level = ScriptInstructionHandlerSupport.GetUpgradeLevel(
+            panelSnapshot,
+            panelSide.Value,
+            upgradePath);
+        if (!level.HasValue)
+        {
+            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "UpgradeMonkeyPanel",
+                $"Failed to read the current '{instruction.UpgradePath}' path level.");
+        }
+
+        return level.Value;
     }
 }

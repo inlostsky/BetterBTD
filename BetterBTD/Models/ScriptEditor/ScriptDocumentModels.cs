@@ -95,6 +95,18 @@ public sealed class ScriptInstructionDocument
 
     public int WaitTimeMilliseconds { get; set; }
 
+    public bool? PlacementDetectionEnabled { get; set; }
+
+    public bool? PlacementFailureAdjustmentEnabled { get; set; }
+
+    public int? PlacementAttemptIntervalMilliseconds { get; set; }
+
+    public int? PlacementAdjustmentAttemptIntervalMilliseconds { get; set; }
+
+    public bool? UpgradeDetectionEnabled { get; set; }
+
+    public int? UpgradeAttemptIntervalMilliseconds { get; set; }
+
     public int WaitGoldAmount { get; set; }
 
     public int WaitRoundCount { get; set; }

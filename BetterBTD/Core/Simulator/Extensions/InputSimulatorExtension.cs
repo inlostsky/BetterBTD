@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Windows.Input;
 using BetterBTD.Core.Config;
+using BetterBTD.Core.Simulator;
 using Fischless.WindowsInput;
 
 namespace BetterBTD.Core.Simulator.Extensions;
@@ -134,16 +135,7 @@ public static class InputSimulatorExtension
                 self.Mouse.XButtonClick(0x0002);
                 break;
             default:
-                var vk = key.ToVK();
-                if (InputBuilder.IsExtendedKey(vk))
-                {
-                    self.Keyboard.KeyPress(false, vk);
-                }
-                else
-                {
-                    self.Keyboard.KeyPress(vk);
-                }
-
+                KeyboardInputUtilities.KeyPress(self.Keyboard, key);
                 break;
         }
     }
@@ -171,16 +163,7 @@ public static class InputSimulatorExtension
                 self.Mouse.XButtonDown(0x0002);
                 break;
             default:
-                var vk = key.ToVK();
-                if (InputBuilder.IsExtendedKey(vk))
-                {
-                    self.Keyboard.KeyDown(false, vk);
-                }
-                else
-                {
-                    self.Keyboard.KeyDown(vk);
-                }
-
+                KeyboardInputUtilities.KeyDown(self.Keyboard, key);
                 break;
         }
     }
@@ -208,16 +191,7 @@ public static class InputSimulatorExtension
                 self.Mouse.XButtonUp(0x0002);
                 break;
             default:
-                var vk = key.ToVK();
-                if (InputBuilder.IsExtendedKey(vk))
-                {
-                    self.Keyboard.KeyUp(false, vk);
-                }
-                else
-                {
-                    self.Keyboard.KeyUp(vk);
-                }
-
+                KeyboardInputUtilities.KeyUp(self.Keyboard, key);
                 break;
         }
     }

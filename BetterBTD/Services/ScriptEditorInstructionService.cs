@@ -129,6 +129,12 @@ public sealed class ScriptEditorInstructionService
             ClickIntervalMilliseconds = instruction.ClickIntervalMilliseconds,
             NextRoundSendCount = instruction.NextRoundSendCount,
             WaitTimeMilliseconds = instruction.WaitTimeMilliseconds,
+            PlacementDetectionEnabled = instruction.PlacementDetectionEnabled,
+            PlacementFailureAdjustmentEnabled = instruction.PlacementFailureAdjustmentEnabled,
+            PlacementAttemptIntervalMilliseconds = instruction.PlacementAttemptIntervalMilliseconds,
+            PlacementAdjustmentAttemptIntervalMilliseconds = instruction.PlacementAdjustmentAttemptIntervalMilliseconds,
+            UpgradeDetectionEnabled = instruction.UpgradeDetectionEnabled,
+            UpgradeAttemptIntervalMilliseconds = instruction.UpgradeAttemptIntervalMilliseconds,
             WaitGoldAmount = instruction.WaitGoldAmount,
             WaitRoundCount = instruction.WaitRoundCount,
             PositionX = instruction.PositionX,
@@ -203,6 +209,18 @@ public sealed class ScriptEditorInstructionService
             : document.ClickIntervalMilliseconds;
         instruction.NextRoundSendCount = document.NextRoundSendCount <= 0 ? instruction.NextRoundSendCount : document.NextRoundSendCount;
         instruction.WaitTimeMilliseconds = document.WaitTimeMilliseconds < 0 ? instruction.WaitTimeMilliseconds : document.WaitTimeMilliseconds;
+        instruction.PlacementDetectionEnabled = document.PlacementDetectionEnabled ?? instruction.PlacementDetectionEnabled;
+        instruction.PlacementFailureAdjustmentEnabled = document.PlacementFailureAdjustmentEnabled ?? instruction.PlacementFailureAdjustmentEnabled;
+        instruction.PlacementAttemptIntervalMilliseconds = document.PlacementAttemptIntervalMilliseconds is null or < 0
+            ? instruction.PlacementAttemptIntervalMilliseconds
+            : document.PlacementAttemptIntervalMilliseconds.Value;
+        instruction.PlacementAdjustmentAttemptIntervalMilliseconds = document.PlacementAdjustmentAttemptIntervalMilliseconds is null or < 0
+            ? instruction.PlacementAdjustmentAttemptIntervalMilliseconds
+            : document.PlacementAdjustmentAttemptIntervalMilliseconds.Value;
+        instruction.UpgradeDetectionEnabled = document.UpgradeDetectionEnabled ?? instruction.UpgradeDetectionEnabled;
+        instruction.UpgradeAttemptIntervalMilliseconds = document.UpgradeAttemptIntervalMilliseconds is null or < 0
+            ? instruction.UpgradeAttemptIntervalMilliseconds
+            : document.UpgradeAttemptIntervalMilliseconds.Value;
         instruction.WaitGoldAmount = document.WaitGoldAmount;
         instruction.WaitRoundCount = document.WaitRoundCount <= 0 ? instruction.WaitRoundCount : document.WaitRoundCount;
         instruction.PositionX = document.PositionX;
@@ -259,6 +277,12 @@ public sealed class ScriptEditorInstructionService
             NextRoundSendCount = source.NextRoundSendCount,
             WaitMode = source.WaitMode,
             WaitTimeMilliseconds = source.WaitTimeMilliseconds,
+            PlacementDetectionEnabled = source.PlacementDetectionEnabled,
+            PlacementFailureAdjustmentEnabled = source.PlacementFailureAdjustmentEnabled,
+            PlacementAttemptIntervalMilliseconds = source.PlacementAttemptIntervalMilliseconds,
+            PlacementAdjustmentAttemptIntervalMilliseconds = source.PlacementAdjustmentAttemptIntervalMilliseconds,
+            UpgradeDetectionEnabled = source.UpgradeDetectionEnabled,
+            UpgradeAttemptIntervalMilliseconds = source.UpgradeAttemptIntervalMilliseconds,
             WaitGoldAmount = source.WaitGoldAmount,
             WaitRoundCount = source.WaitRoundCount,
             PositionX = source.PositionX,

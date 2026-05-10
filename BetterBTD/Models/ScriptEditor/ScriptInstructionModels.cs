@@ -98,6 +98,12 @@ public sealed class ScriptInstructionInstance : ObservableObject
     private int _clickIntervalMilliseconds = 80;
     private int _nextRoundSendCount = 1;
     private int _waitTimeMilliseconds = 1000;
+    private bool _placementDetectionEnabled = true;
+    private bool _placementFailureAdjustmentEnabled = true;
+    private int _placementAttemptIntervalMilliseconds = 200;
+    private int _placementAdjustmentAttemptIntervalMilliseconds = 200;
+    private bool _upgradeDetectionEnabled = true;
+    private int _upgradeAttemptIntervalMilliseconds = 200;
     private int _waitGoldAmount;
     private int _waitRoundCount = 1;
     private double _positionX;
@@ -263,6 +269,42 @@ public sealed class ScriptInstructionInstance : ObservableObject
     {
         get => _waitTimeMilliseconds;
         set => SetProperty(ref _waitTimeMilliseconds, value < 0 ? 0 : value);
+    }
+
+    public bool PlacementDetectionEnabled
+    {
+        get => _placementDetectionEnabled;
+        set => SetProperty(ref _placementDetectionEnabled, value);
+    }
+
+    public bool PlacementFailureAdjustmentEnabled
+    {
+        get => _placementFailureAdjustmentEnabled;
+        set => SetProperty(ref _placementFailureAdjustmentEnabled, value);
+    }
+
+    public int PlacementAttemptIntervalMilliseconds
+    {
+        get => _placementAttemptIntervalMilliseconds;
+        set => SetProperty(ref _placementAttemptIntervalMilliseconds, value < 0 ? 0 : value);
+    }
+
+    public int PlacementAdjustmentAttemptIntervalMilliseconds
+    {
+        get => _placementAdjustmentAttemptIntervalMilliseconds;
+        set => SetProperty(ref _placementAdjustmentAttemptIntervalMilliseconds, value < 0 ? 0 : value);
+    }
+
+    public bool UpgradeDetectionEnabled
+    {
+        get => _upgradeDetectionEnabled;
+        set => SetProperty(ref _upgradeDetectionEnabled, value);
+    }
+
+    public int UpgradeAttemptIntervalMilliseconds
+    {
+        get => _upgradeAttemptIntervalMilliseconds;
+        set => SetProperty(ref _upgradeAttemptIntervalMilliseconds, value < 0 ? 0 : value);
     }
 
     public int WaitGoldAmount

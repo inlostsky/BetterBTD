@@ -11,6 +11,7 @@ public sealed partial class LocalizationService
         BuildZhCnCaptureTestResources(),
         BuildZhCnTasksResources(),
         BuildZhCnEditorResources(),
+        BuildZhCnEditorPlacementResources(),
         BuildZhCnGameElementsResources());
 
     private static Dictionary<string, string> BuildEnUsResources() => MergeResources(
@@ -19,6 +20,7 @@ public sealed partial class LocalizationService
         BuildEnUsCaptureTestResources(),
         BuildEnUsTasksResources(),
         BuildEnUsEditorResources(),
+        BuildEnUsEditorPlacementResources(),
         BuildEnUsGameElementsResources());
 
     private static Dictionary<string, string> MergeResources(params Dictionary<string, string>[] groups)

@@ -9,23 +9,8 @@ namespace BetterBTD.Core.ScriptExecution.Handlers;
 internal static class ScriptInstructionHandlerSupport
 {
     private const int RepeatedHotkeyIntervalMilliseconds = 60;
-
-    private static readonly (double OffsetX, double OffsetY)[] PlacementOffsets =
-    [
-        (0d, 0d),
-        (4d, 0d),
-        (-4d, 0d),
-        (0d, 4d),
-        (0d, -4d),
-        (8d, 0d),
-        (-8d, 0d),
-        (0d, 8d),
-        (0d, -8d),
-        (6d, 6d),
-        (-6d, 6d),
-        (6d, -6d),
-        (-6d, -6d)
-    ];
+    private const int PlacementSearchRingCount = 20;
+    private const double PlacementSearchRingStepPixels = 1d;
 
     private static readonly (double OffsetX, double OffsetY)[] SelectionOffsets =
     [
@@ -42,7 +27,20 @@ internal static class ScriptInstructionHandlerSupport
 
     public static IEnumerable<WpfPoint> BuildPlacementSearchCoordinates(WpfPoint requestedCoordinate)
     {
-        return BuildOffsetCoordinates(requestedCoordinate, PlacementOffsets);
+        yield return requestedCoordinate;
+
+        for (var ring = 1; ring <= PlacementSearchRingCount; ring++)
+        {
+            var offset = ring * PlacementSearchRingStepPixels;
+            yield return new WpfPoint(requestedCoordinate.X + offset, requestedCoordinate.Y);
+            yield return new WpfPoint(requestedCoordinate.X + offset, requestedCoordinate.Y + offset);
+            yield return new WpfPoint(requestedCoordinate.X, requestedCoordinate.Y + offset);
+            yield return new WpfPoint(requestedCoordinate.X - offset, requestedCoordinate.Y + offset);
+            yield return new WpfPoint(requestedCoordinate.X - offset, requestedCoordinate.Y);
+            yield return new WpfPoint(requestedCoordinate.X - offset, requestedCoordinate.Y - offset);
+            yield return new WpfPoint(requestedCoordinate.X, requestedCoordinate.Y - offset);
+            yield return new WpfPoint(requestedCoordinate.X + offset, requestedCoordinate.Y - offset);
+        }
     }
 
     public static bool IsPlacementModeActive(GameStageStateSnapshot? snapshot)
@@ -232,12 +230,124 @@ internal static class ScriptInstructionHandlerSupport
             cancellationToken).ConfigureAwait(false);
     }
 
+    public static async Task CloseUpgradePanelAsync(
+        ScriptInstructionExecutionContext context,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        await ScriptExecutionOperations.CheckpointAsync(
+            context,
+            "UpgradePanelClose",
+            "Sending Escape to close the upgrade panel.",
+            cancellationToken).ConfigureAwait(false);
+
+        context.RuntimeServices.Input.PressKey(KeyId.Escape);
+    }
+
+    public static async Task<GameStageStateSnapshot> WaitForUpgradePanelVisibleAsync(
+        ScriptInstructionExecutionContext context,
+        WpfPoint targetCoordinate,
+        int timeoutMilliseconds,
+        int detectionIntervalMilliseconds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        GameStageStateSnapshot? visibleSnapshot = null;
+        var clickCount = 0;
+
+        await ScriptExecutionOperations.WaitUntilAsync(
+            context,
+            new ScriptWaitOptions
+            {
+                TimeoutMilliseconds = timeoutMilliseconds,
+                PollIntervalMilliseconds = 10,
+                Description = "upgrade panel visible"
+            },
+            async innerToken =>
+            {
+                clickCount++;
+
+                await ScriptExecutionOperations.CheckpointAsync(
+                    context,
+                    "UpgradeMonkeySelect",
+                    $"Selection press {clickCount}: clicking {FormatPoint(targetCoordinate)}.",
+                    innerToken).ConfigureAwait(false);
+
+                context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(targetCoordinate, clickCount: 1);
+
+                await ScriptExecutionOperations.DelayAsync(
+                    context,
+                    detectionIntervalMilliseconds,
+                    "UpgradeMonkeySelectDelay",
+                    innerToken).ConfigureAwait(false);
+
+                visibleSnapshot = await context.RuntimeServices.GameStageState
+                    .CaptureSnapshotAsync(innerToken)
+                    .ConfigureAwait(false);
+
+                return ResolveVisibleUpgradePanelSide(visibleSnapshot).HasValue;
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        return visibleSnapshot
+            ?? throw CreateExecutionException(
+                context,
+                "UpgradeMonkeyPanel",
+                $"Failed to detect the upgrade panel near {FormatPoint(targetCoordinate)}.");
+    }
+
+    public static async Task WaitForPlacementModeActiveAsync(
+        ScriptInstructionExecutionContext context,
+        HotkeyBinding hotkey,
+        string selectionCode,
+        int attempt,
+        int timeoutMilliseconds,
+        int pollIntervalMilliseconds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(hotkey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(selectionCode);
+
+        var pressCount = 0;
+
+        await ScriptExecutionOperations.WaitUntilAsync(
+            context,
+            new ScriptWaitOptions
+            {
+                TimeoutMilliseconds = timeoutMilliseconds,
+                PollIntervalMilliseconds = pollIntervalMilliseconds,
+                Description = "placement mode active"
+            },
+            async innerToken =>
+            {
+                pressCount++;
+
+                await ScriptExecutionOperations.CheckpointAsync(
+                    context,
+                    "PlaceMonkeySelect",
+                    $"Placement attempt {attempt}: sending hotkey '{hotkey.DisplayName}' for '{selectionCode}' (press {pressCount}).",
+                    innerToken).ConfigureAwait(false);
+
+                context.RuntimeServices.Input.PressHotkey(hotkey);
+
+                var snapshot = await context.RuntimeServices.GameStageState
+                    .CaptureSnapshotAsync(innerToken)
+                    .ConfigureAwait(false);
+                return IsPlacementModeActive(snapshot);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
     public static async Task PressHotkeyRepeatedAsync(
         ScriptInstructionExecutionContext context,
         HotkeyBinding hotkey,
         int repeatCount,
         string checkpoint,
         string description,
+        int intervalMilliseconds,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -245,6 +355,7 @@ internal static class ScriptInstructionHandlerSupport
         ArgumentException.ThrowIfNullOrWhiteSpace(checkpoint);
 
         var effectiveRepeatCount = Math.Max(1, repeatCount);
+        var effectiveIntervalMilliseconds = Math.Max(0, intervalMilliseconds);
         var effectiveDescription = string.IsNullOrWhiteSpace(description)
             ? $"Sending hotkey '{hotkey.DisplayName}'."
             : description;
@@ -280,7 +391,7 @@ internal static class ScriptInstructionHandlerSupport
                 {
                     await ScriptExecutionOperations.DelayAsync(
                         context,
-                        RepeatedHotkeyIntervalMilliseconds,
+                        effectiveIntervalMilliseconds,
                         $"{checkpoint}Interval",
                         cancellationToken).ConfigureAwait(false);
                 }
@@ -293,6 +404,24 @@ internal static class ScriptInstructionHandlerSupport
                 context.RuntimeServices.Input.KeyUp(modifierKeys[index]);
             }
         }
+    }
+
+    public static Task PressHotkeyRepeatedAsync(
+        ScriptInstructionExecutionContext context,
+        HotkeyBinding hotkey,
+        int repeatCount,
+        string checkpoint,
+        string description,
+        CancellationToken cancellationToken)
+    {
+        return PressHotkeyRepeatedAsync(
+            context,
+            hotkey,
+            repeatCount,
+            checkpoint,
+            description,
+            RepeatedHotkeyIntervalMilliseconds,
+            cancellationToken);
     }
 
     private static IEnumerable<WpfPoint> BuildOffsetCoordinates(

@@ -65,5 +65,9 @@ public sealed class SwitchMonkeyTargetInstructionHandler : ScriptInstructionHand
             "SwitchMonkeyTargetSucceeded",
             $"Switched '{monkeyState.ObjectId}' targeting {switchDirection} {switchCount} time(s).",
             cancellationToken).ConfigureAwait(false);
+
+        await ScriptInstructionHandlerSupport
+            .CloseUpgradePanelAsync(context, cancellationToken)
+            .ConfigureAwait(false);
     }
 }

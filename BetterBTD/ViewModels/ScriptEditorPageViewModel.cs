@@ -271,6 +271,8 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
             OnPropertyChanged(nameof(ShowNonExecutableInstructionHint));
             OnPropertyChanged(nameof(ShowAdvancedProperties));
             OnPropertyChanged(nameof(ShowMouseClickAdvancedProperties));
+            OnPropertyChanged(nameof(ShowPlaceMonkeyAdvancedProperties));
+            OnPropertyChanged(nameof(ShowUpgradeMonkeyAdvancedProperties));
         }
     }
 
@@ -283,6 +285,10 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public bool ShowAdvancedProperties => SelectedSequenceInstruction?.Type is not ScriptCommandType.ModifyMonkeyCoordinate and not ScriptCommandType.Comment;
 
     public bool ShowMouseClickAdvancedProperties => SelectedSequenceInstruction?.Type == ScriptCommandType.MouseClick;
+
+    public bool ShowPlaceMonkeyAdvancedProperties => SelectedSequenceInstruction?.Type == ScriptCommandType.PlaceMonkey;
+
+    public bool ShowUpgradeMonkeyAdvancedProperties => SelectedSequenceInstruction?.Type == ScriptCommandType.UpgradeMonkey;
 
     public bool ShowSequenceEmptyState => InstructionSequence.Count == 0;
 
@@ -362,6 +368,12 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public string PropertyClickCountText => _localizationService.T("Editor.Property.ClickCount");
     public string PropertyCommentContentText => _localizationService.T("Editor.Property.CommentContent");
     public string PropertyAdvancedText => _localizationService.T("Editor.Property.Advanced");
+    public string PropertyPlacementDetectionText => _localizationService.T("Editor.Property.PlacementDetection");
+    public string PropertyPlacementFailureAdjustmentText => _localizationService.T("Editor.Property.PlacementFailureAdjustment");
+    public string PropertyPlacementAttemptIntervalMillisecondsText => _localizationService.T("Editor.Property.PlacementAttemptIntervalMilliseconds");
+    public string PropertyPlacementAdjustmentAttemptIntervalMillisecondsText => _localizationService.T("Editor.Property.PlacementAdjustmentAttemptIntervalMilliseconds");
+    public string PropertyUpgradeDetectionText => _localizationService.T("Editor.Property.UpgradeDetection");
+    public string PropertyUpgradeAttemptIntervalMillisecondsText => _localizationService.T("Editor.Property.UpgradeAttemptIntervalMilliseconds");
     public string PropertyClickIntervalMillisecondsText => _localizationService.T("Editor.Property.ClickIntervalMilliseconds");
     public string PropertyIntervalToNextInstructionText => _localizationService.T("Editor.Property.IntervalToNextInstruction");
     public string NonExecutableInstructionHintText => _localizationService.T("Editor.Property.NonExecutableHint");
@@ -1896,6 +1908,12 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         OnPropertyChanged(nameof(PropertyClickCountText));
         OnPropertyChanged(nameof(PropertyCommentContentText));
         OnPropertyChanged(nameof(PropertyAdvancedText));
+        OnPropertyChanged(nameof(PropertyPlacementDetectionText));
+        OnPropertyChanged(nameof(PropertyPlacementFailureAdjustmentText));
+        OnPropertyChanged(nameof(PropertyPlacementAttemptIntervalMillisecondsText));
+        OnPropertyChanged(nameof(PropertyPlacementAdjustmentAttemptIntervalMillisecondsText));
+        OnPropertyChanged(nameof(PropertyUpgradeDetectionText));
+        OnPropertyChanged(nameof(PropertyUpgradeAttemptIntervalMillisecondsText));
         OnPropertyChanged(nameof(PropertyClickIntervalMillisecondsText));
         OnPropertyChanged(nameof(PropertyIntervalToNextInstructionText));
         OnPropertyChanged(nameof(NonExecutableInstructionHintText));

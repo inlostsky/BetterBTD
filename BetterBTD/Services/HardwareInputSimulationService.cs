@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using BetterBTD.Core.Config;
+using BetterBTD.Core.Simulator;
 using BetterBTD.Models;
 using Microsoft.Win32.SafeHandles;
 using Vanara.PInvoke;
@@ -511,7 +512,7 @@ public sealed class HardwareInputSimulationService
         return true;
     }
 
-    private static bool TryGetScanCode(KeyId key, out ushort scanCode, out bool isE0, out bool isE1)
+    internal static bool TryGetScanCode(KeyId key, out ushort scanCode, out bool isE0, out bool isE1)
     {
         scanCode = 0;
         isE0 = false;
@@ -529,22 +530,23 @@ public sealed class HardwareInputSimulationService
             return false;
         }
 
-        var virtualKey = (uint)key.ToVK();
-        var mapped = MapVirtualKey(virtualKey, 4);
-        if (mapped == 0)
+        if (key == KeyId.Pause)
         {
-            mapped = MapVirtualKey(virtualKey, 0);
+            scanCode = 0x45;
+            isE1 = true;
+            return true;
         }
+
+        var virtualKey = (uint)key.ToVK();
+        var mapped = MapVirtualKey(virtualKey, 0);
 
         if (mapped == 0)
         {
             return false;
         }
 
-        var extendedPrefix = mapped >> 8;
         scanCode = (ushort)(mapped & 0xFF);
-        isE0 = extendedPrefix == 0xE0;
-        isE1 = extendedPrefix == 0xE1;
+        isE0 = KeyboardInputUtilities.IsExtendedKey(key);
         return true;
     }
 

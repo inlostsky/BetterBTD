@@ -7,6 +7,9 @@ namespace BetterBTD.Core.ScriptExecution.Handlers;
 
 public sealed class PlaceMonkeyInstructionHandler : ScriptInstructionHandlerBase
 {
+    internal const int PlacementModeActivationTimeoutMilliseconds = 10 * 60 * 1000;
+    internal const int PlacementModeActivationPollIntervalMilliseconds = 100;
+
     public override ScriptCommandType CommandType => ScriptCommandType.PlaceMonkey;
 
     public override async Task HandleAsync(ScriptInstructionExecutionContext context, CancellationToken cancellationToken)
@@ -15,23 +18,12 @@ public sealed class PlaceMonkeyInstructionHandler : ScriptInstructionHandlerBase
         var selectionCode = ScriptEditorInstructionService.NormalizePlaceSelectionCode(instruction.SelectedMonkeyTower);
         var requestedCoordinate = new WpfPoint(instruction.PositionX, instruction.PositionY);
         var placementHotkey = ScriptExecutionKeyBindingResolver.ResolvePlacementHotkey(selectionCode);
+        var placementDetectionEnabled = instruction.PlacementDetectionEnabled ?? true;
+        var placementFailureAdjustmentEnabled = instruction.PlacementFailureAdjustmentEnabled ?? true;
+        var placementAttemptIntervalMilliseconds = instruction.PlacementAttemptIntervalMilliseconds ?? 200;
+        var placementAdjustmentAttemptIntervalMilliseconds = instruction.PlacementAdjustmentAttemptIntervalMilliseconds ?? 200;
 
         await ScriptInstructionHandlerSupport.CancelPlacementModeIfActiveAsync(context, cancellationToken).ConfigureAwait(false);
-
-        if (ScriptEditorInstructionService.IsHeroSelectionCode(selectionCode))
-        {
-            var precheckSnapshot = await ScriptExecutionOperations
-                .CaptureRequiredSnapshotAsync(context, "PlaceMonkeyHeroPrecheck", cancellationToken)
-                .ConfigureAwait(false);
-
-            if (precheckSnapshot.CanPlaceHero == false)
-            {
-                throw ScriptInstructionHandlerSupport.CreateExecutionException(
-                    context,
-                    "PlaceMonkeyHeroPrecheck",
-                    "The configured hero is not currently available for placement.");
-            }
-        }
 
         await ScriptExecutionOperations.RetryAsync(
             context,
@@ -52,32 +44,48 @@ public sealed class PlaceMonkeyInstructionHandler : ScriptInstructionHandlerBase
 
                 context.RuntimeServices.Input.MoveMouseToScriptCoordinate(requestedCoordinate);
 
-                await ScriptExecutionOperations.CheckpointAsync(
+                if (!placementDetectionEnabled)
+                {
+                    await ScriptExecutionOperations.CheckpointAsync(
+                        context,
+                        "PlaceMonkeySelect",
+                        $"Placement attempt {attempt}: sending hotkey '{placementHotkey.DisplayName}' for '{selectionCode}' without placement detection.",
+                        token).ConfigureAwait(false);
+
+                    context.RuntimeServices.Input.PressHotkey(placementHotkey);
+
+                    await ScriptExecutionOperations.CheckpointAsync(
+                        context,
+                        "PlaceMonkeyClick",
+                        $"Trying placement click at {ScriptInstructionHandlerSupport.FormatPoint(requestedCoordinate)} without placement detection.",
+                        token).ConfigureAwait(false);
+
+                    context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(requestedCoordinate, clickCount: 1);
+                    MarkPlaced(context, instruction, selectionCode, requestedCoordinate);
+
+                    await ScriptExecutionOperations.CheckpointAsync(
+                        context,
+                        "PlaceMonkeyPlaced",
+                        $"Placed '{selectionCode}' at {ScriptInstructionHandlerSupport.FormatPoint(requestedCoordinate)} without placement detection.",
+                        token).ConfigureAwait(false);
+
+                    return true;
+                }
+
+                await ScriptInstructionHandlerSupport.WaitForPlacementModeActiveAsync(
                     context,
-                    "PlaceMonkeySelect",
-                    $"Placement attempt {attempt}: sending hotkey '{placementHotkey.DisplayName}' for '{selectionCode}'.",
+                    placementHotkey,
+                    selectionCode,
+                    attempt,
+                    PlacementModeActivationTimeoutMilliseconds,
+                    placementAttemptIntervalMilliseconds,
                     token).ConfigureAwait(false);
 
-                context.RuntimeServices.Input.PressHotkey(placementHotkey);
+                var placementCoordinates = placementFailureAdjustmentEnabled
+                    ? ScriptInstructionHandlerSupport.BuildPlacementSearchCoordinates(requestedCoordinate)
+                    : [requestedCoordinate];
 
-                await ScriptExecutionOperations.WaitUntilAsync(
-                    context,
-                    new ScriptWaitOptions
-                    {
-                        TimeoutMilliseconds = 1000,
-                        PollIntervalMilliseconds = 100,
-                        Description = "placement mode active"
-                    },
-                    async innerToken =>
-                    {
-                        var snapshot = await context.RuntimeServices.GameStageState
-                            .CaptureSnapshotAsync(innerToken)
-                            .ConfigureAwait(false);
-                        return ScriptInstructionHandlerSupport.IsPlacementModeActive(snapshot);
-                    },
-                    token).ConfigureAwait(false);
-
-                foreach (var placementCoordinate in ScriptInstructionHandlerSupport.BuildPlacementSearchCoordinates(requestedCoordinate))
+                foreach (var placementCoordinate in placementCoordinates)
                 {
                     await ScriptExecutionOperations.CheckpointAsync(
                         context,
@@ -94,8 +102,8 @@ public sealed class PlaceMonkeyInstructionHandler : ScriptInstructionHandlerBase
                             context,
                             new ScriptWaitOptions
                             {
-                                TimeoutMilliseconds = 400,
-                                PollIntervalMilliseconds = 75,
+                                TimeoutMilliseconds = placementAdjustmentAttemptIntervalMilliseconds,
+                                PollIntervalMilliseconds = Math.Min(75, Math.Max(10, placementAdjustmentAttemptIntervalMilliseconds)),
                                 Description = "placement mode exit"
                             },
                             async innerToken =>
@@ -113,15 +121,7 @@ public sealed class PlaceMonkeyInstructionHandler : ScriptInstructionHandlerBase
 
                     if (postClickSnapshot?.IsPlacingMonkey == false)
                     {
-                        var monkeyDocument = context.TaskFlow.MonkeyObjectsByBindingId.GetValueOrDefault(instruction.MonkeyBindingId);
-                        var runtimeState = context.State.UpsertMonkeyState(
-                            instruction.MonkeyBindingId,
-                            string.IsNullOrWhiteSpace(instruction.MonkeyObjectId)
-                                ? monkeyDocument?.ObjectId ?? string.Empty
-                                : instruction.MonkeyObjectId,
-                            selectionCode,
-                            monkeyDocument?.PlacementOrder ?? 0);
-                        runtimeState.LastKnownCoordinate = placementCoordinate;
+                        MarkPlaced(context, instruction, selectionCode, placementCoordinate);
 
                         await ScriptExecutionOperations.CheckpointAsync(
                             context,
@@ -137,10 +137,29 @@ public sealed class PlaceMonkeyInstructionHandler : ScriptInstructionHandlerBase
                 throw ScriptInstructionHandlerSupport.CreateExecutionException(
                     context,
                     "PlaceMonkeyClick",
-                    $"Failed to place '{selectionCode}' near {ScriptInstructionHandlerSupport.FormatPoint(requestedCoordinate)} after offset search.",
+                    placementFailureAdjustmentEnabled
+                        ? $"Failed to place '{selectionCode}' near {ScriptInstructionHandlerSupport.FormatPoint(requestedCoordinate)} after offset search."
+                        : $"Failed to place '{selectionCode}' at {ScriptInstructionHandlerSupport.FormatPoint(requestedCoordinate)} without failure adjustment.",
                     attempt);
             },
             static success => success,
             cancellationToken).ConfigureAwait(false);
+    }
+
+    private static void MarkPlaced(
+        ScriptInstructionExecutionContext context,
+        ScriptInstructionDocument instruction,
+        string selectionCode,
+        WpfPoint placementCoordinate)
+    {
+        var monkeyDocument = context.TaskFlow.MonkeyObjectsByBindingId.GetValueOrDefault(instruction.MonkeyBindingId);
+        var runtimeState = context.State.UpsertMonkeyState(
+            instruction.MonkeyBindingId,
+            string.IsNullOrWhiteSpace(instruction.MonkeyObjectId)
+                ? monkeyDocument?.ObjectId ?? string.Empty
+                : instruction.MonkeyObjectId,
+            selectionCode,
+            monkeyDocument?.PlacementOrder ?? 0);
+        runtimeState.LastKnownCoordinate = placementCoordinate;
     }
 }

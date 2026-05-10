@@ -19,7 +19,7 @@
         <Style x:Key="CoordinateNumberBoxStyle"
                TargetType="ui:NumberBox"
                BasedOn="{StaticResource {x:Type ui:NumberBox}}">
-            <Setter Property="MinWidth" Value="160" />
+            <Setter Property="Width" Value="130" />
             <Setter Property="HorizontalAlignment" Value="Right" />
         </Style>
         <Style x:Key="CoordinateAxisLabelStyle"
@@ -35,11 +35,29 @@
             <Setter Property="Margin" Value="0,0,8,0" />
             <Setter Property="HorizontalAlignment" Value="Right" />
         </Style>
+        <Style x:Key="AdvancedPropertyRowStyle"
+               TargetType="Grid">
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+        <Style x:Key="AdvancedPropertyLabelStyle"
+               TargetType="TextBlock"
+               BasedOn="{StaticResource CardDescriptionTextStyle}">
+            <Setter Property="Margin" Value="0,0,16,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="AdvancedPropertyNumberBoxStyle"
+               TargetType="ui:NumberBox"
+               BasedOn="{StaticResource {x:Type ui:NumberBox}}">
+            <Setter Property="Width" Value="130" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Minimum" Value="0" />
+            <Setter Property="SmallChange" Value="10" />
+        </Style>
 
         <DataTemplate x:Key="PlaceMonkeyEditorTemplate">
             <StackPanel Margin="0,0,0,10">
                 <TextBlock Style="{StaticResource CardDescriptionTextStyle}"
-                           Text="{Binding DataContext.PropertyMonkeyTowerText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}" />
+                           Text="{Binding DataContext.PropertyMonkeyTowerText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}"/>
                 <vio:CascadingComboBox Margin="0,4,0,10"
                                        PlaceholderText="{Binding DataContext.MetadataMapPlaceholderText, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}"
                                        ItemsSource="{Binding DataContext.MonkeyTowerItems, RelativeSource={RelativeSource AncestorType=controls:ScriptInstructionPropertiesPanel}}"
@@ -762,7 +780,98 @@
                         </ui:CardExpander.Header>
 
                         <StackPanel Margin="16">
-                            <Grid Margin="0,0,0,10"
+                            <StackPanel Visibility="{Binding ShowPlaceMonkeyAdvancedProperties, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid Style="{StaticResource AdvancedPropertyRowStyle}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Column="0"
+                                               Style="{StaticResource AdvancedPropertyLabelStyle}"
+                                               Text="{Binding PropertyPlacementDetectionText}" />
+                                    <ui:ToggleSwitch Grid.Column="1"
+                                                     HorizontalAlignment="Right"
+                                                     VerticalAlignment="Center"
+                                                     IsChecked="{Binding SelectedSequenceInstruction.PlacementDetectionEnabled, Mode=TwoWay}" />
+                                </Grid>
+
+                                <Grid Style="{StaticResource AdvancedPropertyRowStyle}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Column="0"
+                                               Style="{StaticResource AdvancedPropertyLabelStyle}"
+                                               Text="{Binding PropertyPlacementFailureAdjustmentText}" />
+                                    <ui:ToggleSwitch Grid.Column="1"
+                                                     HorizontalAlignment="Right"
+                                                     VerticalAlignment="Center"
+                                                     IsChecked="{Binding SelectedSequenceInstruction.PlacementFailureAdjustmentEnabled, Mode=TwoWay}" />
+                                </Grid>
+
+                                <Grid Style="{StaticResource AdvancedPropertyRowStyle}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Column="0"
+                                               Style="{StaticResource AdvancedPropertyLabelStyle}"
+                                               Text="{Binding PropertyPlacementAttemptIntervalMillisecondsText}" />
+                                    <ui:NumberBox Grid.Column="1"
+                                                  Style="{StaticResource AdvancedPropertyNumberBoxStyle}"
+                                                  Value="{Binding SelectedSequenceInstruction.PlacementAttemptIntervalMilliseconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </Grid>
+
+                                <Grid Style="{StaticResource AdvancedPropertyRowStyle}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Column="0"
+                                               Style="{StaticResource AdvancedPropertyLabelStyle}"
+                                               Text="{Binding PropertyPlacementAdjustmentAttemptIntervalMillisecondsText}" />
+                                    <ui:NumberBox Grid.Column="1"
+                                                  Style="{StaticResource AdvancedPropertyNumberBoxStyle}"
+                                                  Value="{Binding SelectedSequenceInstruction.PlacementAdjustmentAttemptIntervalMilliseconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding ShowUpgradeMonkeyAdvancedProperties, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid Style="{StaticResource AdvancedPropertyRowStyle}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Column="0"
+                                               Style="{StaticResource AdvancedPropertyLabelStyle}"
+                                               Text="{Binding PropertyUpgradeDetectionText}" />
+                                    <ui:ToggleSwitch Grid.Column="1"
+                                                     HorizontalAlignment="Right"
+                                                     VerticalAlignment="Center"
+                                                     IsChecked="{Binding SelectedSequenceInstruction.UpgradeDetectionEnabled, Mode=TwoWay}" />
+                                </Grid>
+
+                                <Grid Style="{StaticResource AdvancedPropertyRowStyle}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Column="0"
+                                               Style="{StaticResource AdvancedPropertyLabelStyle}"
+                                               Text="{Binding PropertyUpgradeAttemptIntervalMillisecondsText}" />
+                                    <ui:NumberBox Grid.Column="1"
+                                                  Style="{StaticResource AdvancedPropertyNumberBoxStyle}"
+                                                  Value="{Binding SelectedSequenceInstruction.UpgradeAttemptIntervalMilliseconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </Grid>
+                            </StackPanel>
+
+                            <Grid Style="{StaticResource AdvancedPropertyRowStyle}"
                                   Visibility="{Binding ShowMouseClickAdvancedProperties, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -770,14 +879,10 @@
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock Grid.Column="0"
-                                           Margin="0,0,16,0"
-                                           VerticalAlignment="Center"
-                                           Style="{StaticResource CardDescriptionTextStyle}"
+                                           Style="{StaticResource AdvancedPropertyLabelStyle}"
                                            Text="{Binding PropertyClickIntervalMillisecondsText}" />
                                 <ui:NumberBox Grid.Column="1"
-                                              Width="160"
-                                              Minimum="0"
-                                              SmallChange="10"
+                                              Style="{StaticResource AdvancedPropertyNumberBoxStyle}"
                                               Value="{Binding SelectedSequenceInstruction.ClickIntervalMilliseconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             </Grid>
 
@@ -788,14 +893,10 @@
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock Grid.Column="0"
-                                           Margin="0,0,16,0"
-                                           VerticalAlignment="Center"
-                                           Style="{StaticResource CardDescriptionTextStyle}"
+                                           Style="{StaticResource AdvancedPropertyLabelStyle}"
                                            Text="{Binding PropertyIntervalToNextInstructionText}" />
                                 <ui:NumberBox Grid.Column="1"
-                                              Width="160"
-                                              Minimum="0"
-                                              SmallChange="10"
+                                              Style="{StaticResource AdvancedPropertyNumberBoxStyle}"
                                               Value="{Binding SelectedSequenceInstruction.IntervalToNextInstructionMs, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             </Grid>
                         </StackPanel>

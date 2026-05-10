@@ -85,5 +85,9 @@ public sealed class SetMonkeyAbilityInstructionHandler : ScriptInstructionHandle
                 ? $"Applied monkey ability '{abilityType}' for '{monkeyState.ObjectId}' with target coordinate."
                 : $"Applied monkey ability '{abilityType}' for '{monkeyState.ObjectId}'.",
             cancellationToken).ConfigureAwait(false);
+
+        await ScriptInstructionHandlerSupport
+            .CloseUpgradePanelAsync(context, cancellationToken)
+            .ConfigureAwait(false);
     }
 }
