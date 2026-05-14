@@ -51,13 +51,18 @@ public sealed class SetMonkeyAbilityInstructionHandler : ScriptInstructionHandle
         var panelDetectionEnabled = ScriptInstructionHandlerSupport.ResolveMonkeyPanelDetectionEnabled(
             monkeyState.ObjectId,
             instruction.MonkeyPanelDetectionEnabled ?? true);
+        var detectionIntervalMilliseconds = instruction.MonkeyPanelDetectionIntervalMilliseconds ?? DefaultOperationIntervalMilliseconds;
         var operationIntervalMilliseconds = instruction.MonkeyPanelOperationIntervalMilliseconds ?? DefaultOperationIntervalMilliseconds;
+        var shouldSelectMonkey = ScriptInstructionHandlerSupport.ShouldSelectMonkeyForPanelInteraction(context);
+        var shouldCloseMonkeyPanel = ScriptInstructionHandlerSupport.ShouldCloseMonkeyPanelAfterInstruction(context);
 
         await ScriptInstructionHandlerSupport
             .PrepareMonkeyPanelInteractionAsync(
                 context,
                 targetCoordinate,
+                shouldSelectMonkey,
                 panelDetectionEnabled,
+                detectionIntervalMilliseconds,
                 operationIntervalMilliseconds,
                 cancellationToken)
             .ConfigureAwait(false);
@@ -97,8 +102,11 @@ public sealed class SetMonkeyAbilityInstructionHandler : ScriptInstructionHandle
                 : $"Applied monkey ability '{abilityType}' for '{monkeyState.ObjectId}'.",
             cancellationToken).ConfigureAwait(false);
 
-        await ScriptInstructionHandlerSupport
-            .CloseUpgradePanelAsync(context, cancellationToken)
-            .ConfigureAwait(false);
+        if (shouldCloseMonkeyPanel)
+        {
+            await ScriptInstructionHandlerSupport
+                .CloseUpgradePanelAsync(context, cancellationToken)
+                .ConfigureAwait(false);
+        }
     }
 }

@@ -42,16 +42,20 @@ public sealed class SellMonkeyInstructionHandler : ScriptInstructionHandlerBase
         var panelDetectionEnabled = ScriptInstructionHandlerSupport.ResolveMonkeyPanelDetectionEnabled(
             monkeyState.ObjectId,
             instruction.MonkeyPanelDetectionEnabled ?? true);
+        var detectionIntervalMilliseconds = instruction.MonkeyPanelDetectionIntervalMilliseconds ?? DefaultOperationIntervalMilliseconds;
         var operationIntervalMilliseconds = instruction.MonkeyPanelOperationIntervalMilliseconds ?? DefaultOperationIntervalMilliseconds;
         var sellDetectionEnabled = ScriptInstructionHandlerSupport.ResolveSellDetectionEnabled(
             monkeyState.ObjectId,
             instruction.SellDetectionEnabled ?? true);
+        var shouldSelectMonkey = ScriptInstructionHandlerSupport.ShouldSelectMonkeyForPanelInteraction(context);
 
         await ScriptInstructionHandlerSupport
             .PrepareMonkeyPanelInteractionAsync(
                 context,
                 targetCoordinate,
+                shouldSelectMonkey,
                 panelDetectionEnabled,
+                detectionIntervalMilliseconds,
                 operationIntervalMilliseconds,
                 cancellationToken)
             .ConfigureAwait(false);

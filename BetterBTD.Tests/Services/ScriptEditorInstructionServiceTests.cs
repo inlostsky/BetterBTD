@@ -53,7 +53,8 @@ public sealed class ScriptEditorInstructionServiceTests
         var instruction = service.CreateInstructionInstance(template, string.Empty, string.Empty, string.Empty);
 
         Assert.True(instruction.UpgradeDetectionEnabled);
-        Assert.Equal(200, instruction.UpgradeAttemptIntervalMilliseconds);
+        Assert.Equal(200, instruction.UpgradeDetectionIntervalMilliseconds);
+        Assert.Equal(200, instruction.UpgradeOperationIntervalMilliseconds);
     }
 
     [Fact]
@@ -77,7 +78,8 @@ public sealed class ScriptEditorInstructionServiceTests
             string.Empty);
 
         Assert.True(instruction.UpgradeDetectionEnabled);
-        Assert.Equal(200, instruction.UpgradeAttemptIntervalMilliseconds);
+        Assert.Equal(200, instruction.UpgradeDetectionIntervalMilliseconds);
+        Assert.Equal(200, instruction.UpgradeOperationIntervalMilliseconds);
     }
 
     [Theory]
@@ -92,6 +94,7 @@ public sealed class ScriptEditorInstructionServiceTests
         var instruction = service.CreateInstructionInstance(template, string.Empty, string.Empty, string.Empty);
 
         Assert.True(instruction.MonkeyPanelDetectionEnabled);
+        Assert.Equal(200, instruction.MonkeyPanelDetectionIntervalMilliseconds);
         Assert.Equal(200, instruction.MonkeyPanelOperationIntervalMilliseconds);
 
         if (commandType == ScriptCommandType.SellMonkey)
@@ -132,11 +135,38 @@ public sealed class ScriptEditorInstructionServiceTests
             string.Empty);
 
         Assert.True(instruction.MonkeyPanelDetectionEnabled);
+        Assert.Equal(200, instruction.MonkeyPanelDetectionIntervalMilliseconds);
         Assert.Equal(200, instruction.MonkeyPanelOperationIntervalMilliseconds);
 
         if (commandType == ScriptCommandType.SellMonkey)
         {
             Assert.True(instruction.SellDetectionEnabled);
         }
+    }
+
+    [Fact]
+    public void CreateInstructionInstanceFromDocument_SwitchMonkeyTarget_LoadsMonkeyPanelIntervals()
+    {
+        var service = ScriptEditorInstructionService.Instance;
+        var templates = service.CreateInstructionLibrary().ToDictionary(x => x.Type);
+        var document = new ScriptInstructionDocument
+        {
+            CommandType = ScriptCommandType.SwitchMonkeyTarget.ToString(),
+            SwitchDirection = SwitchDirectionType.Right.ToString(),
+            SwitchCount = 1,
+            MonkeyPanelDetectionIntervalMilliseconds = 120,
+            MonkeyPanelOperationIntervalMilliseconds = 340
+        };
+
+        var instruction = service.CreateInstructionInstanceFromDocument(
+            document,
+            new Dictionary<string, ScriptMonkeyObjectDocument>(),
+            templates,
+            string.Empty,
+            string.Empty,
+            string.Empty);
+
+        Assert.Equal(120, instruction.MonkeyPanelDetectionIntervalMilliseconds);
+        Assert.Equal(340, instruction.MonkeyPanelOperationIntervalMilliseconds);
     }
 }

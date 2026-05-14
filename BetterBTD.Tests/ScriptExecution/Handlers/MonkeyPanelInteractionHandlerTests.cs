@@ -314,6 +314,213 @@ public sealed class MonkeyPanelInteractionHandlerTests
     }
 
     [Fact]
+    public async Task SwitchMonkeyTarget_PreviousSameMonkeyInstruction_ReusesPanelWithoutClicking()
+    {
+        var input = new RecordingScriptInputService();
+        var gameStageState = new QueueGameStageStateService(
+        [
+            new GameStageStateSnapshot
+            {
+                RightUpgradePanel = new GameStageUpgradePanelState
+                {
+                    IsVisible = true
+                }
+            }
+        ]);
+        var runtimeServices = new ScriptExecutionRuntimeServices
+        {
+            Capture = new NullScriptCaptureService(),
+            Input = input,
+            GameStageState = gameStageState
+        };
+
+        var instructions = new[]
+        {
+            new ScriptInstructionDocument
+            {
+                CommandType = ScriptCommandType.UpgradeMonkey.ToString(),
+                TargetMonkeyBindingId = "dart-bind",
+                TargetMonkeyObjectId = "Tower:DartMonkey",
+                UpgradePath = UpgradePathType.Top.ToString(),
+                UpgradeCount = 1
+            },
+            new ScriptInstructionDocument
+            {
+                CommandType = ScriptCommandType.SwitchMonkeyTarget.ToString(),
+                TargetMonkeyBindingId = "dart-bind",
+                SwitchDirection = SwitchDirectionType.Right.ToString(),
+                SwitchCount = 1
+            }
+        };
+
+        var monkeyObjects = new[]
+        {
+            new ScriptMonkeyObjectDocument
+            {
+                BindingId = "dart-bind",
+                ObjectId = "Tower:DartMonkey",
+                SelectionCode = "DartMonkey",
+                PlacementOrder = 1
+            }
+        };
+
+        var context = TestScriptExecutionContextFactory.Create(
+            instructions,
+            currentStepPosition: 1,
+            runtimeServices,
+            monkeyObjects);
+        context.State.UpsertMonkeyState("dart-bind", "Tower:DartMonkey", "DartMonkey", 1).LastKnownCoordinate =
+            new WpfPoint(120, 240);
+
+        var handler = new SwitchMonkeyTargetInstructionHandler();
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        Assert.Empty(input.Clicks);
+        Assert.Equal([KeyId.Tab, KeyId.Escape], input.PressedKeys);
+        Assert.Equal(1, gameStageState.CaptureSnapshotCallCount);
+    }
+
+    [Fact]
+    public async Task SwitchMonkeyTarget_PreviousSameMonkeyInstruction_ReopensPanelWhenReuseSnapshotIsMissing()
+    {
+        var input = new RecordingScriptInputService();
+        var gameStageState = new QueueGameStageStateService(
+        [
+            new GameStageStateSnapshot(),
+            new GameStageStateSnapshot
+            {
+                RightUpgradePanel = new GameStageUpgradePanelState
+                {
+                    IsVisible = true
+                }
+            }
+        ]);
+        var runtimeServices = new ScriptExecutionRuntimeServices
+        {
+            Capture = new NullScriptCaptureService(),
+            Input = input,
+            GameStageState = gameStageState
+        };
+
+        var instructions = new[]
+        {
+            new ScriptInstructionDocument
+            {
+                CommandType = ScriptCommandType.UpgradeMonkey.ToString(),
+                TargetMonkeyBindingId = "dart-bind",
+                TargetMonkeyObjectId = "Tower:DartMonkey",
+                UpgradePath = UpgradePathType.Top.ToString(),
+                UpgradeCount = 1
+            },
+            new ScriptInstructionDocument
+            {
+                CommandType = ScriptCommandType.SwitchMonkeyTarget.ToString(),
+                TargetMonkeyBindingId = "dart-bind",
+                SwitchDirection = SwitchDirectionType.Right.ToString(),
+                SwitchCount = 1
+            }
+        };
+
+        var monkeyObjects = new[]
+        {
+            new ScriptMonkeyObjectDocument
+            {
+                BindingId = "dart-bind",
+                ObjectId = "Tower:DartMonkey",
+                SelectionCode = "DartMonkey",
+                PlacementOrder = 1
+            }
+        };
+
+        var context = TestScriptExecutionContextFactory.Create(
+            instructions,
+            currentStepPosition: 1,
+            runtimeServices,
+            monkeyObjects);
+        context.State.UpsertMonkeyState("dart-bind", "Tower:DartMonkey", "DartMonkey", 1).LastKnownCoordinate =
+            new WpfPoint(120, 240);
+
+        var handler = new SwitchMonkeyTargetInstructionHandler();
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        var click = Assert.Single(input.Clicks);
+        Assert.Equal(new WpfPoint(120, 240), click.Coordinate);
+        Assert.Equal([KeyId.Tab, KeyId.Escape], input.PressedKeys);
+        Assert.Equal(2, gameStageState.CaptureSnapshotCallCount);
+    }
+
+    [Fact]
+    public async Task SetMonkeyAbility_NextSameMonkeyInstruction_KeepsPanelOpenWithoutEscape()
+    {
+        var input = new RecordingScriptInputService();
+        var gameStageState = new QueueGameStageStateService(
+        [
+            new GameStageStateSnapshot
+            {
+                RightUpgradePanel = new GameStageUpgradePanelState
+                {
+                    IsVisible = true
+                }
+            }
+        ]);
+        var runtimeServices = new ScriptExecutionRuntimeServices
+        {
+            Capture = new NullScriptCaptureService(),
+            Input = input,
+            GameStageState = gameStageState
+        };
+
+        var instructions = new[]
+        {
+            new ScriptInstructionDocument
+            {
+                CommandType = ScriptCommandType.SetMonkeyAbility.ToString(),
+                TargetMonkeyBindingId = "dart-bind",
+                SelectedAbility = MonkeyAbilityType.Ability1.ToString(),
+                RequiresAbilityCoordinate = false
+            },
+            new ScriptInstructionDocument
+            {
+                CommandType = ScriptCommandType.SellMonkey.ToString(),
+                TargetMonkeyBindingId = "dart-bind",
+                SellDetectionEnabled = false
+            }
+        };
+
+        var monkeyObjects = new[]
+        {
+            new ScriptMonkeyObjectDocument
+            {
+                BindingId = "dart-bind",
+                ObjectId = "Tower:DartMonkey",
+                SelectionCode = "DartMonkey",
+                PlacementOrder = 1
+            }
+        };
+
+        var context = TestScriptExecutionContextFactory.Create(
+            instructions,
+            currentStepPosition: 0,
+            runtimeServices,
+            monkeyObjects);
+        context.State.UpsertMonkeyState("dart-bind", "Tower:DartMonkey", "DartMonkey", 1).LastKnownCoordinate =
+            new WpfPoint(120, 240);
+
+        var handler = new SetMonkeyAbilityInstructionHandler();
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        var click = Assert.Single(input.Clicks);
+        Assert.Equal(new WpfPoint(120, 240), click.Coordinate);
+        var abilityHotkey = Assert.Single(input.PressedHotkeys);
+        Assert.Equal(KeyId.PageDown, abilityHotkey.Key);
+        Assert.Empty(input.PressedKeys);
+        Assert.Equal(1, gameStageState.CaptureSnapshotCallCount);
+    }
+
+    [Fact]
     public async Task SellMonkey_SellDetectionEnabled_RetriesUntilPanelCloses()
     {
         var input = new RecordingScriptInputService();
@@ -463,6 +670,74 @@ public sealed class MonkeyPanelInteractionHandlerTests
 
         var click = Assert.Single(input.Clicks);
         Assert.Equal(new WpfPoint(120, 240), click.Coordinate);
+        var sellHotkey = Assert.Single(input.PressedHotkeys);
+        Assert.Equal(KeyId.Backspace, sellHotkey.Key);
+        Assert.Empty(input.PressedKeys);
+        Assert.Equal(1, gameStageState.CaptureSnapshotCallCount);
+    }
+
+    [Fact]
+    public async Task SellMonkey_PreviousSameMonkeyInstruction_ReusesPanelWithoutClicking()
+    {
+        var input = new RecordingScriptInputService();
+        var gameStageState = new QueueGameStageStateService(
+        [
+            new GameStageStateSnapshot
+            {
+                RightUpgradePanel = new GameStageUpgradePanelState
+                {
+                    IsVisible = true
+                }
+            }
+        ]);
+        var runtimeServices = new ScriptExecutionRuntimeServices
+        {
+            Capture = new NullScriptCaptureService(),
+            Input = input,
+            GameStageState = gameStageState
+        };
+
+        var instructions = new[]
+        {
+            new ScriptInstructionDocument
+            {
+                CommandType = ScriptCommandType.SetMonkeyAbility.ToString(),
+                TargetMonkeyBindingId = "dart-bind",
+                SelectedAbility = MonkeyAbilityType.Ability1.ToString(),
+                RequiresAbilityCoordinate = false
+            },
+            new ScriptInstructionDocument
+            {
+                CommandType = ScriptCommandType.SellMonkey.ToString(),
+                TargetMonkeyBindingId = "dart-bind",
+                SellDetectionEnabled = false
+            }
+        };
+
+        var monkeyObjects = new[]
+        {
+            new ScriptMonkeyObjectDocument
+            {
+                BindingId = "dart-bind",
+                ObjectId = "Tower:DartMonkey",
+                SelectionCode = "DartMonkey",
+                PlacementOrder = 1
+            }
+        };
+
+        var context = TestScriptExecutionContextFactory.Create(
+            instructions,
+            currentStepPosition: 1,
+            runtimeServices,
+            monkeyObjects);
+        context.State.UpsertMonkeyState("dart-bind", "Tower:DartMonkey", "DartMonkey", 1).LastKnownCoordinate =
+            new WpfPoint(120, 240);
+
+        var handler = new SellMonkeyInstructionHandler();
+
+        await handler.HandleAsync(context, CancellationToken.None);
+
+        Assert.Empty(input.Clicks);
         var sellHotkey = Assert.Single(input.PressedHotkeys);
         Assert.Equal(KeyId.Backspace, sellHotkey.Key);
         Assert.Empty(input.PressedKeys);

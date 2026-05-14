@@ -103,8 +103,10 @@ public sealed class ScriptInstructionInstance : ObservableObject
     private int _placementAttemptIntervalMilliseconds = 200;
     private int _placementAdjustmentAttemptIntervalMilliseconds = 200;
     private bool _upgradeDetectionEnabled = true;
-    private int _upgradeAttemptIntervalMilliseconds = 200;
+    private int _upgradeDetectionIntervalMilliseconds = 200;
+    private int _upgradeOperationIntervalMilliseconds = 200;
     private bool _monkeyPanelDetectionEnabled = true;
+    private int _monkeyPanelDetectionIntervalMilliseconds = 200;
     private int _monkeyPanelOperationIntervalMilliseconds = 200;
     private bool _sellDetectionEnabled = true;
     private int _waitGoldAmount;
@@ -304,16 +306,28 @@ public sealed class ScriptInstructionInstance : ObservableObject
         set => SetProperty(ref _upgradeDetectionEnabled, value);
     }
 
-    public int UpgradeAttemptIntervalMilliseconds
+    public int UpgradeDetectionIntervalMilliseconds
     {
-        get => _upgradeAttemptIntervalMilliseconds;
-        set => SetProperty(ref _upgradeAttemptIntervalMilliseconds, value < 0 ? 0 : value);
+        get => _upgradeDetectionIntervalMilliseconds;
+        set => SetProperty(ref _upgradeDetectionIntervalMilliseconds, value < 0 ? 0 : value);
+    }
+
+    public int UpgradeOperationIntervalMilliseconds
+    {
+        get => _upgradeOperationIntervalMilliseconds;
+        set => SetProperty(ref _upgradeOperationIntervalMilliseconds, value < 0 ? 0 : value);
     }
 
     public bool MonkeyPanelDetectionEnabled
     {
         get => _monkeyPanelDetectionEnabled;
         set => SetProperty(ref _monkeyPanelDetectionEnabled, value);
+    }
+
+    public int MonkeyPanelDetectionIntervalMilliseconds
+    {
+        get => _monkeyPanelDetectionIntervalMilliseconds;
+        set => SetProperty(ref _monkeyPanelDetectionIntervalMilliseconds, value < 0 ? 0 : value);
     }
 
     public int MonkeyPanelOperationIntervalMilliseconds

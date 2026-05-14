@@ -379,8 +379,10 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public string PropertyPlacementAttemptIntervalMillisecondsText => _localizationService.T("Editor.Property.PlacementAttemptIntervalMilliseconds");
     public string PropertyPlacementAdjustmentAttemptIntervalMillisecondsText => _localizationService.T("Editor.Property.PlacementAdjustmentAttemptIntervalMilliseconds");
     public string PropertyUpgradeDetectionText => _localizationService.T("Editor.Property.UpgradeDetection");
-    public string PropertyUpgradeAttemptIntervalMillisecondsText => _localizationService.T("Editor.Property.UpgradeAttemptIntervalMilliseconds");
+    public string PropertyUpgradeDetectionIntervalMillisecondsText => _localizationService.T("Editor.Property.UpgradeDetectionIntervalMilliseconds");
+    public string PropertyUpgradeOperationIntervalMillisecondsText => _localizationService.T("Editor.Property.UpgradeOperationIntervalMilliseconds");
     public string PropertyMonkeyPanelDetectionText => _localizationService.T("Editor.Property.MonkeyPanelDetection");
+    public string PropertyMonkeyPanelDetectionIntervalMillisecondsText => _localizationService.T("Editor.Property.MonkeyPanelDetectionIntervalMilliseconds");
     public string PropertyMonkeyPanelOperationIntervalMillisecondsText => _localizationService.T("Editor.Property.MonkeyPanelOperationIntervalMilliseconds");
     public string PropertySellDetectionText => _localizationService.T("Editor.Property.SellDetection");
     public string PropertyClickIntervalMillisecondsText => _localizationService.T("Editor.Property.ClickIntervalMilliseconds");
@@ -1976,8 +1978,10 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         OnPropertyChanged(nameof(PropertyPlacementAttemptIntervalMillisecondsText));
         OnPropertyChanged(nameof(PropertyPlacementAdjustmentAttemptIntervalMillisecondsText));
         OnPropertyChanged(nameof(PropertyUpgradeDetectionText));
-        OnPropertyChanged(nameof(PropertyUpgradeAttemptIntervalMillisecondsText));
+        OnPropertyChanged(nameof(PropertyUpgradeDetectionIntervalMillisecondsText));
+        OnPropertyChanged(nameof(PropertyUpgradeOperationIntervalMillisecondsText));
         OnPropertyChanged(nameof(PropertyMonkeyPanelDetectionText));
+        OnPropertyChanged(nameof(PropertyMonkeyPanelDetectionIntervalMillisecondsText));
         OnPropertyChanged(nameof(PropertyMonkeyPanelOperationIntervalMillisecondsText));
         OnPropertyChanged(nameof(PropertySellDetectionText));
         OnPropertyChanged(nameof(PropertyClickIntervalMillisecondsText));

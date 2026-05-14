@@ -8,7 +8,8 @@ namespace BetterBTD.Core.ScriptExecution.Handlers;
 public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBase
 {
     internal const int UpgradePanelDetectionTimeoutMilliseconds = 10 * 60 * 1000;
-    internal const int DefaultUpgradeAttemptIntervalMilliseconds = 200;
+    internal const int DefaultUpgradeDetectionIntervalMilliseconds = 200;
+    internal const int DefaultUpgradeOperationIntervalMilliseconds = 200;
 
     public override ScriptCommandType CommandType => ScriptCommandType.UpgradeMonkey;
 
@@ -37,19 +38,25 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
         var upgradeHotkey = ScriptExecutionKeyBindingResolver.ResolveUpgradeHotkey(upgradePath);
         var upgradeCount = Math.Max(1, instruction.UpgradeCount);
         var upgradeDetectionEnabled = instruction.UpgradeDetectionEnabled ?? true;
-        var upgradeAttemptIntervalMilliseconds = instruction.UpgradeAttemptIntervalMilliseconds ?? DefaultUpgradeAttemptIntervalMilliseconds;
+        var upgradeDetectionIntervalMilliseconds = instruction.UpgradeDetectionIntervalMilliseconds ?? DefaultUpgradeDetectionIntervalMilliseconds;
+        var upgradeOperationIntervalMilliseconds = instruction.UpgradeOperationIntervalMilliseconds ?? DefaultUpgradeOperationIntervalMilliseconds;
+        var shouldSelectMonkey = ScriptInstructionHandlerSupport.ShouldSelectMonkeyForPanelInteraction(context);
+        var shouldCloseMonkeyPanel = ScriptInstructionHandlerSupport.ShouldCloseMonkeyPanelAfterInstruction(context);
 
         if (isHeroTarget)
         {
-            var heroHotkey = ScriptExecutionKeyBindingResolver.ResolveHeroHotkey();
+            if (shouldSelectMonkey)
+            {
+                var heroHotkey = ScriptExecutionKeyBindingResolver.ResolveHeroHotkey();
 
-            await ScriptExecutionOperations.CheckpointAsync(
-                context,
-                "UpgradeMonkeyHeroSelect",
-                $"Selecting hero '{monkeyState.ObjectId}' with hotkey '{heroHotkey.DisplayName}'.",
-                cancellationToken).ConfigureAwait(false);
+                await ScriptExecutionOperations.CheckpointAsync(
+                    context,
+                    "UpgradeMonkeyHeroSelect",
+                    $"Selecting hero '{monkeyState.ObjectId}' with hotkey '{heroHotkey.DisplayName}'.",
+                    cancellationToken).ConfigureAwait(false);
 
-            context.RuntimeServices.Input.PressHotkey(heroHotkey);
+                context.RuntimeServices.Input.PressHotkey(heroHotkey);
+            }
 
             await ScriptInstructionHandlerSupport.PressHotkeyRepeatedAsync(
                 context,
@@ -57,7 +64,7 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
                 upgradeCount,
                 "UpgradeMonkeyHeroPress",
                 $"Upgrading hero '{monkeyState.ObjectId}' without runtime verification.",
-                upgradeAttemptIntervalMilliseconds,
+                upgradeOperationIntervalMilliseconds,
                 cancellationToken).ConfigureAwait(false);
         }
         else
@@ -78,14 +85,19 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
                 upgradePath,
                 upgradeHotkey,
                 upgradeCount,
+                shouldSelectMonkey,
                 upgradeDetectionEnabled,
-                upgradeAttemptIntervalMilliseconds,
+                upgradeDetectionIntervalMilliseconds,
+                upgradeOperationIntervalMilliseconds,
                 cancellationToken).ConfigureAwait(false);
         }
 
-        await ScriptInstructionHandlerSupport
-            .CloseUpgradePanelAsync(context, cancellationToken)
-            .ConfigureAwait(false);
+        if (shouldCloseMonkeyPanel)
+        {
+            await ScriptInstructionHandlerSupport
+                .CloseUpgradePanelAsync(context, cancellationToken)
+                .ConfigureAwait(false);
+        }
     }
 
     private static UpgradePathType ResolveUpgradePath(
@@ -117,25 +129,30 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
         UpgradePathType upgradePath,
         HotkeyBinding upgradeHotkey,
         int upgradeCount,
+        bool shouldSelectMonkey,
         bool upgradeDetectionEnabled,
-        int upgradeAttemptIntervalMilliseconds,
+        int upgradeDetectionIntervalMilliseconds,
+        int upgradeOperationIntervalMilliseconds,
         CancellationToken cancellationToken)
     {
         if (!upgradeDetectionEnabled)
         {
-            await ScriptExecutionOperations.CheckpointAsync(
-                context,
-                "UpgradeMonkeySelect",
-                $"Selecting '{monkeyState.ObjectId}' at {ScriptInstructionHandlerSupport.FormatPoint(targetCoordinate)} without upgrade detection.",
-                cancellationToken).ConfigureAwait(false);
+            if (shouldSelectMonkey)
+            {
+                await ScriptExecutionOperations.CheckpointAsync(
+                    context,
+                    "UpgradeMonkeySelect",
+                    $"Selecting '{monkeyState.ObjectId}' at {ScriptInstructionHandlerSupport.FormatPoint(targetCoordinate)} without upgrade detection.",
+                    cancellationToken).ConfigureAwait(false);
 
-            context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(targetCoordinate, clickCount: 1);
+                context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(targetCoordinate, clickCount: 1);
 
-            await ScriptExecutionOperations.DelayAsync(
-                context,
-                upgradeAttemptIntervalMilliseconds,
-                "UpgradeMonkeySelectDelay",
-                cancellationToken).ConfigureAwait(false);
+                await ScriptExecutionOperations.DelayAsync(
+                    context,
+                    upgradeOperationIntervalMilliseconds,
+                    "UpgradeMonkeySelectDelay",
+                    cancellationToken).ConfigureAwait(false);
+            }
 
             await ScriptInstructionHandlerSupport.PressHotkeyRepeatedAsync(
                 context,
@@ -143,18 +160,24 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
                 upgradeCount,
                 "UpgradeMonkeyPress",
                 $"Upgrading '{monkeyState.ObjectId}' without runtime verification.",
-                upgradeAttemptIntervalMilliseconds,
+                upgradeOperationIntervalMilliseconds,
                 cancellationToken).ConfigureAwait(false);
 
             return;
         }
 
-        var panelSnapshot = await ScriptInstructionHandlerSupport.WaitForUpgradePanelVisibleAsync(
+        var panelSnapshot = await ScriptInstructionHandlerSupport.PrepareMonkeyPanelInteractionAsync(
             context,
             targetCoordinate,
-            UpgradePanelDetectionTimeoutMilliseconds,
-            upgradeAttemptIntervalMilliseconds,
-            cancellationToken).ConfigureAwait(false);
+            shouldSelectMonkey,
+            true,
+            upgradeDetectionIntervalMilliseconds,
+            upgradeOperationIntervalMilliseconds,
+            cancellationToken).ConfigureAwait(false)
+            ?? throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                context,
+                "UpgradeMonkeyPanel",
+                "Failed to detect the upgrade panel for the selected monkey.");
 
         var currentLevel = GetRequiredUpgradeLevel(context, instruction, panelSnapshot, upgradePath);
         if (currentLevel >= 5)
@@ -186,7 +209,7 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
 
             await ScriptExecutionOperations.DelayAsync(
                 context,
-                upgradeAttemptIntervalMilliseconds,
+                upgradeOperationIntervalMilliseconds,
                 "UpgradeMonkeyPressInterval",
                 cancellationToken).ConfigureAwait(false);
 
@@ -200,7 +223,7 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
                     context,
                     targetCoordinate,
                     UpgradePanelDetectionTimeoutMilliseconds,
-                    upgradeAttemptIntervalMilliseconds,
+                    upgradeDetectionIntervalMilliseconds,
                     cancellationToken).ConfigureAwait(false);
             }
 

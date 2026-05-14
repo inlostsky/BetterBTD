@@ -99,6 +99,18 @@ internal static class ScriptInstructionHandlerSupport
         return !IsHeroObjectKey(objectKey) && detectionEnabled;
     }
 
+    public static bool ShouldSelectMonkeyForPanelInteraction(ScriptInstructionExecutionContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return !HasAdjacentMonkeyPanelInstructionWithSameTarget(context, stepOffset: -1);
+    }
+
+    public static bool ShouldCloseMonkeyPanelAfterInstruction(ScriptInstructionExecutionContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return !HasAdjacentMonkeyPanelInstructionWithSameTarget(context, stepOffset: 1);
+    }
+
     public static bool IsWaitTimeout(ScriptExecutionException exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
@@ -255,27 +267,63 @@ internal static class ScriptInstructionHandlerSupport
         context.RuntimeServices.Input.PressKey(KeyId.Escape);
     }
 
-    public static async Task PrepareMonkeyPanelInteractionAsync(
+    public static async Task<GameStageStateSnapshot?> PrepareMonkeyPanelInteractionAsync(
         ScriptInstructionExecutionContext context,
         WpfPoint targetCoordinate,
+        bool shouldSelectMonkey,
         bool panelDetectionEnabled,
+        int detectionIntervalMilliseconds,
         int operationIntervalMilliseconds,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        var effectiveDetectionIntervalMilliseconds = Math.Max(0, detectionIntervalMilliseconds);
         var effectiveOperationIntervalMilliseconds = Math.Max(0, operationIntervalMilliseconds);
 
-        if (panelDetectionEnabled)
+        if (!shouldSelectMonkey)
         {
-            await WaitForUpgradePanelVisibleAsync(
+            if (!panelDetectionEnabled)
+            {
+                return null;
+            }
+
+            await ScriptExecutionOperations.CheckpointAsync(
+                context,
+                "MonkeyPanelReuse",
+                "Reusing the currently open monkey upgrade panel from the previous instruction.",
+                cancellationToken).ConfigureAwait(false);
+
+            var visibleSnapshot = await context.RuntimeServices.GameStageState
+                .CaptureSnapshotAsync(cancellationToken)
+                .ConfigureAwait(false);
+            if (ResolveVisibleUpgradePanelSide(visibleSnapshot).HasValue)
+            {
+                return visibleSnapshot;
+            }
+
+            await ScriptExecutionOperations.CheckpointAsync(
+                context,
+                "MonkeyPanelReuseFallback",
+                "The chained monkey panel was not visible. Re-selecting the monkey and reopening the panel.",
+                cancellationToken).ConfigureAwait(false);
+
+            return await WaitForUpgradePanelVisibleAsync(
                 context,
                 targetCoordinate,
                 10 * 60 * 1000,
-                effectiveOperationIntervalMilliseconds,
+                effectiveDetectionIntervalMilliseconds,
                 cancellationToken).ConfigureAwait(false);
+        }
 
-            return;
+        if (panelDetectionEnabled)
+        {
+            return await WaitForUpgradePanelVisibleAsync(
+                context,
+                targetCoordinate,
+                10 * 60 * 1000,
+                effectiveDetectionIntervalMilliseconds,
+                cancellationToken).ConfigureAwait(false);
         }
 
         await ScriptExecutionOperations.CheckpointAsync(
@@ -291,6 +339,8 @@ internal static class ScriptInstructionHandlerSupport
             effectiveOperationIntervalMilliseconds,
             "UpgradeMonkeySelectDelay",
             cancellationToken).ConfigureAwait(false);
+
+        return null;
     }
 
     public static async Task<GameStageStateSnapshot> WaitForUpgradePanelVisibleAsync(
@@ -583,5 +633,94 @@ internal static class ScriptInstructionHandlerSupport
         }
 
         return keys;
+    }
+
+    private static bool HasAdjacentMonkeyPanelInstructionWithSameTarget(
+        ScriptInstructionExecutionContext context,
+        int stepOffset)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (!TryGetStepPosition(context, out var currentStepPosition))
+        {
+            return false;
+        }
+
+        var adjacentStepPosition = currentStepPosition + stepOffset;
+        if (adjacentStepPosition < 0 || adjacentStepPosition >= context.TaskFlow.Steps.Count)
+        {
+            return false;
+        }
+
+        var currentStep = context.TaskFlow.Steps[currentStepPosition];
+        var adjacentStep = context.TaskFlow.Steps[adjacentStepPosition];
+        if (!IsMonkeyPanelInstruction(currentStep.CommandType) || !IsMonkeyPanelInstruction(adjacentStep.CommandType))
+        {
+            return false;
+        }
+
+        return AreSameMonkeyPanelTarget(currentStep.Instruction, adjacentStep.Instruction);
+    }
+
+    private static bool TryGetStepPosition(
+        ScriptInstructionExecutionContext context,
+        out int stepPosition)
+    {
+        for (var index = 0; index < context.TaskFlow.Steps.Count; index++)
+        {
+            if (ReferenceEquals(context.TaskFlow.Steps[index], context.Step))
+            {
+                stepPosition = index;
+                return true;
+            }
+        }
+
+        for (var index = 0; index < context.TaskFlow.Steps.Count; index++)
+        {
+            if (context.TaskFlow.Steps[index].Index == context.Step.Index)
+            {
+                stepPosition = index;
+                return true;
+            }
+        }
+
+        stepPosition = -1;
+        return false;
+    }
+
+    private static bool IsMonkeyPanelInstruction(ScriptCommandType commandType)
+    {
+        return commandType is ScriptCommandType.UpgradeMonkey
+            or ScriptCommandType.SwitchMonkeyTarget
+            or ScriptCommandType.SetMonkeyAbility
+            or ScriptCommandType.SellMonkey;
+    }
+
+    private static bool AreSameMonkeyPanelTarget(
+        ScriptInstructionDocument currentInstruction,
+        ScriptInstructionDocument adjacentInstruction)
+    {
+        ArgumentNullException.ThrowIfNull(currentInstruction);
+        ArgumentNullException.ThrowIfNull(adjacentInstruction);
+
+        if (!string.IsNullOrWhiteSpace(currentInstruction.TargetMonkeyBindingId) &&
+            !string.IsNullOrWhiteSpace(adjacentInstruction.TargetMonkeyBindingId))
+        {
+            return string.Equals(
+                currentInstruction.TargetMonkeyBindingId,
+                adjacentInstruction.TargetMonkeyBindingId,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (!string.IsNullOrWhiteSpace(currentInstruction.TargetMonkeyObjectId) &&
+            !string.IsNullOrWhiteSpace(adjacentInstruction.TargetMonkeyObjectId))
+        {
+            return string.Equals(
+                currentInstruction.TargetMonkeyObjectId,
+                adjacentInstruction.TargetMonkeyObjectId,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
     }
 }
