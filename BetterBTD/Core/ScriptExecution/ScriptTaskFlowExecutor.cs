@@ -105,6 +105,27 @@ public sealed class ScriptTaskFlowExecutor
 
             var state = new ScriptExecutionState();
             state.SeedMonkeyStates(taskFlow.Document.MonkeyObjects);
+            if (normalizedStartStepIndex > 0)
+            {
+                var startStep = taskFlow.Steps[normalizedStartStepIndex];
+                executionSession.MarkContextBuilding(
+                    startStep.Index,
+                    startStep.CommandType.ToString(),
+                    $"Building runtime context from {normalizedStartStepIndex} prior step(s).");
+
+                var contextBuildSummary = ScriptExecutionRuntimeContextBuilder.Build(
+                    taskFlow,
+                    state,
+                    normalizedStartStepIndex);
+
+                await executionSession
+                    .ReachCheckpointAsync(
+                        "BuildRuntimeContextCompleted",
+                        $"Built runtime context from {contextBuildSummary.ReplayedStepCount} prior step(s); applied {contextBuildSummary.MutatedStepCount} runtime state update(s).",
+                        null,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
 
             foreach (var step in taskFlow.Steps.Skip(normalizedStartStepIndex))
             {

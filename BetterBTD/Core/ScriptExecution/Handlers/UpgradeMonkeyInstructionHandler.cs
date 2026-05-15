@@ -37,6 +37,7 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
         var upgradePath = ResolveUpgradePath(context, instruction, isHeroTarget);
         var upgradeHotkey = ScriptExecutionKeyBindingResolver.ResolveUpgradeHotkey(upgradePath);
         var upgradeCount = Math.Max(1, instruction.UpgradeCount);
+        var targetLevel = monkeyState.GetExpectedUpgradeLevel(upgradePath) + upgradeCount;
         var upgradeDetectionEnabled = instruction.UpgradeDetectionEnabled ?? true;
         var upgradeDetectionIntervalMilliseconds = instruction.UpgradeDetectionIntervalMilliseconds ?? DefaultUpgradeDetectionIntervalMilliseconds;
         var upgradeOperationIntervalMilliseconds = instruction.UpgradeOperationIntervalMilliseconds ?? DefaultUpgradeOperationIntervalMilliseconds;
@@ -69,6 +70,14 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
         }
         else
         {
+            if (targetLevel > 5)
+            {
+                throw ScriptInstructionHandlerSupport.CreateExecutionException(
+                    context,
+                    "UpgradeMonkeyLevelCap",
+                    $"Cannot upgrade '{instruction.UpgradePath}' to target level {targetLevel} because level 5 is the maximum.");
+            }
+
             if (monkeyState.LastKnownCoordinate is null)
             {
                 throw ScriptInstructionHandlerSupport.CreateExecutionException(
@@ -85,6 +94,7 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
                 upgradePath,
                 upgradeHotkey,
                 upgradeCount,
+                targetLevel,
                 shouldSelectMonkey,
                 upgradeDetectionEnabled,
                 upgradeDetectionIntervalMilliseconds,
@@ -129,6 +139,7 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
         UpgradePathType upgradePath,
         HotkeyBinding upgradeHotkey,
         int upgradeCount,
+        int targetLevel,
         bool shouldSelectMonkey,
         bool upgradeDetectionEnabled,
         int upgradeDetectionIntervalMilliseconds,
@@ -163,6 +174,7 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
                 upgradeOperationIntervalMilliseconds,
                 cancellationToken).ConfigureAwait(false);
 
+            monkeyState.SetExpectedUpgradeLevel(upgradePath, targetLevel);
             return;
         }
 
@@ -180,21 +192,17 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
                 "Failed to detect the upgrade panel for the selected monkey.");
 
         var currentLevel = GetRequiredUpgradeLevel(context, instruction, panelSnapshot, upgradePath);
-        if (currentLevel >= 5)
+        if (currentLevel >= targetLevel)
         {
-            throw ScriptInstructionHandlerSupport.CreateExecutionException(
+            await ScriptExecutionOperations.CheckpointAsync(
                 context,
-                "UpgradeMonkeyLevelCap",
-                $"The '{instruction.UpgradePath}' path is already at level 5.");
-        }
-
-        var targetLevel = currentLevel + upgradeCount;
-        if (targetLevel > 5)
-        {
-            throw ScriptInstructionHandlerSupport.CreateExecutionException(
-                context,
-                "UpgradeMonkeyLevelCap",
-                $"Cannot upgrade '{instruction.UpgradePath}' from level {currentLevel} by {upgradeCount} because level 5 is the maximum.");
+                "UpgradeMonkeySatisfied",
+                currentLevel == targetLevel
+                    ? $"'{instruction.UpgradePath}' is already at target level {targetLevel} for '{monkeyState.ObjectId}'."
+                    : $"'{instruction.UpgradePath}' is already above target level {targetLevel} for '{monkeyState.ObjectId}' (current level {currentLevel}).",
+                cancellationToken).ConfigureAwait(false);
+            monkeyState.SetExpectedUpgradeLevel(upgradePath, targetLevel);
+            return;
         }
 
         while (currentLevel < targetLevel)
@@ -235,6 +243,7 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
             "UpgradeMonkeySucceeded",
             $"'{instruction.UpgradePath}' reached level {targetLevel} for '{monkeyState.ObjectId}'.",
             cancellationToken).ConfigureAwait(false);
+        monkeyState.SetExpectedUpgradeLevel(upgradePath, targetLevel);
     }
 
     private static int GetRequiredUpgradeLevel(

@@ -67,6 +67,28 @@ public sealed class ScriptMonkeyRuntimeState
     public int PlacementOrder { get; set; }
 
     public Point? LastKnownCoordinate { get; set; }
+
+    public ScriptUpgradeLevelState ExpectedUpgradeLevels { get; set; } = ScriptUpgradeLevelState.Empty;
+
+    public int GetExpectedUpgradeLevel(UpgradePathType upgradePath)
+    {
+        return ExpectedUpgradeLevels.GetLevel(upgradePath);
+    }
+
+    public void SetExpectedUpgradeLevel(UpgradePathType upgradePath, int level)
+    {
+        ExpectedUpgradeLevels = ExpectedUpgradeLevels.SetLevel(upgradePath, level);
+    }
+
+    public void ApplyExpectedUpgrade(UpgradePathType upgradePath, int upgradeCount)
+    {
+        ExpectedUpgradeLevels = ExpectedUpgradeLevels.ApplyUpgrade(upgradePath, upgradeCount);
+    }
+
+    public void ResetExpectedUpgradeLevels()
+    {
+        ExpectedUpgradeLevels = ScriptUpgradeLevelState.Empty;
+    }
 }
 
 public sealed class ScriptExecutionState
@@ -143,6 +165,12 @@ public sealed class ScriptExecutionState
 
         _monkeyStates[bindingId] = monkeyState;
         return monkeyState;
+    }
+
+    public bool RemoveMonkeyState(string bindingId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(bindingId);
+        return _monkeyStates.Remove(bindingId);
     }
 }
 

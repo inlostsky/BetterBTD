@@ -68,5 +68,7 @@ public sealed class SellMonkeyInstructionHandler : ScriptInstructionHandlerBase
             SellDetectionTimeoutMilliseconds,
             operationIntervalMilliseconds,
             cancellationToken).ConfigureAwait(false);
+
+        _ = context.State.RemoveMonkeyState(instruction.TargetMonkeyBindingId);
     }
 }

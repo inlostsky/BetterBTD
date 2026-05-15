@@ -54,6 +54,18 @@ public sealed class ScriptExecutionSession
             resetPauseRequested: true);
     }
 
+    public void MarkContextBuilding(int startStepIndex, string commandType, string message)
+    {
+        PublishUpdate(
+            null,
+            startStepIndex,
+            commandType,
+            message,
+            "BuildRuntimeContext",
+            0,
+            resetPauseRequested: false);
+    }
+
     public void EnterStep(int stepIndex, string commandType)
     {
         PublishUpdate(

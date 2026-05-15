@@ -160,6 +160,7 @@ public sealed class PlaceMonkeyInstructionHandler : ScriptInstructionHandlerBase
                 : instruction.MonkeyObjectId,
             selectionCode,
             monkeyDocument?.PlacementOrder ?? 0);
+        runtimeState.ResetExpectedUpgradeLevels();
         runtimeState.LastKnownCoordinate = placementCoordinate;
     }
 }

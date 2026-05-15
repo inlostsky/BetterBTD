@@ -230,7 +230,7 @@ public sealed class ScriptEditorSequenceService
     private void UpdateInstructionDisplayName(
         ScriptInstructionInstance instruction,
         IList<ScriptInstructionInstance> instructions,
-        IReadOnlyDictionary<ScriptInstructionInstance, string> upgradeLevelStates,
+        IReadOnlyDictionary<ScriptInstructionInstance, ScriptUpgradeLevelState> upgradeLevelStates,
         LocalizationService localizationService)
     {
         var text = instruction.Type switch
@@ -250,7 +250,7 @@ public sealed class ScriptEditorSequenceService
                 : string.Format(
                     localizationService.T("Editor.Display.UpgradeMonkey"),
                     GetTargetMonkeyDisplayName(instruction, instructions, localizationService),
-                    upgradeLevelStates.GetValueOrDefault(instruction, "000")),
+                    upgradeLevelStates.GetValueOrDefault(instruction, ScriptUpgradeLevelState.Empty).ToDisplayString()),
             ScriptCommandType.SwitchMonkeyTarget => string.Format(
                 localizationService.T("Editor.Display.SwitchMonkeyTarget"),
                 GetTargetMonkeyDisplayName(instruction, instructions, localizationService),
@@ -313,10 +313,10 @@ public sealed class ScriptEditorSequenceService
         instruction.DisplayName = text;
     }
 
-    private IReadOnlyDictionary<ScriptInstructionInstance, string> BuildUpgradeLevelStates(IList<ScriptInstructionInstance> instructions)
+    private IReadOnlyDictionary<ScriptInstructionInstance, ScriptUpgradeLevelState> BuildUpgradeLevelStates(IList<ScriptInstructionInstance> instructions)
     {
-        var upgradeStates = new Dictionary<ScriptInstructionInstance, string>();
-        var monkeyLevels = new Dictionary<string, (int Top, int Middle, int Bottom)>(StringComparer.OrdinalIgnoreCase);
+        var upgradeStates = new Dictionary<ScriptInstructionInstance, ScriptUpgradeLevelState>();
+        var monkeyLevels = new Dictionary<string, ScriptUpgradeLevelState>(StringComparer.OrdinalIgnoreCase);
 
         for (var index = 0; index < instructions.Count; index++)
         {
@@ -334,16 +334,10 @@ public sealed class ScriptEditorSequenceService
 
             var trackingKey = ResolveUpgradeTrackingKey(instruction, targetObjectKey, index);
             monkeyLevels.TryGetValue(trackingKey, out var currentLevels);
-            currentLevels = instruction.UpgradePath switch
-            {
-                UpgradePathType.Top => (currentLevels.Top + instruction.UpgradeCount, currentLevels.Middle, currentLevels.Bottom),
-                UpgradePathType.Middle => (currentLevels.Top, currentLevels.Middle + instruction.UpgradeCount, currentLevels.Bottom),
-                UpgradePathType.Bottom => (currentLevels.Top, currentLevels.Middle, currentLevels.Bottom + instruction.UpgradeCount),
-                _ => currentLevels
-            };
+            currentLevels = currentLevels.ApplyUpgrade(instruction.UpgradePath, instruction.UpgradeCount);
 
             monkeyLevels[trackingKey] = currentLevels;
-            upgradeStates[instruction] = $"{currentLevels.Top}{currentLevels.Middle}{currentLevels.Bottom}";
+            upgradeStates[instruction] = currentLevels;
         }
 
         return upgradeStates;
