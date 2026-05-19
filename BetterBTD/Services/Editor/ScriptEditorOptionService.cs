@@ -107,16 +107,13 @@ public sealed class ScriptEditorOptionService
                     DisplayName = localizationService.T(hero.NameKey)
                 })
                 .ToList(),
-            TagOptions =
-            [
-                "\u9ed1\u6846",
-                "\u7ade\u901f",
-                "BOSS",
-                "\u6536\u96c6",
-                "\u91d1\u6c14\u7403",
-                "\u5f81\u7a0b",
-                "BR"
-            ]
+            TagOptions = ScriptTagCatalog.Definitions
+                .Select(tag => new LanguageOption
+                {
+                    Code = tag.Key,
+                    DisplayName = tag.DisplayName
+                })
+                .ToList()
         };
     }
 }
@@ -137,6 +134,6 @@ public sealed class ScriptEditorMetadataOptions
     public required IReadOnlyList<LanguageOption> DifficultyOptions { get; init; }
     public required IReadOnlyList<LanguageOption> ModeOptions { get; init; }
     public required IReadOnlyList<LanguageOption> HeroOptions { get; init; }
-    public required IReadOnlyList<string> TagOptions { get; init; }
+    public required IReadOnlyList<LanguageOption> TagOptions { get; init; }
 }
 

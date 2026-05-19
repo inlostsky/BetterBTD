@@ -36,7 +36,7 @@ public sealed class ScriptMetadataDocument
 
     public string Hero { get; set; } = HeroType.Quincy.ToString();
 
-    public string Tag { get; set; } = string.Empty;
+    public List<string> Tags { get; set; } = [];
 }
 
 public sealed class ScriptMonkeyObjectDocument

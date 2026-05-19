@@ -103,6 +103,7 @@ public sealed class ScriptDocumentService
         document.Metadata.Difficulty = NormalizeOrDefault(document.Metadata.Difficulty, StageDifficulty.Medium.ToString());
         document.Metadata.Mode = NormalizeOrDefault(document.Metadata.Mode, StageMode.Standard.ToString());
         document.Metadata.Hero = NormalizeOrDefault(document.Metadata.Hero, HeroType.Quincy.ToString());
+        document.Metadata.Tags = [.. ScriptTagCatalog.NormalizeStoredTags(document.Metadata.Tags)];
 
         foreach (var monkeyObject in document.MonkeyObjects)
         {

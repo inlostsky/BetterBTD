@@ -124,7 +124,7 @@ public sealed class ScriptInstructionOptimizationService
             Difficulty = metadata.Difficulty,
             Mode = metadata.Mode,
             Hero = metadata.Hero,
-            Tag = metadata.Tag
+            Tags = [.. metadata.Tags ?? []]
         };
     }
 

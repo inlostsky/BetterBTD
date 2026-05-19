@@ -67,7 +67,8 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     private LanguageOption? _selectedDifficultyOption;
     private LanguageOption? _selectedModeOption;
     private LanguageOption? _selectedHeroOption;
-    private string _selectedTag = string.Empty;
+    private LanguageOption? _selectedTagOption;
+    private string _pendingTagInput = string.Empty;
     private ScriptInstructionTemplate? _selectedLibraryInstruction;
     private ScriptInstructionInstance? _selectedSequenceInstruction;
     private bool _isRestoringHistory;
@@ -125,9 +126,13 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         SaveScriptFileCommand = new RelayCommand(SaveScriptFile);
         SaveScriptFileAsCommand = new RelayCommand(SaveScriptFileAs);
         CreateNewScriptFileCommand = new RelayCommand(CreateNewScriptFile);
+        OpenTagEditorCommand = new RelayCommand(OpenTagEditor);
+        AddScriptTagCommand = new RelayCommand(AddScriptTag);
+        RemoveScriptTagCommand = new RelayCommand<string?>(RemoveScriptTag);
         StartCoordinateSelectionCommand = new RelayCommand<string?>(StartCoordinateSelection);
         CancelCoordinateSelectionCommand = new RelayCommand<string?>(_ => CancelCoordinateSelection());
         RunScriptCommand = new AsyncRelayCommand(RunScriptAsync);
+        SelectedTagOptions.CollectionChanged += OnSelectedTagOptionsChanged;
 
         BuildMetadataOptions();
         BuildInstructionLibrary();
@@ -153,6 +158,9 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public IRelayCommand SaveScriptFileCommand { get; }
     public IRelayCommand SaveScriptFileAsCommand { get; }
     public IRelayCommand CreateNewScriptFileCommand { get; }
+    public IRelayCommand OpenTagEditorCommand { get; }
+    public IRelayCommand AddScriptTagCommand { get; }
+    public IRelayCommand<string?> RemoveScriptTagCommand { get; }
     public IRelayCommand<string?> StartCoordinateSelectionCommand { get; }
     public IRelayCommand<string?> CancelCoordinateSelectionCommand { get; }
     public IAsyncRelayCommand RunScriptCommand { get; }
@@ -160,7 +168,8 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public ObservableCollection<LanguageOption> DifficultyOptions { get; } = [];
     public ObservableCollection<LanguageOption> ModeOptions { get; } = [];
     public ObservableCollection<LanguageOption> HeroOptions { get; } = [];
-    public ObservableCollection<string> TagOptions { get; } = [];
+    public ObservableCollection<LanguageOption> TagOptions { get; } = [];
+    public ObservableCollection<LanguageOption> SelectedTagOptions { get; } = [];
     public ObservableCollection<LanguageOption> MonkeyObjectOptions { get; } = [];
     public ObservableCollection<LanguageOption> UpgradePathOptions { get; } = [];
     public ObservableCollection<LanguageOption> SwitchDirectionOptions { get; } = [];
@@ -236,10 +245,24 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         set => SetProperty(ref _selectedHeroOption, value);
     }
 
-    public string SelectedTag
+    public LanguageOption? SelectedTagOption
     {
-        get => _selectedTag;
-        set => SetProperty(ref _selectedTag, value?.Trim() ?? string.Empty);
+        get => _selectedTagOption;
+        set
+        {
+            if (!SetProperty(ref _selectedTagOption, value) || value is null)
+            {
+                return;
+            }
+
+            PendingTagInput = value.DisplayName;
+        }
+    }
+
+    public string PendingTagInput
+    {
+        get => _pendingTagInput;
+        set => SetProperty(ref _pendingTagInput, value?.Trim() ?? string.Empty);
     }
 
     public ScriptInstructionTemplate? SelectedLibraryInstruction
@@ -316,7 +339,12 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public string MetadataModeText => _localizationService.T("Editor.Metadata.Mode");
     public string MetadataHeroText => _localizationService.T("Editor.Metadata.Hero");
     public string MetadataTagText => _localizationService.T("Editor.Metadata.Tag");
+    public string MetadataTagAddText => _localizationService.T("Editor.Metadata.Tag.Add");
+    public string MetadataTagHintText => _localizationService.T("Editor.Metadata.Tag.Hint");
+    public string MetadataTagEmptyText => _localizationService.T("Editor.Metadata.Tag.Empty");
     public string MetadataMapPlaceholderText => _localizationService.T("Editor.Metadata.Map.Placeholder");
+    public string TagEditorWindowTitle => _localizationService.T("Editor.Metadata.Tag.WindowTitle");
+    public string SelectedTagsSummaryText => BuildSelectedTagsSummaryText();
 
     public string DebugOpenRuntimeText => _localizationService.LanguageCode.Equals("en-US", StringComparison.OrdinalIgnoreCase)
         ? "Open Runtime"
@@ -403,7 +431,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
                 Difficulty = SelectedDifficultyOption?.Code ?? StageDifficulty.Medium.ToString(),
                 Mode = SelectedModeOption?.Code ?? StageMode.Standard.ToString(),
                 Hero = SelectedHeroOption?.Code ?? HeroType.Quincy.ToString(),
-                Tag = SelectedTag
+                Tags = SelectedTagOptions.Select(x => x.Code).ToList()
             },
             MonkeyObjects = _scriptEditorInstructionService.BuildMonkeyObjectDocuments(InstructionSequence),
             Instructions = _scriptEditorInstructionService.BuildInstructionDocuments(InstructionSequence)
@@ -489,6 +517,87 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         }
 
         return $"{currentText} {displayName}";
+    }
+
+    private string BuildSelectedTagsSummaryText()
+    {
+        if (SelectedTagOptions.Count == 0)
+        {
+            return MetadataTagEmptyText;
+        }
+
+        return string.Join(" | ", SelectedTagOptions.Select(x => x.DisplayName));
+    }
+
+    private void OpenTagEditor()
+    {
+        var window = new ScriptTagEditorWindow(this);
+        var owner = Application.Current?.Windows
+            .OfType<Window>()
+            .FirstOrDefault(x => x.IsActive)
+            ?? Application.Current?.MainWindow;
+        if (owner is not null && !ReferenceEquals(owner, window))
+        {
+            window.Owner = owner;
+        }
+
+        _ = window.ShowDialog();
+    }
+
+    private void AddScriptTag()
+    {
+        var storedTag = ScriptTagCatalog.ResolveStoredValue(PendingTagInput);
+        if (string.IsNullOrWhiteSpace(storedTag) ||
+            SelectedTagOptions.Any(x => string.Equals(x.Code, storedTag, StringComparison.OrdinalIgnoreCase)))
+        {
+            ClearPendingTagInput();
+            return;
+        }
+
+        SelectedTagOptions.Add(CreateTagOption(storedTag));
+        ClearPendingTagInput();
+    }
+
+    private void RemoveScriptTag(string? storedTag)
+    {
+        if (string.IsNullOrWhiteSpace(storedTag))
+        {
+            return;
+        }
+
+        var option = SelectedTagOptions.FirstOrDefault(x => string.Equals(x.Code, storedTag, StringComparison.OrdinalIgnoreCase));
+        if (option is not null)
+        {
+            SelectedTagOptions.Remove(option);
+        }
+    }
+
+    private void ClearPendingTagInput()
+    {
+        SelectedTagOption = null;
+        PendingTagInput = string.Empty;
+    }
+
+    private void SetSelectedTags(IEnumerable<string>? storedTags)
+    {
+        ReplaceCollection(
+            SelectedTagOptions,
+            ScriptTagCatalog.NormalizeStoredTags(storedTags)
+                .Select(CreateTagOption));
+    }
+
+    private void OnSelectedTagOptionsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(SelectedTagsSummaryText));
+    }
+
+    private static LanguageOption CreateTagOption(string storedTag)
+    {
+        return new LanguageOption
+        {
+            Code = storedTag,
+            DisplayName = ScriptTagCatalog.GetDisplayName(storedTag)
+        };
     }
 
     private static string BuildUntitledFileName()
@@ -1427,7 +1536,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
                              ?? ModeOptions.FirstOrDefault();
         SelectedHeroOption = HeroOptions.FirstOrDefault(x => string.Equals(x.Code, heroCode, StringComparison.OrdinalIgnoreCase))
                              ?? HeroOptions.FirstOrDefault();
-        SelectedTag = metadata.Tag;
+        SetSelectedTags(metadata.Tags);
     }
 
     private void ReplaceSequenceWithInstructions(IEnumerable<ScriptInstructionInstance> instructions)
@@ -1907,7 +2016,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         var selectedDifficultyCode = SelectedDifficultyOption?.Code ?? StageDifficulty.Medium.ToString();
         var selectedModeCode = SelectedModeOption?.Code ?? StageMode.Standard.ToString();
         var selectedHeroCode = SelectedHeroOption?.Code ?? HeroType.Quincy.ToString();
-        var selectedTag = SelectedTag;
+        var selectedTags = SelectedTagOptions.Select(x => x.Code).ToList();
         var options = _scriptEditorOptionService.CreateMetadataOptions(_localizationService);
         ReplaceCollection(DifficultyOptions, options.DifficultyOptions);
         ReplaceCollection(ModeOptions, options.ModeOptions);
@@ -1917,7 +2026,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         SelectedDifficultyOption = DifficultyOptions.FirstOrDefault(x => x.Code == selectedDifficultyCode) ?? DifficultyOptions.FirstOrDefault();
         SelectedModeOption = ModeOptions.FirstOrDefault(x => x.Code == selectedModeCode) ?? ModeOptions.FirstOrDefault();
         SelectedHeroOption = HeroOptions.FirstOrDefault(x => x.Code == selectedHeroCode) ?? HeroOptions.FirstOrDefault();
-        SelectedTag = selectedTag;
+        SetSelectedTags(selectedTags);
     }
 
     private void UpdateInstructionLocalization()
@@ -1949,7 +2058,12 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         OnPropertyChanged(nameof(MetadataModeText));
         OnPropertyChanged(nameof(MetadataHeroText));
         OnPropertyChanged(nameof(MetadataTagText));
+        OnPropertyChanged(nameof(MetadataTagAddText));
+        OnPropertyChanged(nameof(MetadataTagEmptyText));
+        OnPropertyChanged(nameof(MetadataTagHintText));
         OnPropertyChanged(nameof(MetadataMapPlaceholderText));
+        OnPropertyChanged(nameof(TagEditorWindowTitle));
+        OnPropertyChanged(nameof(SelectedTagsSummaryText));
         OnPropertyChanged(nameof(DebugOpenRuntimeText));
         OnPropertyChanged(nameof(DebugRunText));
         OnPropertyChanged(nameof(DebugStepText));
