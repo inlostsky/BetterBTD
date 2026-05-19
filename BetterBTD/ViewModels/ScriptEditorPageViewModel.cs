@@ -69,6 +69,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     private LanguageOption? _selectedDifficultyOption;
     private LanguageOption? _selectedModeOption;
     private LanguageOption? _selectedHeroOption;
+    private string _selectedTag = string.Empty;
     private ScriptInstructionTemplate? _selectedLibraryInstruction;
     private ScriptInstructionInstance? _selectedSequenceInstruction;
     private bool _isRestoringHistory;
@@ -161,6 +162,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public ObservableCollection<LanguageOption> DifficultyOptions { get; } = [];
     public ObservableCollection<LanguageOption> ModeOptions { get; } = [];
     public ObservableCollection<LanguageOption> HeroOptions { get; } = [];
+    public ObservableCollection<string> TagOptions { get; } = [];
     public ObservableCollection<LanguageOption> MonkeyObjectOptions { get; } = [];
     public ObservableCollection<LanguageOption> UpgradePathOptions { get; } = [];
     public ObservableCollection<LanguageOption> SwitchDirectionOptions { get; } = [];
@@ -248,6 +250,12 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         set => SetProperty(ref _selectedHeroOption, value);
     }
 
+    public string SelectedTag
+    {
+        get => _selectedTag;
+        set => SetProperty(ref _selectedTag, value?.Trim() ?? string.Empty);
+    }
+
     public ScriptInstructionTemplate? SelectedLibraryInstruction
     {
         get => _selectedLibraryInstruction;
@@ -321,6 +329,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     public string MetadataDifficultyText => _localizationService.T("Editor.Metadata.Difficulty");
     public string MetadataModeText => _localizationService.T("Editor.Metadata.Mode");
     public string MetadataHeroText => _localizationService.T("Editor.Metadata.Hero");
+    public string MetadataTagText => _localizationService.T("Editor.Metadata.Tag");
     public string MetadataMapPlaceholderText => _localizationService.T("Editor.Metadata.Map.Placeholder");
 
     public string ScriptCategoryAllText => _localizationService.T("Editor.Category.All");
@@ -414,7 +423,8 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
                 Map = SelectedMap.ToString(),
                 Difficulty = SelectedDifficultyOption?.Code ?? StageDifficulty.Medium.ToString(),
                 Mode = SelectedModeOption?.Code ?? StageMode.Standard.ToString(),
-                Hero = SelectedHeroOption?.Code ?? HeroType.Quincy.ToString()
+                Hero = SelectedHeroOption?.Code ?? HeroType.Quincy.ToString(),
+                Tag = SelectedTag
             },
             MonkeyObjects = _scriptEditorInstructionService.BuildMonkeyObjectDocuments(InstructionSequence),
             Instructions = _scriptEditorInstructionService.BuildInstructionDocuments(InstructionSequence)
@@ -1451,6 +1461,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
                              ?? ModeOptions.FirstOrDefault();
         SelectedHeroOption = HeroOptions.FirstOrDefault(x => string.Equals(x.Code, heroCode, StringComparison.OrdinalIgnoreCase))
                              ?? HeroOptions.FirstOrDefault();
+        SelectedTag = metadata.Tag;
     }
 
     private void ReplaceSequenceWithInstructions(IEnumerable<ScriptInstructionInstance> instructions)
@@ -1930,14 +1941,17 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         var selectedDifficultyCode = SelectedDifficultyOption?.Code ?? StageDifficulty.Medium.ToString();
         var selectedModeCode = SelectedModeOption?.Code ?? StageMode.Standard.ToString();
         var selectedHeroCode = SelectedHeroOption?.Code ?? HeroType.Quincy.ToString();
+        var selectedTag = SelectedTag;
         var options = _scriptEditorOptionService.CreateMetadataOptions(_localizationService);
         ReplaceCollection(DifficultyOptions, options.DifficultyOptions);
         ReplaceCollection(ModeOptions, options.ModeOptions);
         ReplaceCollection(HeroOptions, options.HeroOptions);
+        ReplaceCollection(TagOptions, options.TagOptions);
 
         SelectedDifficultyOption = DifficultyOptions.FirstOrDefault(x => x.Code == selectedDifficultyCode) ?? DifficultyOptions.FirstOrDefault();
         SelectedModeOption = ModeOptions.FirstOrDefault(x => x.Code == selectedModeCode) ?? ModeOptions.FirstOrDefault();
         SelectedHeroOption = HeroOptions.FirstOrDefault(x => x.Code == selectedHeroCode) ?? HeroOptions.FirstOrDefault();
+        SelectedTag = selectedTag;
     }
 
     private void UpdateInstructionLocalization()
@@ -1968,6 +1982,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         OnPropertyChanged(nameof(MetadataDifficultyText));
         OnPropertyChanged(nameof(MetadataModeText));
         OnPropertyChanged(nameof(MetadataHeroText));
+        OnPropertyChanged(nameof(MetadataTagText));
         OnPropertyChanged(nameof(MetadataMapPlaceholderText));
         OnPropertyChanged(nameof(ScriptCategoryAllText));
         OnPropertyChanged(nameof(ScriptCategoryCollectionText));

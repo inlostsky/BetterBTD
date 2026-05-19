@@ -52,6 +52,8 @@ public sealed class ScriptMetadataDocument
     public string Mode { get; set; } = StageMode.Standard.ToString();
 
     public string Hero { get; set; } = HeroType.Quincy.ToString();
+
+    public string Tag { get; set; } = string.Empty;
 }
 
 public sealed class ScriptMonkeyObjectDocument

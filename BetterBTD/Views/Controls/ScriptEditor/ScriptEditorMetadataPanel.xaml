@@ -17,7 +17,7 @@
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
             <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
                 <TextBlock Style="{StaticResource CardDescriptionTextStyle}" Text="{Binding MetadataMapText}" />
-                <vio:CascadingComboBox Width="180"
+                <vio:CascadingComboBox Width="120"
                                        Margin="0,4,0,0"
                                        PlaceholderText="{Binding MetadataMapPlaceholderText}"
                                        ItemsSource="{Binding MapItems}"
@@ -26,7 +26,7 @@
 
             <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
                 <TextBlock Style="{StaticResource CardDescriptionTextStyle}" Text="{Binding MetadataDifficultyText}" />
-                <ComboBox Width="140"
+                <ComboBox Width="80"
                           Margin="0,4,0,0"
                           DisplayMemberPath="DisplayName"
                           ItemsSource="{Binding DifficultyOptions}"
@@ -35,7 +35,7 @@
 
             <StackPanel VerticalAlignment="Center">
                 <TextBlock Style="{StaticResource CardDescriptionTextStyle}" Text="{Binding MetadataModeText}" />
-                <ComboBox Width="140"
+                <ComboBox Width="120"
                           Margin="0,4,0,0"
                           DisplayMemberPath="DisplayName"
                           ItemsSource="{Binding ModeOptions}"
@@ -44,11 +44,21 @@
 
             <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
                 <TextBlock Style="{StaticResource CardDescriptionTextStyle}" Text="{Binding MetadataHeroText}" />
-                <ComboBox Width="140"
+                <ComboBox Width="120"
                           Margin="0,4,0,0"
                           DisplayMemberPath="DisplayName"
                           ItemsSource="{Binding HeroOptions}"
                           SelectedItem="{Binding SelectedHeroOption}" />
+            </StackPanel>
+
+            <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource CardDescriptionTextStyle}" Text="{Binding MetadataTagText}" />
+                <ComboBox Width="120"
+                          Margin="0,4,0,0"
+                          IsEditable="True"
+                          IsTextSearchEnabled="True"
+                          ItemsSource="{Binding TagOptions}"
+                          Text="{Binding SelectedTag, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
             </StackPanel>
         </StackPanel>
     </ui:CardControl>

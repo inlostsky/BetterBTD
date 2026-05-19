@@ -125,7 +125,8 @@ public sealed class ScriptInstructionOptimizationService
             Map = metadata.Map,
             Difficulty = metadata.Difficulty,
             Mode = metadata.Mode,
-            Hero = metadata.Hero
+            Hero = metadata.Hero,
+            Tag = metadata.Tag
         };
     }
 
