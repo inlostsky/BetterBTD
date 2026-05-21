@@ -88,6 +88,7 @@ public sealed class ManagedScriptLibraryService
                 DisplayName = Path.GetFileNameWithoutExtension(sourceFilePath),
                 SourceFileName = Path.GetFileName(sourceFilePath),
                 StoredFileName = storedFileName,
+                Description = scriptDocument.Metadata.Description,
                 Map = scriptDocument.Metadata.Map,
                 Difficulty = scriptDocument.Metadata.Difficulty,
                 Mode = scriptDocument.Metadata.Mode,
@@ -307,6 +308,7 @@ public sealed class ManagedScriptLibraryService
             }
 
             var scriptDocument = _scriptDocumentService.Load(storedFilePath);
+            record.Description = scriptDocument.Metadata.Description;
             record.Map = scriptDocument.Metadata.Map;
             record.Difficulty = scriptDocument.Metadata.Difficulty;
             record.Mode = scriptDocument.Metadata.Mode;
@@ -373,6 +375,7 @@ public sealed class ManagedScriptLibraryService
             DisplayName = record.DisplayName,
             SourceFileName = record.SourceFileName,
             StoredFilePath = storedFilePath,
+            Description = record.Description,
             Map = parsedMap,
             Difficulty = parsedDifficulty,
             Mode = parsedMode,
@@ -405,6 +408,7 @@ public sealed class ManagedScriptLibraryService
         record.DisplayName = record.DisplayName?.Trim() ?? string.Empty;
         record.SourceFileName = record.SourceFileName?.Trim() ?? string.Empty;
         record.StoredFileName = record.StoredFileName?.Trim() ?? string.Empty;
+        record.Description = record.Description?.Trim() ?? string.Empty;
         record.Map = record.Map?.Trim() ?? GameMapType.MonkeyMeadow.ToString();
         record.Difficulty = record.Difficulty?.Trim() ?? StageDifficulty.Medium.ToString();
         record.Mode = record.Mode?.Trim() ?? StageMode.Standard.ToString();

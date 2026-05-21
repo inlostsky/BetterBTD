@@ -191,6 +191,18 @@ public static class GameElementCatalog
         return type.ToString();
     }
 
+    public static string GetMapTierDisplayName(MapDifficultyTier tier)
+    {
+        return tier switch
+        {
+            MapDifficultyTier.Beginner => LocalizationService.Instance.T("GameElements.MapTier.Beginner"),
+            MapDifficultyTier.Intermediate => LocalizationService.Instance.T("GameElements.MapTier.Intermediate"),
+            MapDifficultyTier.Advanced => LocalizationService.Instance.T("GameElements.MapTier.Advanced"),
+            MapDifficultyTier.Expert => LocalizationService.Instance.T("GameElements.MapTier.Expert"),
+            _ => tier.ToString()
+        };
+    }
+
     public static IReadOnlyList<MapDefinition> Maps { get; } =
     [
         // Beginner

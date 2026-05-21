@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using BetterBTD.Helpers;
 using BetterBTD.Models;
 using BetterBTD.Models.AutoTasks;
 using BetterBTD.Models.GameElements;
@@ -7,6 +8,7 @@ using BetterBTD.Models.ScriptEditor;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using Wpf.Ui.Violeta.Controls;
 
 namespace BetterBTD.ViewModels;
 
@@ -17,15 +19,23 @@ public sealed class MyScriptsPageViewModel : ObservableObject
     private readonly ManagedScriptLibraryService _managedScriptLibraryService;
 
     private List<ManagedScriptListItemViewModel> _allScripts = [];
-    private List<ManagedScriptSlotListItemViewModel> _allSlots = [];
+    private Dictionary<string, ManagedScriptSlotEntry> _blackBorderSlotsById = new(StringComparer.OrdinalIgnoreCase);
+    private bool _isUpdatingFilters;
     private string _scriptSearchText = string.Empty;
-    private string _slotSearchText = string.Empty;
-    private LanguageOption? _selectedTaskKindOption;
-    private LanguageOption? _selectedMapOption;
+    private GameMapType _selectedMap = GameMapType.MonkeyMeadow;
     private LanguageOption? _selectedDifficultyOption;
     private LanguageOption? _selectedModeOption;
     private ManagedScriptListItemViewModel? _selectedScript;
-    private ManagedScriptSlotListItemViewModel? _selectedSlot;
+    private string _selectedScriptName = string.Empty;
+    private string _selectedScriptDescription = string.Empty;
+    private string _selectedScriptHero = string.Empty;
+    private string _selectedScriptMap = string.Empty;
+    private string _selectedScriptDifficulty = string.Empty;
+    private string _selectedScriptMode = string.Empty;
+    private string _selectedScriptTags = string.Empty;
+    private string _selectedScriptState = string.Empty;
+    private string _selectedBlackBorderTarget = string.Empty;
+    private string _selectedBlackBorderBindingState = string.Empty;
 
     public MyScriptsPageViewModel(LocalizationService localizationService)
     {
@@ -37,18 +47,13 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         ImportScriptCommand = new RelayCommand(ImportScript);
         ExportSelectedScriptCommand = new RelayCommand(ExportSelectedScript, CanExportSelectedScript);
         RemoveSelectedScriptCommand = new RelayCommand(RemoveSelectedScript, CanRemoveSelectedScript);
-        BindSelectedScriptToSlotCommand = new RelayCommand(BindSelectedScriptToSlot, CanBindSelectedScriptToSlot);
-        ClearSelectedSlotBindingCommand = new RelayCommand(ClearSelectedSlotBinding, CanClearSelectedSlotBinding);
+        BindSelectedScriptToBlackBorderCommand = new RelayCommand(BindSelectedScriptToBlackBorder, CanBindSelectedScriptToBlackBorder);
+        ClearSelectedBlackBorderBindingCommand = new RelayCommand(ClearSelectedBlackBorderBinding, CanClearSelectedBlackBorderBinding);
 
         _localizationService.LanguageChanged += (_, _) => RefreshLocalizedContent();
 
         RefreshLocalizedContent();
-        Refresh();
     }
-
-    public ObservableCollection<LanguageOption> TaskKindOptions { get; } = [];
-
-    public ObservableCollection<LanguageOption> MapOptions { get; } = [];
 
     public ObservableCollection<LanguageOption> DifficultyOptions { get; } = [];
 
@@ -56,7 +61,7 @@ public sealed class MyScriptsPageViewModel : ObservableObject
 
     public ObservableCollection<ManagedScriptListItemViewModel> Scripts { get; } = [];
 
-    public ObservableCollection<ManagedScriptSlotListItemViewModel> Slots { get; } = [];
+    public IReadOnlyList<ICascadingItem> MapItems => GameElementCascadingItems.MapItems;
 
     public IRelayCommand RefreshCommand { get; }
 
@@ -66,13 +71,9 @@ public sealed class MyScriptsPageViewModel : ObservableObject
 
     public IRelayCommand RemoveSelectedScriptCommand { get; }
 
-    public IRelayCommand BindSelectedScriptToSlotCommand { get; }
+    public IRelayCommand BindSelectedScriptToBlackBorderCommand { get; }
 
-    public IRelayCommand ClearSelectedSlotBindingCommand { get; }
-
-    public string Title => _localizationService.T("Library.Page.Title");
-
-    public string Subtitle => _localizationService.T("Library.Page.Subtitle");
+    public IRelayCommand ClearSelectedBlackBorderBindingCommand { get; }
 
     public string ImportText => _localizationService.T("Library.Action.Import");
 
@@ -81,12 +82,6 @@ public sealed class MyScriptsPageViewModel : ObservableObject
     public string RemoveText => _localizationService.T("Library.Action.Remove");
 
     public string RefreshText => _localizationService.T("Library.Action.Refresh");
-
-    public string BindText => _localizationService.T("Library.Action.Bind");
-
-    public string ClearBindingText => _localizationService.T("Library.Action.ClearBinding");
-
-    public string FiltersTitle => _localizationService.T("Library.Filters.Title");
 
     public string ScriptSearchLabel => _localizationService.T("Library.Filters.Search");
 
@@ -98,18 +93,6 @@ public sealed class MyScriptsPageViewModel : ObservableObject
 
     public string ModeFilterLabel => _localizationService.T("Library.Filters.Mode");
 
-    public string TaskKindFilterLabel => _localizationService.T("Library.Filters.TaskKind");
-
-    public string SlotSearchLabel => _localizationService.T("Library.Filters.SlotSearch");
-
-    public string ScriptsSectionTitle => _localizationService.T("Library.Section.Scripts");
-
-    public string SlotsSectionTitle => _localizationService.T("Library.Section.Slots");
-
-    public string EmptyScriptsText => _localizationService.T("Library.Empty.Scripts");
-
-    public string EmptySlotsText => _localizationService.T("Library.Empty.Slots");
-
     public string NameColumnText => _localizationService.T("Library.Column.Name");
 
     public string MapColumnText => _localizationService.T("Library.Column.Map");
@@ -120,15 +103,7 @@ public sealed class MyScriptsPageViewModel : ObservableObject
 
     public string TagsColumnText => _localizationService.T("Library.Column.Tags");
 
-    public string BindingsColumnText => _localizationService.T("Library.Column.Bindings");
-
     public string StateColumnText => _localizationService.T("Library.Column.State");
-
-    public string GroupColumnText => _localizationService.T("Library.Column.Group");
-
-    public string SlotColumnText => _localizationService.T("Library.Column.Slot");
-
-    public string BoundScriptColumnText => _localizationService.T("Library.Column.BoundScript");
 
     public string SelectedScriptSummary => SelectedScript is null
         ? _localizationService.T("Library.Summary.None")
@@ -136,6 +111,30 @@ public sealed class MyScriptsPageViewModel : ObservableObject
             _localizationService.T("Library.Summary.Script"),
             SelectedScript.SourceFileName,
             SelectedScript.ScriptId);
+
+    public string PropertyNameText => _localizationService.T("Library.Property.Name");
+
+    public string PropertyDescriptionText => _localizationService.T("Library.Property.Description");
+
+    public string PropertyHeroText => _localizationService.T("Library.Property.Hero");
+
+    public string PropertyMapText => _localizationService.T("Library.Property.Map");
+
+    public string PropertyDifficultyText => _localizationService.T("Library.Property.Difficulty");
+
+    public string PropertyModeText => _localizationService.T("Library.Property.Mode");
+
+    public string PropertyTagsText => _localizationService.T("Library.Property.Tags");
+
+    public string PropertyStateText => _localizationService.T("Library.Property.State");
+
+    public string PropertyBlackBorderTargetText => _localizationService.T("Library.Property.BlackBorderTarget");
+
+    public string PropertyBlackBorderBindingText => _localizationService.T("Library.Property.BlackBorderBinding");
+
+    public string BindBlackBorderText => _localizationService.T("Library.Action.BindBlackBorder");
+
+    public string ClearBlackBorderText => _localizationService.T("Library.Action.ClearBlackBorder");
 
     public string ScriptSearchText
     {
@@ -147,49 +146,21 @@ public sealed class MyScriptsPageViewModel : ObservableObject
                 return;
             }
 
-            RefreshFilteredCollections();
+            RefreshFilteredScripts();
         }
     }
 
-    public string SlotSearchText
+    public GameMapType SelectedMap
     {
-        get => _slotSearchText;
+        get => _selectedMap;
         set
         {
-            if (!SetProperty(ref _slotSearchText, value))
+            if (!SetProperty(ref _selectedMap, value))
             {
                 return;
             }
 
-            RefreshFilteredCollections();
-        }
-    }
-
-    public LanguageOption? SelectedTaskKindOption
-    {
-        get => _selectedTaskKindOption;
-        set
-        {
-            if (!SetProperty(ref _selectedTaskKindOption, value))
-            {
-                return;
-            }
-
-            RefreshFilteredCollections();
-        }
-    }
-
-    public LanguageOption? SelectedMapOption
-    {
-        get => _selectedMapOption;
-        set
-        {
-            if (!SetProperty(ref _selectedMapOption, value))
-            {
-                return;
-            }
-
-            RefreshFilteredCollections();
+            RefreshFilteredScripts();
         }
     }
 
@@ -203,7 +174,12 @@ public sealed class MyScriptsPageViewModel : ObservableObject
                 return;
             }
 
-            RefreshFilteredCollections();
+            if (_isUpdatingFilters)
+            {
+                return;
+            }
+
+            RefreshFilteredScripts();
         }
     }
 
@@ -217,7 +193,12 @@ public sealed class MyScriptsPageViewModel : ObservableObject
                 return;
             }
 
-            RefreshFilteredCollections();
+            if (_isUpdatingFilters)
+            {
+                return;
+            }
+
+            RefreshFilteredScripts();
         }
     }
 
@@ -231,35 +212,84 @@ public sealed class MyScriptsPageViewModel : ObservableObject
                 return;
             }
 
+            UpdateSelectedScriptDetails();
             OnPropertyChanged(nameof(SelectedScriptSummary));
             ExportSelectedScriptCommand.NotifyCanExecuteChanged();
             RemoveSelectedScriptCommand.NotifyCanExecuteChanged();
-            BindSelectedScriptToSlotCommand.NotifyCanExecuteChanged();
+            BindSelectedScriptToBlackBorderCommand.NotifyCanExecuteChanged();
+            ClearSelectedBlackBorderBindingCommand.NotifyCanExecuteChanged();
         }
     }
 
-    public ManagedScriptSlotListItemViewModel? SelectedSlot
+    public string SelectedScriptName
     {
-        get => _selectedSlot;
-        set
-        {
-            if (!SetProperty(ref _selectedSlot, value))
-            {
-                return;
-            }
+        get => _selectedScriptName;
+        private set => SetProperty(ref _selectedScriptName, value);
+    }
 
-            BindSelectedScriptToSlotCommand.NotifyCanExecuteChanged();
-            ClearSelectedSlotBindingCommand.NotifyCanExecuteChanged();
-        }
+    public string SelectedScriptDescription
+    {
+        get => _selectedScriptDescription;
+        private set => SetProperty(ref _selectedScriptDescription, value);
+    }
+
+    public string SelectedScriptHero
+    {
+        get => _selectedScriptHero;
+        private set => SetProperty(ref _selectedScriptHero, value);
+    }
+
+    public string SelectedScriptMap
+    {
+        get => _selectedScriptMap;
+        private set => SetProperty(ref _selectedScriptMap, value);
+    }
+
+    public string SelectedScriptDifficulty
+    {
+        get => _selectedScriptDifficulty;
+        private set => SetProperty(ref _selectedScriptDifficulty, value);
+    }
+
+    public string SelectedScriptMode
+    {
+        get => _selectedScriptMode;
+        private set => SetProperty(ref _selectedScriptMode, value);
+    }
+
+    public string SelectedScriptTags
+    {
+        get => _selectedScriptTags;
+        private set => SetProperty(ref _selectedScriptTags, value);
+    }
+
+    public string SelectedScriptState
+    {
+        get => _selectedScriptState;
+        private set => SetProperty(ref _selectedScriptState, value);
+    }
+
+    public string SelectedBlackBorderTarget
+    {
+        get => _selectedBlackBorderTarget;
+        private set => SetProperty(ref _selectedBlackBorderTarget, value);
+    }
+
+    public string SelectedBlackBorderBindingState
+    {
+        get => _selectedBlackBorderBindingState;
+        private set => SetProperty(ref _selectedBlackBorderBindingState, value);
     }
 
     private void Refresh()
     {
         var snapshot = _managedScriptLibraryService.GetSnapshot();
+        _blackBorderSlotsById = snapshot.Slots
+            .Where(x => x.Definition.TaskKind == AutoTaskKind.BlackBorder)
+            .ToDictionary(x => x.Definition.SlotId, StringComparer.OrdinalIgnoreCase);
         _allScripts = snapshot.Scripts.Select(CreateScriptItem).ToList();
-        _allSlots = snapshot.Slots.Select(CreateSlotItem).ToList();
         BuildFilterOptions();
-        RefreshFilteredCollections();
+        RefreshFilteredScripts();
     }
 
     private void ImportScript()
@@ -355,23 +385,23 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         }
     }
 
-    private bool CanBindSelectedScriptToSlot()
+    private bool CanBindSelectedScriptToBlackBorder()
     {
-        return SelectedScript is not null && SelectedSlot is not null;
+        return SelectedScript?.CanBindToBlackBorder == true;
     }
 
-    private void BindSelectedScriptToSlot()
+    private void BindSelectedScriptToBlackBorder()
     {
-        if (SelectedScript is null || SelectedSlot is null)
+        if (SelectedScript is null || string.IsNullOrWhiteSpace(SelectedScript.BlackBorderSlotId))
         {
             return;
         }
 
         try
         {
-            _managedScriptLibraryService.SetBinding(SelectedSlot.SlotId, SelectedScript.ScriptId);
+            _managedScriptLibraryService.SetBinding(SelectedScript.BlackBorderSlotId, SelectedScript.ScriptId);
             Refresh();
-            RestoreSelection(SelectedScript.ScriptId, SelectedSlot.SlotId);
+            RestoreSelection(SelectedScript.ScriptId);
         }
         catch (Exception ex)
         {
@@ -379,23 +409,23 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         }
     }
 
-    private bool CanClearSelectedSlotBinding()
+    private bool CanClearSelectedBlackBorderBinding()
     {
-        return SelectedSlot?.HasBinding == true;
+        return SelectedScript?.IsBoundToBlackBorder == true;
     }
 
-    private void ClearSelectedSlotBinding()
+    private void ClearSelectedBlackBorderBinding()
     {
-        if (SelectedSlot is null)
+        if (SelectedScript is null || string.IsNullOrWhiteSpace(SelectedScript.BlackBorderSlotId))
         {
             return;
         }
 
         try
         {
-            _managedScriptLibraryService.SetBinding(SelectedSlot.SlotId, null);
+            _managedScriptLibraryService.SetBinding(SelectedScript.BlackBorderSlotId, null);
             Refresh();
-            RestoreSelection(SelectedScript?.ScriptId, SelectedSlot.SlotId);
+            RestoreSelection(SelectedScript.ScriptId);
         }
         catch (Exception ex)
         {
@@ -403,10 +433,9 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         }
     }
 
-    private void RefreshFilteredCollections()
+    private void RefreshFilteredScripts()
     {
         var selectedScriptId = SelectedScript?.ScriptId;
-        var selectedSlotId = SelectedSlot?.SlotId;
 
         var filteredScripts = _allScripts
             .Where(MatchesScriptFilters)
@@ -414,24 +443,13 @@ public sealed class MyScriptsPageViewModel : ObservableObject
             .ThenBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var filteredSlots = _allSlots
-            .Where(MatchesSlotFilters)
-            .OrderBy(x => x.TaskKind)
-            .ThenBy(x => x.GroupDisplayName, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.SlotDisplayName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
         ReplaceCollection(Scripts, filteredScripts);
-        ReplaceCollection(Slots, filteredSlots);
-
         SelectedScript = Scripts.FirstOrDefault(x => x.ScriptId == selectedScriptId) ?? Scripts.FirstOrDefault();
-        SelectedSlot = Slots.FirstOrDefault(x => x.SlotId == selectedSlotId) ?? Slots.FirstOrDefault();
     }
 
     private bool MatchesScriptFilters(ManagedScriptListItemViewModel script)
     {
-        if (SelectedMapOption?.Code.Length > 0 &&
-            !string.Equals(script.MapCode, SelectedMapOption.Code, StringComparison.OrdinalIgnoreCase))
+        if (script.MapType != SelectedMap)
         {
             return false;
         }
@@ -456,69 +474,40 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         var query = ScriptSearchText.Trim();
         return script.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                script.MapDisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-               script.TagsText.Contains(query, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private bool MatchesSlotFilters(ManagedScriptSlotListItemViewModel slot)
-    {
-        if (SelectedTaskKindOption?.Code.Length > 0 &&
-            !string.Equals(slot.TaskKind.ToKey(), SelectedTaskKindOption.Code, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(SlotSearchText))
-        {
-            return true;
-        }
-
-        var query = SlotSearchText.Trim();
-        return slot.GroupDisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-               slot.SlotDisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-               slot.BoundScriptDisplayName.Contains(query, StringComparison.OrdinalIgnoreCase);
+               script.TagsText.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+               script.HeroDisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+               script.Description.Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
     private ManagedScriptListItemViewModel CreateScriptItem(ManagedScriptAssetEntry entry)
     {
+        var blackBorderSlotId = ManagedScriptSlotIdFactory.CreateBlackBorderSlotId(entry.Map, entry.Difficulty, entry.Mode);
+        _blackBorderSlotsById.TryGetValue(blackBorderSlotId, out var blackBorderSlot);
+        var isBoundToBlackBorder = blackBorderSlot?.BoundScriptId.Equals(entry.ScriptId, StringComparison.OrdinalIgnoreCase) == true;
+
         return new ManagedScriptListItemViewModel
         {
             ScriptId = entry.ScriptId,
             DisplayName = entry.DisplayName,
+            Description = entry.Description,
             SourceFileName = entry.SourceFileName,
-            MapCode = entry.Map.ToString(),
+            MapType = entry.Map,
             DifficultyCode = entry.Difficulty.ToString(),
             ModeCode = entry.Mode.ToString(),
             MapDisplayName = GameElementCatalog.GetMapDisplayName(entry.Map),
             DifficultyDisplayName = GameElementCatalog.GetStageDifficultyDisplayName(entry.Difficulty),
             ModeDisplayName = GameElementCatalog.GetStageModeDisplayName(entry.Mode),
+            HeroDisplayName = GameElementCatalog.GetHeroDisplayName(entry.Hero),
             TagsText = entry.Tags.Count == 0
                 ? string.Empty
                 : string.Join(", ", entry.Tags.Select(ScriptTagCatalog.GetDisplayName)),
-            BindingCountText = entry.BindingCount.ToString(),
             StateText = ResolveScriptStateText(entry),
-            UpdatedAt = entry.UpdatedAt
-        };
-    }
-
-    private ManagedScriptSlotListItemViewModel CreateSlotItem(ManagedScriptSlotEntry entry)
-    {
-        var definition = entry.Definition;
-        var groupDisplayName = definition.StageTarget is null
-            ? definition.GroupName
-            : $"{GameElementCatalog.GetMapDisplayName(definition.StageTarget.Map)} / {GameElementCatalog.GetStageDifficultyDisplayName(definition.StageTarget.Difficulty)}";
-        var slotDisplayName = definition.StageTarget is null
-            ? definition.DisplayName
-            : GameElementCatalog.GetStageModeDisplayName(definition.StageTarget.Mode);
-
-        return new ManagedScriptSlotListItemViewModel
-        {
-            SlotId = definition.SlotId,
-            TaskKind = definition.TaskKind,
-            GroupDisplayName = groupDisplayName,
-            SlotDisplayName = slotDisplayName,
-            BoundScriptDisplayName = entry.BoundScript?.DisplayName ?? string.Empty,
-            StateText = ResolveSlotStateText(entry),
-            HasBinding = entry.HasBinding
+            UpdatedAt = entry.UpdatedAt,
+            BlackBorderSlotId = blackBorderSlotId,
+            BlackBorderTargetText = $"{GameElementCatalog.GetMapDisplayName(entry.Map)} / {GameElementCatalog.GetStageDifficultyDisplayName(entry.Difficulty)} / {GameElementCatalog.GetStageModeDisplayName(entry.Mode)}",
+            BlackBorderBindingStateText = ResolveBlackBorderBindingStateText(entry, blackBorderSlot),
+            IsBoundToBlackBorder = isBoundToBlackBorder,
+            CanBindToBlackBorder = !entry.HasMissingFile && !entry.HasMetadataIssue
         };
     }
 
@@ -537,127 +526,148 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         return _localizationService.T("Library.State.Ready");
     }
 
-    private string ResolveSlotStateText(ManagedScriptSlotEntry entry)
+    private string ResolveBlackBorderBindingStateText(
+        ManagedScriptAssetEntry entry,
+        ManagedScriptSlotEntry? blackBorderSlot)
     {
-        if (entry.IsBrokenBinding)
+        if (entry.HasMetadataIssue)
         {
-            return _localizationService.T("Library.State.BrokenBinding");
+            return _localizationService.T("Library.State.MetadataIssue");
         }
 
-        if (!entry.HasBinding)
+        if (blackBorderSlot is null)
         {
-            return entry.Definition.IsPlaceholder
-                ? _localizationService.T("Library.State.Placeholder")
-                : _localizationService.T("Library.State.Unbound");
+            return _localizationService.T("Library.State.Unbound");
         }
 
-        return _localizationService.T("Library.State.Bound");
+        if (!blackBorderSlot.HasBinding)
+        {
+            return _localizationService.T("Library.BlackBorder.Unbound");
+        }
+
+        if (blackBorderSlot.IsBrokenBinding)
+        {
+            return _localizationService.T("Library.BlackBorder.Broken");
+        }
+
+        if (string.Equals(blackBorderSlot.BoundScriptId, entry.ScriptId, StringComparison.OrdinalIgnoreCase))
+        {
+            return _localizationService.T("Library.BlackBorder.BoundToCurrent");
+        }
+
+        return string.Format(
+            _localizationService.T("Library.BlackBorder.BoundToOther"),
+            blackBorderSlot.BoundScript?.DisplayName ?? blackBorderSlot.BoundScriptId);
     }
 
     private void BuildFilterOptions()
     {
         var allText = _localizationService.T("Library.Filters.All");
-        var previousTaskKind = SelectedTaskKindOption?.Code ?? string.Empty;
-        var previousMap = SelectedMapOption?.Code ?? string.Empty;
         var previousDifficulty = SelectedDifficultyOption?.Code ?? string.Empty;
         var previousMode = SelectedModeOption?.Code ?? string.Empty;
 
-        ReplaceCollection(
-            TaskKindOptions,
-            new[]
-            {
-                new LanguageOption { Code = string.Empty, DisplayName = allText },
-                new LanguageOption { Code = AutoTaskKind.Custom.ToKey(), DisplayName = _localizationService.T("Library.TaskKind.Custom") },
-                new LanguageOption { Code = AutoTaskKind.Collection.ToKey(), DisplayName = _localizationService.T("Library.TaskKind.Collection") },
-                new LanguageOption { Code = AutoTaskKind.BlackBorder.ToKey(), DisplayName = _localizationService.T("Library.TaskKind.BlackBorder") },
-                new LanguageOption { Code = AutoTaskKind.Race.ToKey(), DisplayName = _localizationService.T("Library.TaskKind.Race") }
-            });
+        _isUpdatingFilters = true;
 
-        ReplaceCollection(
-            MapOptions,
-            new[]
-            {
-                new LanguageOption { Code = string.Empty, DisplayName = allText }
-            }.Concat(GameElementCatalog.Maps
-                .Select(x => x.Type)
-                .Distinct()
-                .Select(map => new LanguageOption
+        try
+        {
+            ReplaceCollection(
+                DifficultyOptions,
+                new[]
                 {
-                    Code = map.ToString(),
-                    DisplayName = GameElementCatalog.GetMapDisplayName(map)
-                })));
+                    new LanguageOption { Code = string.Empty, DisplayName = allText },
+                    new LanguageOption { Code = StageDifficulty.Easy.ToString(), DisplayName = GameElementCatalog.GetStageDifficultyDisplayName(StageDifficulty.Easy) },
+                    new LanguageOption { Code = StageDifficulty.Medium.ToString(), DisplayName = GameElementCatalog.GetStageDifficultyDisplayName(StageDifficulty.Medium) },
+                    new LanguageOption { Code = StageDifficulty.Hard.ToString(), DisplayName = GameElementCatalog.GetStageDifficultyDisplayName(StageDifficulty.Hard) }
+                });
 
-        ReplaceCollection(
-            DifficultyOptions,
-            new[]
-            {
-                new LanguageOption { Code = string.Empty, DisplayName = allText },
-                new LanguageOption { Code = StageDifficulty.Easy.ToString(), DisplayName = GameElementCatalog.GetStageDifficultyDisplayName(StageDifficulty.Easy) },
-                new LanguageOption { Code = StageDifficulty.Medium.ToString(), DisplayName = GameElementCatalog.GetStageDifficultyDisplayName(StageDifficulty.Medium) },
-                new LanguageOption { Code = StageDifficulty.Hard.ToString(), DisplayName = GameElementCatalog.GetStageDifficultyDisplayName(StageDifficulty.Hard) }
-            });
+            ReplaceCollection(
+                ModeOptions,
+                new[]
+                {
+                    new LanguageOption { Code = string.Empty, DisplayName = allText }
+                }.Concat(Enum.GetValues<StageMode>().Select(mode => new LanguageOption
+                    {
+                        Code = mode.ToString(),
+                        DisplayName = GameElementCatalog.GetStageModeDisplayName(mode)
+                    })));
 
-        ReplaceCollection(
-            ModeOptions,
-            new[]
-            {
-                new LanguageOption { Code = string.Empty, DisplayName = allText }
-            }.Concat(Enum.GetValues<StageMode>().Select(mode => new LanguageOption
-            {
-                Code = mode.ToString(),
-                DisplayName = GameElementCatalog.GetStageModeDisplayName(mode)
-            })));
-
-        SelectedTaskKindOption = TaskKindOptions.FirstOrDefault(x => x.Code == previousTaskKind) ?? TaskKindOptions.FirstOrDefault();
-        SelectedMapOption = MapOptions.FirstOrDefault(x => x.Code == previousMap) ?? MapOptions.FirstOrDefault();
-        SelectedDifficultyOption = DifficultyOptions.FirstOrDefault(x => x.Code == previousDifficulty) ?? DifficultyOptions.FirstOrDefault();
-        SelectedModeOption = ModeOptions.FirstOrDefault(x => x.Code == previousMode) ?? ModeOptions.FirstOrDefault();
+            SelectedDifficultyOption = DifficultyOptions.FirstOrDefault(x => x.Code == previousDifficulty) ?? DifficultyOptions.FirstOrDefault();
+            SelectedModeOption = ModeOptions.FirstOrDefault(x => x.Code == previousMode) ?? ModeOptions.FirstOrDefault();
+        }
+        finally
+        {
+            _isUpdatingFilters = false;
+        }
     }
 
-    private void RestoreSelection(string? scriptId, string? slotId)
+    private void RestoreSelection(string? scriptId)
     {
         SelectedScript = Scripts.FirstOrDefault(x => string.Equals(x.ScriptId, scriptId, StringComparison.OrdinalIgnoreCase))
                          ?? Scripts.FirstOrDefault();
-        SelectedSlot = Slots.FirstOrDefault(x => string.Equals(x.SlotId, slotId, StringComparison.OrdinalIgnoreCase))
-                       ?? Slots.FirstOrDefault();
+    }
+
+    private void UpdateSelectedScriptDetails()
+    {
+        if (SelectedScript is null)
+        {
+            SelectedScriptName = string.Empty;
+            SelectedScriptDescription = string.Empty;
+            SelectedScriptHero = string.Empty;
+            SelectedScriptMap = string.Empty;
+            SelectedScriptDifficulty = string.Empty;
+            SelectedScriptMode = string.Empty;
+            SelectedScriptTags = string.Empty;
+            SelectedScriptState = string.Empty;
+            SelectedBlackBorderTarget = string.Empty;
+            SelectedBlackBorderBindingState = string.Empty;
+            return;
+        }
+
+        SelectedScriptName = SelectedScript.DisplayName;
+        SelectedScriptDescription = SelectedScript.Description;
+        SelectedScriptHero = SelectedScript.HeroDisplayName;
+        SelectedScriptMap = SelectedScript.MapDisplayName;
+        SelectedScriptDifficulty = SelectedScript.DifficultyDisplayName;
+        SelectedScriptMode = SelectedScript.ModeDisplayName;
+        SelectedScriptTags = SelectedScript.TagsText;
+        SelectedScriptState = SelectedScript.StateText;
+        SelectedBlackBorderTarget = SelectedScript.BlackBorderTargetText;
+        SelectedBlackBorderBindingState = SelectedScript.BlackBorderBindingStateText;
     }
 
     private void RefreshLocalizedContent()
     {
-        BuildFilterOptions();
         Refresh();
 
-        OnPropertyChanged(nameof(Title));
-        OnPropertyChanged(nameof(Subtitle));
         OnPropertyChanged(nameof(ImportText));
         OnPropertyChanged(nameof(ExportText));
         OnPropertyChanged(nameof(RemoveText));
         OnPropertyChanged(nameof(RefreshText));
-        OnPropertyChanged(nameof(BindText));
-        OnPropertyChanged(nameof(ClearBindingText));
-        OnPropertyChanged(nameof(FiltersTitle));
         OnPropertyChanged(nameof(ScriptSearchLabel));
         OnPropertyChanged(nameof(ScriptSearchPlaceholder));
+        OnPropertyChanged(nameof(MapItems));
         OnPropertyChanged(nameof(MapFilterLabel));
         OnPropertyChanged(nameof(DifficultyFilterLabel));
         OnPropertyChanged(nameof(ModeFilterLabel));
-        OnPropertyChanged(nameof(TaskKindFilterLabel));
-        OnPropertyChanged(nameof(SlotSearchLabel));
-        OnPropertyChanged(nameof(ScriptsSectionTitle));
-        OnPropertyChanged(nameof(SlotsSectionTitle));
-        OnPropertyChanged(nameof(EmptyScriptsText));
-        OnPropertyChanged(nameof(EmptySlotsText));
         OnPropertyChanged(nameof(NameColumnText));
         OnPropertyChanged(nameof(MapColumnText));
         OnPropertyChanged(nameof(DifficultyColumnText));
         OnPropertyChanged(nameof(ModeColumnText));
         OnPropertyChanged(nameof(TagsColumnText));
-        OnPropertyChanged(nameof(BindingsColumnText));
         OnPropertyChanged(nameof(StateColumnText));
-        OnPropertyChanged(nameof(GroupColumnText));
-        OnPropertyChanged(nameof(SlotColumnText));
-        OnPropertyChanged(nameof(BoundScriptColumnText));
         OnPropertyChanged(nameof(SelectedScriptSummary));
+        OnPropertyChanged(nameof(PropertyNameText));
+        OnPropertyChanged(nameof(PropertyDescriptionText));
+        OnPropertyChanged(nameof(PropertyHeroText));
+        OnPropertyChanged(nameof(PropertyMapText));
+        OnPropertyChanged(nameof(PropertyDifficultyText));
+        OnPropertyChanged(nameof(PropertyModeText));
+        OnPropertyChanged(nameof(PropertyTagsText));
+        OnPropertyChanged(nameof(PropertyStateText));
+        OnPropertyChanged(nameof(PropertyBlackBorderTargetText));
+        OnPropertyChanged(nameof(PropertyBlackBorderBindingText));
+        OnPropertyChanged(nameof(BindBlackBorderText));
+        OnPropertyChanged(nameof(ClearBlackBorderText));
     }
 
     private void ShowError(string titleKey, string message)
@@ -686,9 +696,11 @@ public sealed class ManagedScriptListItemViewModel
 
     public required string DisplayName { get; init; }
 
+    public required string Description { get; init; }
+
     public required string SourceFileName { get; init; }
 
-    public required string MapCode { get; init; }
+    public required GameMapType MapType { get; init; }
 
     public required string DifficultyCode { get; init; }
 
@@ -700,28 +712,21 @@ public sealed class ManagedScriptListItemViewModel
 
     public required string ModeDisplayName { get; init; }
 
-    public required string TagsText { get; init; }
+    public required string HeroDisplayName { get; init; }
 
-    public required string BindingCountText { get; init; }
+    public required string TagsText { get; init; }
 
     public required string StateText { get; init; }
 
     public required DateTimeOffset UpdatedAt { get; init; }
-}
 
-public sealed class ManagedScriptSlotListItemViewModel
-{
-    public required string SlotId { get; init; }
+    public required string BlackBorderSlotId { get; init; }
 
-    public required AutoTaskKind TaskKind { get; init; }
+    public required string BlackBorderTargetText { get; init; }
 
-    public required string GroupDisplayName { get; init; }
+    public required string BlackBorderBindingStateText { get; init; }
 
-    public required string SlotDisplayName { get; init; }
+    public bool IsBoundToBlackBorder { get; init; }
 
-    public required string BoundScriptDisplayName { get; init; }
-
-    public required string StateText { get; init; }
-
-    public bool HasBinding { get; init; }
+    public bool CanBindToBlackBorder { get; init; }
 }

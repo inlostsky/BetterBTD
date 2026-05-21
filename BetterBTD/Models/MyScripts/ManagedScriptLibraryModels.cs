@@ -22,6 +22,8 @@ public sealed class ManagedScriptAssetRecord
 
     public string StoredFileName { get; set; } = string.Empty;
 
+    public string Description { get; set; } = string.Empty;
+
     public string Map { get; set; } = GameMapType.MonkeyMeadow.ToString();
 
     public string Difficulty { get; set; } = StageDifficulty.Medium.ToString();
@@ -62,6 +64,8 @@ public sealed class ManagedScriptAssetEntry
     public required string SourceFileName { get; init; }
 
     public required string StoredFilePath { get; init; }
+
+    public required string Description { get; init; }
 
     public required GameMapType Map { get; init; }
 
