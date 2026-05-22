@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using BetterBTD.Helpers.Security;
 using BetterBTD.Models.AutoTasks;
 using BetterBTD.Models.GameElements;
 using BetterBTD.Models.MyScripts;
@@ -75,10 +76,19 @@ public sealed class ManagedScriptLibraryService
 
             var loadResult = _scriptDocumentService.LoadCompatible(sourceFilePath);
             var document = LoadManifest();
+            var targetFingerprint = BuildDocumentFingerprint(loadResult.Document);
+            var recordsByFingerprint = BuildFingerprintIndex(document);
+            if (recordsByFingerprint.TryGetValue(targetFingerprint, out var existingRecord))
+            {
+                SaveManifest(document);
+                return BuildAssetEntry(existingRecord, document.Bindings);
+            }
+
             var record = CreateManagedScriptRecord(
                 loadResult.Document,
                 Path.GetFileNameWithoutExtension(sourceFilePath),
-                Path.GetFileName(sourceFilePath));
+                Path.GetFileName(sourceFilePath),
+                targetFingerprint);
             document.Scripts.Add(record);
             SaveManifest(document);
 
@@ -86,7 +96,9 @@ public sealed class ManagedScriptLibraryService
         }
     }
 
-    public IReadOnlyList<ManagedScriptAssetEntry> ImportLegacyScriptCollection(string sourceFilePath)
+    public IReadOnlyList<ManagedScriptAssetEntry> ImportLegacyScriptCollection(
+        string sourceFilePath,
+        IProgress<int>? progress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceFilePath);
 
@@ -100,12 +112,15 @@ public sealed class ManagedScriptLibraryService
             }
 
             var document = LoadManifest();
+            var recordsByFingerprint = BuildFingerprintIndex(document);
             var importedEntries = new List<ManagedScriptAssetEntry>();
             using var stream = File.OpenRead(sourceFilePath);
             var enumerator = JsonSerializer.DeserializeAsyncEnumerable<JsonElement>(stream).GetAsyncEnumerator();
             var sourceFileName = Path.GetFileName(sourceFilePath);
             var packageDisplayName = Path.GetFileNameWithoutExtension(sourceFilePath);
             var index = 0;
+            var processedCount = 0;
+            progress?.Report(processedCount);
 
             try
             {
@@ -128,11 +143,22 @@ public sealed class ManagedScriptLibraryService
                         legacyDocument,
                         packageDisplayName,
                         index);
+                    var targetFingerprint = BuildDocumentFingerprint(conversionResult.Document);
+                    processedCount++;
+                    progress?.Report(processedCount);
+                    if (recordsByFingerprint.ContainsKey(targetFingerprint))
+                    {
+                        index++;
+                        continue;
+                    }
+
                     var record = CreateManagedScriptRecord(
                         conversionResult.Document,
                         displayName,
-                        sourceFileName);
+                        sourceFileName,
+                        targetFingerprint);
                     document.Scripts.Add(record);
+                    recordsByFingerprint[targetFingerprint] = record;
                     importedEntries.Add(BuildAssetEntry(record, document.Bindings));
                     index++;
                 }
@@ -142,7 +168,7 @@ public sealed class ManagedScriptLibraryService
                 enumerator.DisposeAsync().AsTask().GetAwaiter().GetResult();
             }
 
-            if (importedEntries.Count == 0)
+            if (processedCount == 0)
             {
                 throw new InvalidDataException("Legacy script package does not contain any importable scripts.");
             }
@@ -170,6 +196,7 @@ public sealed class ManagedScriptLibraryService
 
             var loadResult = _scriptDocumentService.LoadCompatible(sourceFilePath);
             var scriptDocument = loadResult.Document;
+            var scriptFingerprint = BuildDocumentFingerprint(scriptDocument);
             var document = LoadManifest();
             var record = FindRecordById(document, scriptId) ?? FindRecordByStoredFilePath(document, sourceFilePath);
             var now = DateTimeOffset.UtcNow;
@@ -187,6 +214,7 @@ public sealed class ManagedScriptLibraryService
                     DisplayName = ResolveDisplayName(displayName, sourceFilePath),
                     SourceFileName = Path.GetFileName(sourceFilePath),
                     StoredFileName = storedFileName,
+                    Fingerprint = scriptFingerprint,
                     Description = scriptDocument.Metadata.Description,
                     Map = scriptDocument.Metadata.Map,
                     Difficulty = scriptDocument.Metadata.Difficulty,
@@ -225,6 +253,7 @@ public sealed class ManagedScriptLibraryService
                 record.Mode = scriptDocument.Metadata.Mode;
                 record.Hero = scriptDocument.Metadata.Hero;
                 record.Tags = [.. ScriptTagCatalog.NormalizeStoredTags(scriptDocument.Metadata.Tags)];
+                record.Fingerprint = scriptFingerprint;
                 record.UpdatedAt = now;
             }
 
@@ -455,6 +484,7 @@ public sealed class ManagedScriptLibraryService
             }
 
             var scriptDocument = _scriptDocumentService.LoadCompatible(storedFilePath).Document;
+            record.Fingerprint = BuildDocumentFingerprint(scriptDocument);
             record.Description = scriptDocument.Metadata.Description;
             record.Map = scriptDocument.Metadata.Map;
             record.Difficulty = scriptDocument.Metadata.Difficulty;
@@ -544,7 +574,8 @@ public sealed class ManagedScriptLibraryService
     private ManagedScriptAssetRecord CreateManagedScriptRecord(
         ScriptDocument scriptDocument,
         string displayName,
-        string sourceFileName)
+        string sourceFileName,
+        string? fingerprint = null)
     {
         ArgumentNullException.ThrowIfNull(scriptDocument);
 
@@ -560,6 +591,9 @@ public sealed class ManagedScriptLibraryService
             DisplayName = displayName.Trim(),
             SourceFileName = sourceFileName.Trim(),
             StoredFileName = storedFileName,
+            Fingerprint = string.IsNullOrWhiteSpace(fingerprint)
+                ? BuildDocumentFingerprint(scriptDocument)
+                : fingerprint.Trim(),
             Description = scriptDocument.Metadata.Description,
             Map = scriptDocument.Metadata.Map,
             Difficulty = scriptDocument.Metadata.Difficulty,
@@ -586,6 +620,45 @@ public sealed class ManagedScriptLibraryService
         return document.Scripts.FirstOrDefault(record => AreSameFilePath(GetStoredFilePath(record), sourceFilePath));
     }
 
+    private Dictionary<string, ManagedScriptAssetRecord> BuildFingerprintIndex(ManagedScriptLibraryDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var index = new Dictionary<string, ManagedScriptAssetRecord>(StringComparer.Ordinal);
+        foreach (var record in document.Scripts)
+        {
+            var fingerprint = EnsureRecordFingerprint(record);
+            if (string.IsNullOrWhiteSpace(fingerprint))
+            {
+                continue;
+            }
+
+            _ = index.TryAdd(fingerprint, record);
+        }
+
+        return index;
+    }
+
+    private string EnsureRecordFingerprint(ManagedScriptAssetRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        if (!string.IsNullOrWhiteSpace(record.Fingerprint))
+        {
+            return record.Fingerprint;
+        }
+
+        var storedFilePath = GetStoredFilePath(record);
+        if (!File.Exists(storedFilePath))
+        {
+            return string.Empty;
+        }
+
+        var scriptDocument = _scriptDocumentService.LoadCompatible(storedFilePath).Document;
+        record.Fingerprint = BuildDocumentFingerprint(scriptDocument);
+        return record.Fingerprint;
+    }
+
     private void EnsureStorage()
     {
         Directory.CreateDirectory(_rootDirectory);
@@ -600,6 +673,7 @@ public sealed class ManagedScriptLibraryService
         record.DisplayName = record.DisplayName?.Trim() ?? string.Empty;
         record.SourceFileName = record.SourceFileName?.Trim() ?? string.Empty;
         record.StoredFileName = record.StoredFileName?.Trim() ?? string.Empty;
+        record.Fingerprint = record.Fingerprint?.Trim() ?? string.Empty;
         record.Description = record.Description?.Trim() ?? string.Empty;
         record.Map = record.Map?.Trim() ?? GameMapType.MonkeyMeadow.ToString();
         record.Difficulty = record.Difficulty?.Trim() ?? StageDifficulty.Medium.ToString();
@@ -633,6 +707,12 @@ public sealed class ManagedScriptLibraryService
             Path.GetFullPath(left),
             Path.GetFullPath(right),
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string BuildDocumentFingerprint(ScriptDocument scriptDocument)
+    {
+        ArgumentNullException.ThrowIfNull(scriptDocument);
+        return MD5Helper.ComputeMD5(JsonSerializer.Serialize(scriptDocument));
     }
 
     private static string ResolveLegacyPackageScriptDisplayName(

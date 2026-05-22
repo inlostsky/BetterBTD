@@ -16,11 +16,13 @@ public sealed class MyScriptsPageViewModel : ObservableObject
 {
     private readonly LocalizationService _localizationService;
     private readonly AppDialogService _appDialogService;
+    private readonly ImportProgressDialogService _importProgressDialogService;
     private readonly ManagedScriptLibraryService _managedScriptLibraryService;
 
     private List<ManagedScriptListItemViewModel> _allScripts = [];
     private bool _isUpdatingFilters;
     private bool _hasScripts;
+    private bool _isImportingScripts;
     private string _scriptSearchText = string.Empty;
     private ICascadingItem? _selectedMapItem;
     private LanguageOption? _selectedDifficultyOption;
@@ -39,10 +41,11 @@ public sealed class MyScriptsPageViewModel : ObservableObject
     {
         _localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
         _appDialogService = AppDialogService.Instance;
+        _importProgressDialogService = ImportProgressDialogService.Instance;
         _managedScriptLibraryService = ManagedScriptLibraryService.Instance;
 
         RefreshCommand = new RelayCommand(Refresh);
-        ImportScriptCommand = new RelayCommand(ImportScript);
+        ImportScriptCommand = new AsyncRelayCommand(ImportScriptAsync, CanImportScript);
         ExportSelectedScriptCommand = new RelayCommand(ExportSelectedScript, CanExportSelectedScript);
         RemoveSelectedScriptCommand = new RelayCommand(RemoveSelectedScript, CanRemoveSelectedScript);
 
@@ -61,7 +64,7 @@ public sealed class MyScriptsPageViewModel : ObservableObject
 
     public IRelayCommand RefreshCommand { get; }
 
-    public IRelayCommand ImportScriptCommand { get; }
+    public IAsyncRelayCommand ImportScriptCommand { get; }
 
     public IRelayCommand ExportSelectedScriptCommand { get; }
 
@@ -272,7 +275,7 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         RefreshFilteredScripts();
     }
 
-    private void ImportScript()
+    private async Task ImportScriptAsync()
     {
         var dialog = new OpenFileDialog
         {
@@ -285,15 +288,34 @@ public sealed class MyScriptsPageViewModel : ObservableObject
             return;
         }
 
+        var isLegacyPackage = string.Equals(Path.GetExtension(dialog.FileName), ".btd6s", StringComparison.OrdinalIgnoreCase);
+        using var progressDialog = _importProgressDialogService.Show(new ImportProgressDialogRequest
+        {
+            Title = _localizationService.T("Library.Dialog.ImportProgress.Title"),
+            Message = _localizationService.T(isLegacyPackage
+                ? "Library.Dialog.ImportProgress.PackageMessage.Initial"
+                : "Library.Dialog.ImportProgress.Message")
+        });
+
+        _isImportingScripts = true;
+        ImportScriptCommand.NotifyCanExecuteChanged();
+
         try
         {
-            if (string.Equals(Path.GetExtension(dialog.FileName), ".btd6s", StringComparison.OrdinalIgnoreCase))
+            if (isLegacyPackage)
             {
-                _managedScriptLibraryService.ImportLegacyScriptCollection(dialog.FileName);
+                var progress = new Progress<int>(processedCount =>
+                {
+                    progressDialog.UpdateMessage(string.Format(
+                        _localizationService.T("Library.Dialog.ImportProgress.PackageMessage"),
+                        processedCount));
+                });
+
+                await Task.Run(() => _managedScriptLibraryService.ImportLegacyScriptCollection(dialog.FileName, progress));
             }
             else
             {
-                _managedScriptLibraryService.ImportScript(dialog.FileName);
+                await Task.Run(() => _managedScriptLibraryService.ImportScript(dialog.FileName));
             }
 
             Refresh();
@@ -302,6 +324,16 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         {
             ShowError("Library.Dialog.ImportError.Title", ex.Message);
         }
+        finally
+        {
+            _isImportingScripts = false;
+            ImportScriptCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private bool CanImportScript()
+    {
+        return !_isImportingScripts;
     }
 
     private bool CanExportSelectedScript()

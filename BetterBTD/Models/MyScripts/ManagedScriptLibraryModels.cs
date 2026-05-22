@@ -22,6 +22,8 @@ public sealed class ManagedScriptAssetRecord
 
     public string StoredFileName { get; set; } = string.Empty;
 
+    public string Fingerprint { get; set; } = string.Empty;
+
     public string Description { get; set; } = string.Empty;
 
     public string Map { get; set; } = GameMapType.MonkeyMeadow.ToString();

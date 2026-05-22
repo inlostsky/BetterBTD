@@ -147,6 +147,133 @@ public sealed class ManagedScriptLibraryServiceTests
     }
 
     [Fact]
+    public void ImportScript_SkipsDuplicateWhenFingerprintMatches()
+    {
+        var rootDirectory = Path.Combine(Path.GetTempPath(), $"betterbtd-library-{Guid.NewGuid():N}");
+        var firstFilePath = Path.Combine(rootDirectory, "source", "first-script.btd");
+        var secondFilePath = Path.Combine(rootDirectory, "source", "second-script.btd");
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(firstFilePath)!);
+            var document = CreateDocument(
+                GameMapType.MonkeyMeadow,
+                StageDifficulty.Easy,
+                StageMode.Standard,
+                ["black-border"]);
+            ScriptDocumentService.Instance.Save(firstFilePath, document);
+            ScriptDocumentService.Instance.Save(secondFilePath, document);
+
+            var service = new ManagedScriptLibraryService(
+                Path.Combine(rootDirectory, "managed"),
+                ScriptDocumentService.Instance,
+                ManagedScriptSlotCatalogService.Instance);
+
+            var firstImported = service.ImportScript(firstFilePath);
+            var secondImported = service.ImportScript(secondFilePath);
+            var snapshot = service.GetSnapshot();
+
+            Assert.Single(snapshot.Scripts);
+            Assert.Equal(firstImported.ScriptId, secondImported.ScriptId);
+        }
+        finally
+        {
+            if (Directory.Exists(rootDirectory))
+            {
+                Directory.Delete(rootDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void ImportLegacyScriptCollection_SkipsDuplicateWhenFingerprintMatches()
+    {
+        var rootDirectory = Path.Combine(Path.GetTempPath(), $"betterbtd-library-{Guid.NewGuid():N}");
+        var packageFilePath = Path.Combine(rootDirectory, "source", "legacy-package.btd6s");
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(packageFilePath)!);
+            var duplicateScript = CreateLegacyDocument("legacy-standard", GameMapType.MonkeyMeadow, StageDifficulty.Easy, StageMode.Standard);
+            File.WriteAllText(packageFilePath, JsonSerializer.Serialize(new[]
+            {
+                duplicateScript,
+                duplicateScript
+            }));
+
+            var service = new ManagedScriptLibraryService(
+                Path.Combine(rootDirectory, "managed"),
+                ScriptDocumentService.Instance,
+                ManagedScriptSlotCatalogService.Instance);
+
+            var imported = service.ImportLegacyScriptCollection(packageFilePath);
+            var snapshot = service.GetSnapshot();
+
+            Assert.Single(imported);
+            Assert.Single(snapshot.Scripts);
+        }
+        finally
+        {
+            if (Directory.Exists(rootDirectory))
+            {
+                Directory.Delete(rootDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void ImportScript_BackfillsMissingFingerprintAndStillSkipsDuplicate()
+    {
+        var rootDirectory = Path.Combine(Path.GetTempPath(), $"betterbtd-library-{Guid.NewGuid():N}");
+        var firstFilePath = Path.Combine(rootDirectory, "source", "first-script.btd");
+        var secondFilePath = Path.Combine(rootDirectory, "source", "second-script.btd");
+        var managedRootDirectory = Path.Combine(rootDirectory, "managed");
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(firstFilePath)!);
+            var document = CreateDocument(
+                GameMapType.MonkeyMeadow,
+                StageDifficulty.Easy,
+                StageMode.Standard,
+                ["black-border"]);
+            ScriptDocumentService.Instance.Save(firstFilePath, document);
+            ScriptDocumentService.Instance.Save(secondFilePath, document);
+
+            var service = new ManagedScriptLibraryService(
+                managedRootDirectory,
+                ScriptDocumentService.Instance,
+                ManagedScriptSlotCatalogService.Instance);
+
+            _ = service.ImportScript(firstFilePath);
+
+            var manifestFilePath = Path.Combine(managedRootDirectory, "library.json");
+            var manifest = JsonSerializer.Deserialize<ManagedScriptLibraryDocument>(File.ReadAllText(manifestFilePath));
+            Assert.NotNull(manifest);
+            Assert.Single(manifest.Scripts);
+            manifest.Scripts[0].Fingerprint = string.Empty;
+            File.WriteAllText(manifestFilePath, JsonSerializer.Serialize(manifest));
+
+            var duplicateImported = service.ImportScript(secondFilePath);
+            var snapshot = service.GetSnapshot();
+            var updatedManifest = JsonSerializer.Deserialize<ManagedScriptLibraryDocument>(File.ReadAllText(manifestFilePath));
+
+            Assert.Single(snapshot.Scripts);
+            Assert.NotNull(updatedManifest);
+            Assert.Single(updatedManifest.Scripts);
+            Assert.False(string.IsNullOrWhiteSpace(updatedManifest.Scripts[0].Fingerprint));
+            Assert.Equal(snapshot.Scripts[0].ScriptId, duplicateImported.ScriptId);
+        }
+        finally
+        {
+            if (Directory.Exists(rootDirectory))
+            {
+                Directory.Delete(rootDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void SlotCatalog_ContainsExpectedFrameworkSlots()
     {
         var catalog = ManagedScriptSlotCatalogService.Instance;
