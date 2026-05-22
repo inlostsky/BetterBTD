@@ -1,7 +1,6 @@
-﻿using System;
-using System.Linq;
+using System;
 using System.Windows;
-using System.Windows.Controls;
+using System.Windows.Threading;
 using BetterBTD.ViewModels;
 using Wpf.Ui.Controls;
 
@@ -16,11 +15,32 @@ namespace BetterBTD
         {
             InitializeComponent();
             DataContext = new MainWindowViewModel();
-            this.ContentRendered += MainWindow_ContentRendered;
+            ContentRendered += MainWindow_ContentRendered;
         }
+
         private void MainWindow_ContentRendered(object sender, EventArgs e)
         {
             RootNavigation.Navigate(typeof(Views.Pages.StartPageView));
+        }
+
+        public void NavigateToScriptEditor(string scriptFilePath)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(scriptFilePath);
+
+            RootNavigation.Navigate(typeof(Views.Pages.ScriptEditorPageView));
+
+            _ = Dispatcher.InvokeAsync(
+                () =>
+                {
+                    var editorPage = Views.Pages.ScriptEditorPageView.Current;
+                    if (editorPage is null)
+                    {
+                        return;
+                    }
+
+                    _ = editorPage.ViewModel.TryOpenScriptFromExternal(scriptFilePath, openRuntimeWindow: false);
+                },
+                DispatcherPriority.Loaded);
         }
     }
 }

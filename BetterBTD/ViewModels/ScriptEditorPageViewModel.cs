@@ -492,6 +492,15 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         MarkWorkspaceAsPersisted();
     }
 
+    public static bool TryRunScriptFromExternal(string filePath, LocalizationService localizationService)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+        ArgumentNullException.ThrowIfNull(localizationService);
+
+        var viewModel = new ScriptEditorPageViewModel(localizationService);
+        return viewModel.TryOpenScriptFromExternal(filePath, openRuntimeWindow: true);
+    }
+
     private string BuildCurrentFileText()
     {
         var currentText = _localizationService.T("Editor.File.Current");
@@ -569,6 +578,35 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         if (option is not null)
         {
             SelectedTagOptions.Remove(option);
+        }
+    }
+
+    public bool TryOpenScriptFromExternal(string filePath, bool openRuntimeWindow)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+
+        if (!ConfirmUnsavedChanges("Editor.File.UnsavedChanges.OpenPrompt"))
+        {
+            return false;
+        }
+
+        try
+        {
+            LoadScriptDocument(filePath);
+
+            if (openRuntimeWindow)
+            {
+                OpenScriptExecutionWindow();
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ShowMessageDialog(
+                _localizationService.T("Editor.File.OpenError.Title"),
+                string.Format(_localizationService.T("Editor.File.OpenError.Message"), ex.Message));
+            return false;
         }
     }
 

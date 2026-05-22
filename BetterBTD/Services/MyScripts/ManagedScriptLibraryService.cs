@@ -73,13 +73,14 @@ public sealed class ManagedScriptLibraryService
                 throw new FileNotFoundException("Script file was not found.", sourceFilePath);
             }
 
-            var scriptDocument = _scriptDocumentService.Load(sourceFilePath);
+            var loadResult = _scriptDocumentService.LoadCompatible(sourceFilePath);
+            var scriptDocument = loadResult.Document;
             var document = LoadManifest();
 
             var scriptId = Guid.NewGuid().ToString("N");
             var storedFileName = $"{scriptId}.btd";
             var storedFilePath = Path.Combine(_assetsDirectory, storedFileName);
-            File.Copy(sourceFilePath, storedFilePath, overwrite: false);
+            _scriptDocumentService.Save(storedFilePath, scriptDocument);
 
             var now = DateTimeOffset.UtcNow;
             var record = new ManagedScriptAssetRecord
@@ -307,7 +308,7 @@ public sealed class ManagedScriptLibraryService
                 continue;
             }
 
-            var scriptDocument = _scriptDocumentService.Load(storedFilePath);
+            var scriptDocument = _scriptDocumentService.LoadCompatible(storedFilePath).Document;
             record.Description = scriptDocument.Metadata.Description;
             record.Map = scriptDocument.Metadata.Map;
             record.Difficulty = scriptDocument.Metadata.Difficulty;

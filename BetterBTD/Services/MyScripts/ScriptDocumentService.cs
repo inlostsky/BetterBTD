@@ -27,11 +27,17 @@ public sealed class ScriptDocumentService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
-        if (string.Equals(Path.GetExtension(filePath), LegacyScriptFormat.FileExtension, StringComparison.OrdinalIgnoreCase))
+        if (!File.Exists(filePath))
         {
-            var legacyDocument = LegacyScriptDocumentService.Instance.Load(filePath);
-            var conversionResult = LegacyScriptConversionService.Instance.Convert(legacyDocument);
+            throw new FileNotFoundException("Script document was not found.", filePath);
+        }
 
+        var json = File.ReadAllText(filePath);
+        var sourceKind = DetectSourceKind(json, Path.GetExtension(filePath));
+
+        if (sourceKind == ScriptDocumentSourceKind.LegacyBtd6)
+        {
+            var conversionResult = ConvertLegacy(json);
             return new ScriptDocumentLoadResult
             {
                 Document = conversionResult.Document,
@@ -42,7 +48,7 @@ public sealed class ScriptDocumentService
 
         return new ScriptDocumentLoadResult
         {
-            Document = Load(filePath),
+            Document = LoadCurrentFromJson(json),
             SourceKind = ScriptDocumentSourceKind.Current,
             Warnings = []
         };
@@ -78,11 +84,87 @@ public sealed class ScriptDocumentService
         }
 
         var json = File.ReadAllText(filePath);
+        return LoadCurrentFromJson(json);
+    }
+
+    private static ScriptDocumentSourceKind DetectSourceKind(string json, string? fileExtension)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return string.Equals(fileExtension, LegacyScriptFormat.FileExtension, StringComparison.OrdinalIgnoreCase)
+                ? ScriptDocumentSourceKind.LegacyBtd6
+                : ScriptDocumentSourceKind.Current;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                var root = document.RootElement;
+                if (HasLegacyMarkers(root))
+                {
+                    return ScriptDocumentSourceKind.LegacyBtd6;
+                }
+
+                if (HasCurrentMarkers(root))
+                {
+                    return ScriptDocumentSourceKind.Current;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return string.Equals(fileExtension, LegacyScriptFormat.FileExtension, StringComparison.OrdinalIgnoreCase)
+            ? ScriptDocumentSourceKind.LegacyBtd6
+            : ScriptDocumentSourceKind.Current;
+    }
+
+    private static bool HasLegacyMarkers(JsonElement root)
+    {
+        if (root.TryGetProperty("instructionsList", out _) ||
+            root.TryGetProperty("monkeyCounts", out _) ||
+            root.TryGetProperty("monkeyIds", out _))
+        {
+            return true;
+        }
+
+        if (!root.TryGetProperty("metadata", out var metadata) || metadata.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        return metadata.TryGetProperty("selectedMap", out _) ||
+               metadata.TryGetProperty("selectedDifficulty", out _) ||
+               metadata.TryGetProperty("selectedMode", out _) ||
+               metadata.TryGetProperty("selectedHero", out _) ||
+               metadata.TryGetProperty("scriptName", out _) ||
+               metadata.TryGetProperty("anchorCoords", out _);
+    }
+
+    private static bool HasCurrentMarkers(JsonElement root)
+    {
+        return root.TryGetProperty("schema", out _) ||
+               root.TryGetProperty("formatVersion", out _) ||
+               root.TryGetProperty("monkeyObjects", out _) ||
+               root.TryGetProperty("instructions", out _);
+    }
+
+    private static ScriptDocument LoadCurrentFromJson(string json)
+    {
         var document = JsonSerializer.Deserialize<ScriptDocument>(json, JsonOptions) ?? new ScriptDocument();
 
         NormalizeDocument(document);
         ValidateDocument(document);
         return document;
+    }
+
+    private static LegacyScriptConversionService.LegacyScriptConversionResult ConvertLegacy(string json)
+    {
+        var legacyDocument = LegacyScriptDocumentService.Instance.LoadFromJson(json);
+        return LegacyScriptConversionService.Instance.Convert(legacyDocument);
     }
 
     private static void NormalizeDocument(ScriptDocument document)

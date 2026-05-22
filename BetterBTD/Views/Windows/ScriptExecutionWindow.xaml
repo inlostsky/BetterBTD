@@ -60,12 +60,34 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0"
-                     Title="{Binding WindowTitle}">
+        <ui:TitleBar x:Name="RuntimeTitleBar"
+                     Grid.Row="0"
+                     Title="">
             <ui:TitleBar.Icon>
                 <ui:SymbolIcon Symbol="PlayCircle24" />
             </ui:TitleBar.Icon>
         </ui:TitleBar>
+
+        <Grid Grid.Row="0"
+              Panel.ZIndex="1"
+              Margin="52,0,156,0"
+              VerticalAlignment="Stretch"
+              HorizontalAlignment="Stretch"
+              IsHitTestVisible="False">
+            <Border x:Name="WindowTitleViewport"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Stretch"
+                    ClipToBounds="True">
+                <TextBlock x:Name="WindowTitleTextBlock"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Left"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Text="{Binding WindowTitle}"
+                           TextWrapping="NoWrap"
+                           TextTrimming="CharacterEllipsis" />
+            </Border>
+        </Grid>
 
         <Grid Grid.Row="1" Margin="{StaticResource WindowContentPadding}">
             <Grid.RowDefinitions>

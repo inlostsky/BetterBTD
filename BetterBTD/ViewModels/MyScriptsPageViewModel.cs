@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using BetterBTD.Helpers;
 using BetterBTD.Models;
-using BetterBTD.Models.AutoTasks;
 using BetterBTD.Models.GameElements;
 using BetterBTD.Models.MyScripts;
 using BetterBTD.Models.ScriptEditor;
@@ -19,10 +18,10 @@ public sealed class MyScriptsPageViewModel : ObservableObject
     private readonly ManagedScriptLibraryService _managedScriptLibraryService;
 
     private List<ManagedScriptListItemViewModel> _allScripts = [];
-    private Dictionary<string, ManagedScriptSlotEntry> _blackBorderSlotsById = new(StringComparer.OrdinalIgnoreCase);
     private bool _isUpdatingFilters;
+    private bool _hasScripts;
     private string _scriptSearchText = string.Empty;
-    private GameMapType _selectedMap = GameMapType.MonkeyMeadow;
+    private ICascadingItem? _selectedMapItem;
     private LanguageOption? _selectedDifficultyOption;
     private LanguageOption? _selectedModeOption;
     private ManagedScriptListItemViewModel? _selectedScript;
@@ -34,8 +33,6 @@ public sealed class MyScriptsPageViewModel : ObservableObject
     private string _selectedScriptMode = string.Empty;
     private string _selectedScriptTags = string.Empty;
     private string _selectedScriptState = string.Empty;
-    private string _selectedBlackBorderTarget = string.Empty;
-    private string _selectedBlackBorderBindingState = string.Empty;
 
     public MyScriptsPageViewModel(LocalizationService localizationService)
     {
@@ -47,8 +44,6 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         ImportScriptCommand = new RelayCommand(ImportScript);
         ExportSelectedScriptCommand = new RelayCommand(ExportSelectedScript, CanExportSelectedScript);
         RemoveSelectedScriptCommand = new RelayCommand(RemoveSelectedScript, CanRemoveSelectedScript);
-        BindSelectedScriptToBlackBorderCommand = new RelayCommand(BindSelectedScriptToBlackBorder, CanBindSelectedScriptToBlackBorder);
-        ClearSelectedBlackBorderBindingCommand = new RelayCommand(ClearSelectedBlackBorderBinding, CanClearSelectedBlackBorderBinding);
 
         _localizationService.LanguageChanged += (_, _) => RefreshLocalizedContent();
 
@@ -71,15 +66,15 @@ public sealed class MyScriptsPageViewModel : ObservableObject
 
     public IRelayCommand RemoveSelectedScriptCommand { get; }
 
-    public IRelayCommand BindSelectedScriptToBlackBorderCommand { get; }
-
-    public IRelayCommand ClearSelectedBlackBorderBindingCommand { get; }
-
     public string ImportText => _localizationService.T("Library.Action.Import");
 
     public string ExportText => _localizationService.T("Library.Action.Export");
 
     public string RemoveText => _localizationService.T("Library.Action.Remove");
+
+    public string EditText => _localizationService.T("Library.Action.Edit");
+
+    public string RunText => _localizationService.T("Library.Action.Run");
 
     public string RefreshText => _localizationService.T("Library.Action.Refresh");
 
@@ -93,24 +88,29 @@ public sealed class MyScriptsPageViewModel : ObservableObject
 
     public string ModeFilterLabel => _localizationService.T("Library.Filters.Mode");
 
-    public string NameColumnText => _localizationService.T("Library.Column.Name");
+    public string ScriptsSectionText => _localizationService.T("Library.Section.Scripts");
 
-    public string MapColumnText => _localizationService.T("Library.Column.Map");
+    public string PropertiesSectionText => _localizationService.T("Library.Section.Properties");
 
-    public string DifficultyColumnText => _localizationService.T("Library.Column.Difficulty");
+    public string EmptyScriptsText => _localizationService.T("Library.Empty.Scripts");
 
-    public string ModeColumnText => _localizationService.T("Library.Column.Mode");
+    public string VisibleScriptCountText => Scripts.Count == _allScripts.Count
+        ? Scripts.Count.ToString()
+        : $"{Scripts.Count} / {_allScripts.Count}";
 
-    public string TagsColumnText => _localizationService.T("Library.Column.Tags");
-
-    public string StateColumnText => _localizationService.T("Library.Column.State");
+    public bool HasScripts
+    {
+        get => _hasScripts;
+        private set => SetProperty(ref _hasScripts, value);
+    }
 
     public string SelectedScriptSummary => SelectedScript is null
         ? _localizationService.T("Library.Summary.None")
         : string.Format(
             _localizationService.T("Library.Summary.Script"),
-            SelectedScript.SourceFileName,
-            SelectedScript.ScriptId);
+            SelectedScript.SourceFileName);
+
+    public bool HasSelectedScript => SelectedScript is not null;
 
     public string PropertyNameText => _localizationService.T("Library.Property.Name");
 
@@ -128,14 +128,6 @@ public sealed class MyScriptsPageViewModel : ObservableObject
 
     public string PropertyStateText => _localizationService.T("Library.Property.State");
 
-    public string PropertyBlackBorderTargetText => _localizationService.T("Library.Property.BlackBorderTarget");
-
-    public string PropertyBlackBorderBindingText => _localizationService.T("Library.Property.BlackBorderBinding");
-
-    public string BindBlackBorderText => _localizationService.T("Library.Action.BindBlackBorder");
-
-    public string ClearBlackBorderText => _localizationService.T("Library.Action.ClearBlackBorder");
-
     public string ScriptSearchText
     {
         get => _scriptSearchText;
@@ -150,12 +142,17 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         }
     }
 
-    public GameMapType SelectedMap
+    public ICascadingItem? SelectedMapItem
     {
-        get => _selectedMap;
+        get => _selectedMapItem;
         set
         {
-            if (!SetProperty(ref _selectedMap, value))
+            if (!SetProperty(ref _selectedMapItem, value))
+            {
+                return;
+            }
+
+            if (_isUpdatingFilters)
             {
                 return;
             }
@@ -214,10 +211,9 @@ public sealed class MyScriptsPageViewModel : ObservableObject
 
             UpdateSelectedScriptDetails();
             OnPropertyChanged(nameof(SelectedScriptSummary));
+            OnPropertyChanged(nameof(HasSelectedScript));
             ExportSelectedScriptCommand.NotifyCanExecuteChanged();
             RemoveSelectedScriptCommand.NotifyCanExecuteChanged();
-            BindSelectedScriptToBlackBorderCommand.NotifyCanExecuteChanged();
-            ClearSelectedBlackBorderBindingCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -269,24 +265,9 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         private set => SetProperty(ref _selectedScriptState, value);
     }
 
-    public string SelectedBlackBorderTarget
-    {
-        get => _selectedBlackBorderTarget;
-        private set => SetProperty(ref _selectedBlackBorderTarget, value);
-    }
-
-    public string SelectedBlackBorderBindingState
-    {
-        get => _selectedBlackBorderBindingState;
-        private set => SetProperty(ref _selectedBlackBorderBindingState, value);
-    }
-
     private void Refresh()
     {
         var snapshot = _managedScriptLibraryService.GetSnapshot();
-        _blackBorderSlotsById = snapshot.Slots
-            .Where(x => x.Definition.TaskKind == AutoTaskKind.BlackBorder)
-            .ToDictionary(x => x.Definition.SlotId, StringComparer.OrdinalIgnoreCase);
         _allScripts = snapshot.Scripts.Select(CreateScriptItem).ToList();
         BuildFilterOptions();
         RefreshFilteredScripts();
@@ -385,54 +366,6 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         }
     }
 
-    private bool CanBindSelectedScriptToBlackBorder()
-    {
-        return SelectedScript?.CanBindToBlackBorder == true;
-    }
-
-    private void BindSelectedScriptToBlackBorder()
-    {
-        if (SelectedScript is null || string.IsNullOrWhiteSpace(SelectedScript.BlackBorderSlotId))
-        {
-            return;
-        }
-
-        try
-        {
-            _managedScriptLibraryService.SetBinding(SelectedScript.BlackBorderSlotId, SelectedScript.ScriptId);
-            Refresh();
-            RestoreSelection(SelectedScript.ScriptId);
-        }
-        catch (Exception ex)
-        {
-            ShowError("Library.Dialog.BindingError.Title", ex.Message);
-        }
-    }
-
-    private bool CanClearSelectedBlackBorderBinding()
-    {
-        return SelectedScript?.IsBoundToBlackBorder == true;
-    }
-
-    private void ClearSelectedBlackBorderBinding()
-    {
-        if (SelectedScript is null || string.IsNullOrWhiteSpace(SelectedScript.BlackBorderSlotId))
-        {
-            return;
-        }
-
-        try
-        {
-            _managedScriptLibraryService.SetBinding(SelectedScript.BlackBorderSlotId, null);
-            Refresh();
-            RestoreSelection(SelectedScript.ScriptId);
-        }
-        catch (Exception ex)
-        {
-            ShowError("Library.Dialog.BindingError.Title", ex.Message);
-        }
-    }
-
     private void RefreshFilteredScripts()
     {
         var selectedScriptId = SelectedScript?.ScriptId;
@@ -444,23 +377,26 @@ public sealed class MyScriptsPageViewModel : ObservableObject
             .ToList();
 
         ReplaceCollection(Scripts, filteredScripts);
+        HasScripts = Scripts.Count > 0;
         SelectedScript = Scripts.FirstOrDefault(x => x.ScriptId == selectedScriptId) ?? Scripts.FirstOrDefault();
+        OnPropertyChanged(nameof(VisibleScriptCountText));
     }
 
     private bool MatchesScriptFilters(ManagedScriptListItemViewModel script)
     {
-        if (script.MapType != SelectedMap)
+        if (SelectedMapItem?.Tag is GameMapType selectedMap &&
+            !string.Equals(script.MapCode, selectedMap.ToString(), StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        if (SelectedDifficultyOption?.Code.Length > 0 &&
+        if (!string.IsNullOrWhiteSpace(SelectedDifficultyOption?.Code) &&
             !string.Equals(script.DifficultyCode, SelectedDifficultyOption.Code, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        if (SelectedModeOption?.Code.Length > 0 &&
+        if (!string.IsNullOrWhiteSpace(SelectedModeOption?.Code) &&
             !string.Equals(script.ModeCode, SelectedModeOption.Code, StringComparison.OrdinalIgnoreCase))
         {
             return false;
@@ -476,22 +412,19 @@ public sealed class MyScriptsPageViewModel : ObservableObject
                script.MapDisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                script.TagsText.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                script.HeroDisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-               script.Description.Contains(query, StringComparison.OrdinalIgnoreCase);
+               script.Description.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+               script.SourceFileName.Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
     private ManagedScriptListItemViewModel CreateScriptItem(ManagedScriptAssetEntry entry)
     {
-        var blackBorderSlotId = ManagedScriptSlotIdFactory.CreateBlackBorderSlotId(entry.Map, entry.Difficulty, entry.Mode);
-        _blackBorderSlotsById.TryGetValue(blackBorderSlotId, out var blackBorderSlot);
-        var isBoundToBlackBorder = blackBorderSlot?.BoundScriptId.Equals(entry.ScriptId, StringComparison.OrdinalIgnoreCase) == true;
-
         return new ManagedScriptListItemViewModel
         {
             ScriptId = entry.ScriptId,
             DisplayName = entry.DisplayName,
             Description = entry.Description,
             SourceFileName = entry.SourceFileName,
-            MapType = entry.Map,
+            MapCode = entry.Map.ToString(),
             DifficultyCode = entry.Difficulty.ToString(),
             ModeCode = entry.Mode.ToString(),
             MapDisplayName = GameElementCatalog.GetMapDisplayName(entry.Map),
@@ -502,12 +435,11 @@ public sealed class MyScriptsPageViewModel : ObservableObject
                 ? string.Empty
                 : string.Join(", ", entry.Tags.Select(ScriptTagCatalog.GetDisplayName)),
             StateText = ResolveScriptStateText(entry),
-            UpdatedAt = entry.UpdatedAt,
-            BlackBorderSlotId = blackBorderSlotId,
-            BlackBorderTargetText = $"{GameElementCatalog.GetMapDisplayName(entry.Map)} / {GameElementCatalog.GetStageDifficultyDisplayName(entry.Difficulty)} / {GameElementCatalog.GetStageModeDisplayName(entry.Mode)}",
-            BlackBorderBindingStateText = ResolveBlackBorderBindingStateText(entry, blackBorderSlot),
-            IsBoundToBlackBorder = isBoundToBlackBorder,
-            CanBindToBlackBorder = !entry.HasMissingFile && !entry.HasMetadataIssue
+            PreviewText = string.IsNullOrWhiteSpace(entry.Description) ? entry.SourceFileName : entry.Description.Trim(),
+            UpdatedAtText = entry.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
+            MonogramText = ResolveMonogram(entry.DisplayName),
+            HasIssue = entry.HasMissingFile || entry.HasMetadataIssue,
+            UpdatedAt = entry.UpdatedAt
         };
     }
 
@@ -526,43 +458,10 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         return _localizationService.T("Library.State.Ready");
     }
 
-    private string ResolveBlackBorderBindingStateText(
-        ManagedScriptAssetEntry entry,
-        ManagedScriptSlotEntry? blackBorderSlot)
-    {
-        if (entry.HasMetadataIssue)
-        {
-            return _localizationService.T("Library.State.MetadataIssue");
-        }
-
-        if (blackBorderSlot is null)
-        {
-            return _localizationService.T("Library.State.Unbound");
-        }
-
-        if (!blackBorderSlot.HasBinding)
-        {
-            return _localizationService.T("Library.BlackBorder.Unbound");
-        }
-
-        if (blackBorderSlot.IsBrokenBinding)
-        {
-            return _localizationService.T("Library.BlackBorder.Broken");
-        }
-
-        if (string.Equals(blackBorderSlot.BoundScriptId, entry.ScriptId, StringComparison.OrdinalIgnoreCase))
-        {
-            return _localizationService.T("Library.BlackBorder.BoundToCurrent");
-        }
-
-        return string.Format(
-            _localizationService.T("Library.BlackBorder.BoundToOther"),
-            blackBorderSlot.BoundScript?.DisplayName ?? blackBorderSlot.BoundScriptId);
-    }
-
     private void BuildFilterOptions()
     {
         var allText = _localizationService.T("Library.Filters.All");
+        var previousMap = SelectedMapItem?.Tag as GameMapType?;
         var previousDifficulty = SelectedDifficultyOption?.Code ?? string.Empty;
         var previousMode = SelectedModeOption?.Code ?? string.Empty;
 
@@ -591,6 +490,9 @@ public sealed class MyScriptsPageViewModel : ObservableObject
                         DisplayName = GameElementCatalog.GetStageModeDisplayName(mode)
                     })));
 
+            SelectedMapItem = previousMap is GameMapType mapType
+                ? FindMapItem(mapType)
+                : null;
             SelectedDifficultyOption = DifficultyOptions.FirstOrDefault(x => x.Code == previousDifficulty) ?? DifficultyOptions.FirstOrDefault();
             SelectedModeOption = ModeOptions.FirstOrDefault(x => x.Code == previousMode) ?? ModeOptions.FirstOrDefault();
         }
@@ -598,12 +500,6 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         {
             _isUpdatingFilters = false;
         }
-    }
-
-    private void RestoreSelection(string? scriptId)
-    {
-        SelectedScript = Scripts.FirstOrDefault(x => string.Equals(x.ScriptId, scriptId, StringComparison.OrdinalIgnoreCase))
-                         ?? Scripts.FirstOrDefault();
     }
 
     private void UpdateSelectedScriptDetails()
@@ -618,21 +514,17 @@ public sealed class MyScriptsPageViewModel : ObservableObject
             SelectedScriptMode = string.Empty;
             SelectedScriptTags = string.Empty;
             SelectedScriptState = string.Empty;
-            SelectedBlackBorderTarget = string.Empty;
-            SelectedBlackBorderBindingState = string.Empty;
             return;
         }
 
-        SelectedScriptName = SelectedScript.DisplayName;
-        SelectedScriptDescription = SelectedScript.Description;
-        SelectedScriptHero = SelectedScript.HeroDisplayName;
-        SelectedScriptMap = SelectedScript.MapDisplayName;
-        SelectedScriptDifficulty = SelectedScript.DifficultyDisplayName;
-        SelectedScriptMode = SelectedScript.ModeDisplayName;
-        SelectedScriptTags = SelectedScript.TagsText;
-        SelectedScriptState = SelectedScript.StateText;
-        SelectedBlackBorderTarget = SelectedScript.BlackBorderTargetText;
-        SelectedBlackBorderBindingState = SelectedScript.BlackBorderBindingStateText;
+        SelectedScriptName = FormatDetailValue(SelectedScript.DisplayName);
+        SelectedScriptDescription = FormatDetailValue(SelectedScript.Description);
+        SelectedScriptHero = FormatDetailValue(SelectedScript.HeroDisplayName);
+        SelectedScriptMap = FormatDetailValue(SelectedScript.MapDisplayName);
+        SelectedScriptDifficulty = FormatDetailValue(SelectedScript.DifficultyDisplayName);
+        SelectedScriptMode = FormatDetailValue(SelectedScript.ModeDisplayName);
+        SelectedScriptTags = FormatDetailValue(SelectedScript.TagsText);
+        SelectedScriptState = FormatDetailValue(SelectedScript.StateText);
     }
 
     private void RefreshLocalizedContent()
@@ -642,6 +534,8 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         OnPropertyChanged(nameof(ImportText));
         OnPropertyChanged(nameof(ExportText));
         OnPropertyChanged(nameof(RemoveText));
+        OnPropertyChanged(nameof(EditText));
+        OnPropertyChanged(nameof(RunText));
         OnPropertyChanged(nameof(RefreshText));
         OnPropertyChanged(nameof(ScriptSearchLabel));
         OnPropertyChanged(nameof(ScriptSearchPlaceholder));
@@ -649,13 +543,12 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         OnPropertyChanged(nameof(MapFilterLabel));
         OnPropertyChanged(nameof(DifficultyFilterLabel));
         OnPropertyChanged(nameof(ModeFilterLabel));
-        OnPropertyChanged(nameof(NameColumnText));
-        OnPropertyChanged(nameof(MapColumnText));
-        OnPropertyChanged(nameof(DifficultyColumnText));
-        OnPropertyChanged(nameof(ModeColumnText));
-        OnPropertyChanged(nameof(TagsColumnText));
-        OnPropertyChanged(nameof(StateColumnText));
+        OnPropertyChanged(nameof(ScriptsSectionText));
+        OnPropertyChanged(nameof(PropertiesSectionText));
+        OnPropertyChanged(nameof(EmptyScriptsText));
+        OnPropertyChanged(nameof(VisibleScriptCountText));
         OnPropertyChanged(nameof(SelectedScriptSummary));
+        OnPropertyChanged(nameof(HasSelectedScript));
         OnPropertyChanged(nameof(PropertyNameText));
         OnPropertyChanged(nameof(PropertyDescriptionText));
         OnPropertyChanged(nameof(PropertyHeroText));
@@ -664,10 +557,6 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         OnPropertyChanged(nameof(PropertyModeText));
         OnPropertyChanged(nameof(PropertyTagsText));
         OnPropertyChanged(nameof(PropertyStateText));
-        OnPropertyChanged(nameof(PropertyBlackBorderTargetText));
-        OnPropertyChanged(nameof(PropertyBlackBorderBindingText));
-        OnPropertyChanged(nameof(BindBlackBorderText));
-        OnPropertyChanged(nameof(ClearBlackBorderText));
     }
 
     private void ShowError(string titleKey, string message)
@@ -688,6 +577,37 @@ public sealed class MyScriptsPageViewModel : ObservableObject
             target.Add(item);
         }
     }
+
+    private static string FormatDetailValue(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? "-"
+            : value.Trim();
+    }
+
+    private static string ResolveMonogram(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "S";
+        }
+
+        return value.Trim()[0].ToString().ToUpperInvariant();
+    }
+
+    private static ICascadingItem? FindMapItem(GameMapType mapType)
+    {
+        foreach (var tier in GameElementCascadingItems.MapItems)
+        {
+            var found = tier.Children?.FirstOrDefault(item => item.Tag is GameMapType candidate && candidate == mapType);
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
 }
 
 public sealed class ManagedScriptListItemViewModel
@@ -700,7 +620,7 @@ public sealed class ManagedScriptListItemViewModel
 
     public required string SourceFileName { get; init; }
 
-    public required GameMapType MapType { get; init; }
+    public required string MapCode { get; init; }
 
     public required string DifficultyCode { get; init; }
 
@@ -718,15 +638,13 @@ public sealed class ManagedScriptListItemViewModel
 
     public required string StateText { get; init; }
 
+    public required string PreviewText { get; init; }
+
+    public required string UpdatedAtText { get; init; }
+
+    public required string MonogramText { get; init; }
+
+    public bool HasIssue { get; init; }
+
     public required DateTimeOffset UpdatedAt { get; init; }
-
-    public required string BlackBorderSlotId { get; init; }
-
-    public required string BlackBorderTargetText { get; init; }
-
-    public required string BlackBorderBindingStateText { get; init; }
-
-    public bool IsBoundToBlackBorder { get; init; }
-
-    public bool CanBindToBlackBorder { get; init; }
 }

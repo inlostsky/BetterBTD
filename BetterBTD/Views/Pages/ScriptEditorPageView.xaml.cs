@@ -11,6 +11,10 @@ public partial class ScriptEditorPageView : Page
     private const double EditorMaxHeightOffset = 56d;
     private Window? _hostWindow;
 
+    public static ScriptEditorPageView? Current { get; private set; }
+
+    public ScriptEditorPageViewModel ViewModel => (ScriptEditorPageViewModel)DataContext;
+
     public ScriptEditorPageView()
     {
         InitializeComponent();
@@ -22,6 +26,7 @@ public partial class ScriptEditorPageView : Page
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        Current = this;
         _hostWindow = Window.GetWindow(this);
         if (_hostWindow is null)
         {
@@ -34,6 +39,11 @@ public partial class ScriptEditorPageView : Page
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        if (ReferenceEquals(Current, this))
+        {
+            Current = null;
+        }
+
         if (_hostWindow is null)
         {
             return;
