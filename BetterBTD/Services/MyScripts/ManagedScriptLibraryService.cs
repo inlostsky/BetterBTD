@@ -20,7 +20,10 @@ public sealed class ManagedScriptLibraryService
 
     private readonly string _rootDirectory;
     private readonly string _assetsDirectory;
+    private readonly string _bindingsDirectory;
     private readonly string _manifestFilePath;
+    private readonly string _blackBorderBindingsFilePath;
+    private readonly string _collectionBindingsFilePath;
     private readonly ScriptDocumentService _scriptDocumentService;
     private readonly ManagedScriptSlotCatalogService _slotCatalogService;
     private readonly object _syncRoot = new();
@@ -43,7 +46,10 @@ public sealed class ManagedScriptLibraryService
     {
         _rootDirectory = rootDirectory ?? throw new ArgumentNullException(nameof(rootDirectory));
         _assetsDirectory = Path.Combine(_rootDirectory, "Assets");
+        _bindingsDirectory = Path.Combine(_rootDirectory, "Bindings");
         _manifestFilePath = Path.Combine(_rootDirectory, "library.json");
+        _blackBorderBindingsFilePath = Path.Combine(_bindingsDirectory, "blackborder.json");
+        _collectionBindingsFilePath = Path.Combine(_bindingsDirectory, "collection.json");
         _scriptDocumentService = scriptDocumentService ?? throw new ArgumentNullException(nameof(scriptDocumentService));
         _slotCatalogService = slotCatalogService ?? throw new ArgumentNullException(nameof(slotCatalogService));
     }
@@ -55,6 +61,7 @@ public sealed class ManagedScriptLibraryService
         lock (_syncRoot)
         {
             var document = LoadManifest();
+            MigrateDedicatedBindings(document);
             RefreshCachedMetadata(document);
             SaveManifest(document);
             return BuildSnapshot(document);
@@ -76,12 +83,14 @@ public sealed class ManagedScriptLibraryService
 
             var loadResult = _scriptDocumentService.LoadCompatible(sourceFilePath);
             var document = LoadManifest();
+            MigrateDedicatedBindings(document);
+            var currentBindings = LoadCurrentBindings(document);
             var targetFingerprint = BuildDocumentFingerprint(loadResult.Document);
             var recordsByFingerprint = BuildFingerprintIndex(document);
             if (recordsByFingerprint.TryGetValue(targetFingerprint, out var existingRecord))
             {
                 SaveManifest(document);
-                return BuildAssetEntry(existingRecord, document.Bindings);
+                return BuildAssetEntry(existingRecord, currentBindings);
             }
 
             var record = CreateManagedScriptRecord(
@@ -92,7 +101,7 @@ public sealed class ManagedScriptLibraryService
             document.Scripts.Add(record);
             SaveManifest(document);
 
-            return BuildAssetEntry(record, document.Bindings);
+            return BuildAssetEntry(record, currentBindings);
         }
     }
 
@@ -112,6 +121,8 @@ public sealed class ManagedScriptLibraryService
             }
 
             var document = LoadManifest();
+            MigrateDedicatedBindings(document);
+            var currentBindings = LoadCurrentBindings(document);
             var recordsByFingerprint = BuildFingerprintIndex(document);
             var importedEntries = new List<ManagedScriptAssetEntry>();
             using var stream = File.OpenRead(sourceFilePath);
@@ -159,7 +170,7 @@ public sealed class ManagedScriptLibraryService
                         targetFingerprint);
                     document.Scripts.Add(record);
                     recordsByFingerprint[targetFingerprint] = record;
-                    importedEntries.Add(BuildAssetEntry(record, document.Bindings));
+                    importedEntries.Add(BuildAssetEntry(record, currentBindings));
                     index++;
                 }
             }
@@ -198,6 +209,8 @@ public sealed class ManagedScriptLibraryService
             var scriptDocument = loadResult.Document;
             var scriptFingerprint = BuildDocumentFingerprint(scriptDocument);
             var document = LoadManifest();
+            MigrateDedicatedBindings(document);
+            var currentBindings = LoadCurrentBindings(document);
             var record = FindRecordById(document, scriptId) ?? FindRecordByStoredFilePath(document, sourceFilePath);
             var now = DateTimeOffset.UtcNow;
 
@@ -258,7 +271,7 @@ public sealed class ManagedScriptLibraryService
             }
 
             SaveManifest(document);
-            return BuildAssetEntry(record, document.Bindings);
+            return BuildAssetEntry(record, currentBindings);
         }
     }
 
@@ -270,6 +283,7 @@ public sealed class ManagedScriptLibraryService
         lock (_syncRoot)
         {
             var document = LoadManifest();
+            MigrateDedicatedBindings(document);
             var record = document.Scripts.FirstOrDefault(x => string.Equals(x.ScriptId, scriptId, StringComparison.OrdinalIgnoreCase))
                          ?? throw new InvalidOperationException("Managed script asset was not found.");
             var sourceFilePath = GetStoredFilePath(record);
@@ -295,6 +309,7 @@ public sealed class ManagedScriptLibraryService
         lock (_syncRoot)
         {
             var document = LoadManifest();
+            MigrateDedicatedBindings(document);
             var record = document.Scripts.FirstOrDefault(x => string.Equals(x.ScriptId, scriptId, StringComparison.OrdinalIgnoreCase));
             if (record is null)
             {
@@ -303,6 +318,7 @@ public sealed class ManagedScriptLibraryService
 
             document.Scripts.Remove(record);
             document.Bindings.RemoveAll(x => string.Equals(x.ScriptId, scriptId, StringComparison.OrdinalIgnoreCase));
+            RemoveScriptBindingsFromDedicatedFiles(scriptId);
 
             var storedFilePath = GetStoredFilePath(record);
             if (File.Exists(storedFilePath))
@@ -322,10 +338,29 @@ public sealed class ManagedScriptLibraryService
         lock (_syncRoot)
         {
             var document = LoadManifest();
-            var binding = document.Bindings.FirstOrDefault(x => string.Equals(x.SlotId, slotId, StringComparison.OrdinalIgnoreCase));
+            MigrateDedicatedBindings(document);
+
+            if (!_slotCatalogService.TryGetById(slotId, out var slot))
+            {
+                throw new InvalidOperationException("Managed script slot was not found.");
+            }
+
+            var trimmedSlotId = slotId.Trim();
 
             if (string.IsNullOrWhiteSpace(scriptId))
             {
+                if (TryGetDedicatedBindingFilePath(slot.TaskKind, out var dedicatedBindingFilePath))
+                {
+                    var dedicatedBindings = LoadTaskBindingDocument(dedicatedBindingFilePath);
+                    if (dedicatedBindings.Bindings.Remove(trimmedSlotId))
+                    {
+                        SaveTaskBindingDocument(dedicatedBindingFilePath, dedicatedBindings);
+                    }
+
+                    return;
+                }
+
+                var binding = document.Bindings.FirstOrDefault(x => string.Equals(x.SlotId, trimmedSlotId, StringComparison.OrdinalIgnoreCase));
                 if (binding is not null)
                 {
                     document.Bindings.Remove(binding);
@@ -335,32 +370,39 @@ public sealed class ManagedScriptLibraryService
                 return;
             }
 
-            if (!_slotCatalogService.TryGetById(slotId, out _))
-            {
-                throw new InvalidOperationException("Managed script slot was not found.");
-            }
-
             if (document.Scripts.All(x => !string.Equals(x.ScriptId, scriptId, StringComparison.OrdinalIgnoreCase)))
             {
                 throw new InvalidOperationException("Managed script asset was not found.");
             }
 
-            if (binding is null)
+            var trimmedScriptId = scriptId.Trim();
+
+            if (TryGetDedicatedBindingFilePath(slot.TaskKind, out var bindingFilePath))
             {
-                document.Bindings.Add(new ManagedScriptSlotBindingRecord
-                {
-                    SlotId = slotId.Trim(),
-                    ScriptId = scriptId.Trim(),
-                    UpdatedAt = DateTimeOffset.UtcNow
-                });
+                var dedicatedBindings = LoadTaskBindingDocument(bindingFilePath);
+                dedicatedBindings.Bindings[trimmedSlotId] = trimmedScriptId;
+                SaveTaskBindingDocument(bindingFilePath, dedicatedBindings);
             }
             else
             {
-                binding.ScriptId = scriptId.Trim();
-                binding.UpdatedAt = DateTimeOffset.UtcNow;
-            }
+                var binding = document.Bindings.FirstOrDefault(x => string.Equals(x.SlotId, trimmedSlotId, StringComparison.OrdinalIgnoreCase));
+                if (binding is null)
+                {
+                    document.Bindings.Add(new ManagedScriptSlotBindingRecord
+                    {
+                        SlotId = trimmedSlotId,
+                        ScriptId = trimmedScriptId,
+                        UpdatedAt = DateTimeOffset.UtcNow
+                    });
+                }
+                else
+                {
+                    binding.ScriptId = trimmedScriptId;
+                    binding.UpdatedAt = DateTimeOffset.UtcNow;
+                }
 
-            SaveManifest(document);
+                SaveManifest(document);
+            }
         }
     }
 
@@ -390,6 +432,7 @@ public sealed class ManagedScriptLibraryService
         lock (_syncRoot)
         {
             var document = LoadManifest();
+            MigrateDedicatedBindings(document);
             var record = FindRecordByStoredFilePath(document, storedFilePath);
             if (record is null)
             {
@@ -397,7 +440,7 @@ public sealed class ManagedScriptLibraryService
                 return false;
             }
 
-            entry = BuildAssetEntry(record, document.Bindings);
+            entry = BuildAssetEntry(record, LoadCurrentBindings(document));
             return true;
         }
     }
@@ -409,7 +452,9 @@ public sealed class ManagedScriptLibraryService
         lock (_syncRoot)
         {
             var document = LoadManifest();
-            var binding = document.Bindings.FirstOrDefault(x => string.Equals(x.SlotId, slotId, StringComparison.OrdinalIgnoreCase));
+            MigrateDedicatedBindings(document);
+            var bindings = LoadCurrentBindings(document);
+            var binding = bindings.FirstOrDefault(x => string.Equals(x.SlotId, slotId, StringComparison.OrdinalIgnoreCase));
             if (binding is null || string.IsNullOrWhiteSpace(binding.ScriptId))
             {
                 scriptId = string.Empty;
@@ -473,6 +518,47 @@ public sealed class ManagedScriptLibraryService
         File.WriteAllText(_manifestFilePath, json);
     }
 
+    private ManagedScriptTaskBindingDocument LoadTaskBindingDocument(string filePath)
+    {
+        EnsureStorage();
+
+        if (!File.Exists(filePath))
+        {
+            return new ManagedScriptTaskBindingDocument();
+        }
+
+        var json = File.ReadAllText(filePath);
+        var document = JsonSerializer.Deserialize<ManagedScriptTaskBindingDocument>(json, JsonOptions)
+                       ?? new ManagedScriptTaskBindingDocument();
+        document.Bindings ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        document.Bindings = document.Bindings
+            .Where(x => !string.IsNullOrWhiteSpace(x.Key))
+            .GroupBy(x => x.Key.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Last().Value?.Trim() ?? string.Empty,
+                StringComparer.OrdinalIgnoreCase);
+        return document;
+    }
+
+    private void SaveTaskBindingDocument(string filePath, ManagedScriptTaskBindingDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        EnsureStorage();
+        document.Bindings ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        document.Bindings = document.Bindings
+            .Where(x => !string.IsNullOrWhiteSpace(x.Key))
+            .GroupBy(x => x.Key.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Last().Value?.Trim() ?? string.Empty,
+                StringComparer.OrdinalIgnoreCase);
+
+        var json = JsonSerializer.Serialize(document, JsonOptions);
+        File.WriteAllText(filePath, json);
+    }
+
     private void RefreshCachedMetadata(ManagedScriptLibraryDocument document)
     {
         foreach (var record in document.Scripts)
@@ -497,14 +583,15 @@ public sealed class ManagedScriptLibraryService
 
     private ManagedScriptLibrarySnapshot BuildSnapshot(ManagedScriptLibraryDocument document)
     {
+        var currentBindings = LoadCurrentBindings(document);
         var assets = document.Scripts
-            .Select(record => BuildAssetEntry(record, document.Bindings))
+            .Select(record => BuildAssetEntry(record, currentBindings))
             .OrderByDescending(x => x.UpdatedAt)
             .ThenBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         var assetsById = assets.ToDictionary(x => x.ScriptId, StringComparer.OrdinalIgnoreCase);
-        var bindingsBySlotId = document.Bindings.ToDictionary(x => x.SlotId, StringComparer.OrdinalIgnoreCase);
+        var bindingsBySlotId = currentBindings.ToDictionary(x => x.SlotId, StringComparer.OrdinalIgnoreCase);
 
         var slots = _slotCatalogService
             .GetAll()
@@ -663,6 +750,123 @@ public sealed class ManagedScriptLibraryService
     {
         Directory.CreateDirectory(_rootDirectory);
         Directory.CreateDirectory(_assetsDirectory);
+        Directory.CreateDirectory(_bindingsDirectory);
+    }
+
+    private IReadOnlyList<ManagedScriptSlotBindingRecord> LoadCurrentBindings(ManagedScriptLibraryDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var bindings = document.Bindings
+            .Where(binding => binding.SlotId.Length > 0 &&
+                              _slotCatalogService.TryGetById(binding.SlotId, out var slot) &&
+                              !TryGetDedicatedBindingFilePath(slot.TaskKind, out _))
+            .Select(binding => new ManagedScriptSlotBindingRecord
+            {
+                SlotId = binding.SlotId,
+                ScriptId = binding.ScriptId,
+                UpdatedAt = binding.UpdatedAt
+            })
+            .ToList();
+
+        bindings.AddRange(LoadDedicatedBindingRecords(_blackBorderBindingsFilePath));
+        bindings.AddRange(LoadDedicatedBindingRecords(_collectionBindingsFilePath));
+        return bindings;
+    }
+
+    private IReadOnlyList<ManagedScriptSlotBindingRecord> LoadDedicatedBindingRecords(string filePath)
+    {
+        return LoadTaskBindingDocument(filePath)
+            .Bindings
+            .Select(binding => new ManagedScriptSlotBindingRecord
+            {
+                SlotId = binding.Key,
+                ScriptId = binding.Value,
+                UpdatedAt = DateTimeOffset.UtcNow
+            })
+            .ToList();
+    }
+
+    private void MigrateDedicatedBindings(ManagedScriptLibraryDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var blackBorderBindings = LoadTaskBindingDocument(_blackBorderBindingsFilePath);
+        var collectionBindings = LoadTaskBindingDocument(_collectionBindingsFilePath);
+        var manifestBindingsToRemove = new List<ManagedScriptSlotBindingRecord>();
+
+        foreach (var binding in document.Bindings)
+        {
+            if (!_slotCatalogService.TryGetById(binding.SlotId, out var slot) ||
+                !TryGetDedicatedBindingFilePath(slot.TaskKind, out var filePath))
+            {
+                continue;
+            }
+
+            var targetDocument = string.Equals(filePath, _blackBorderBindingsFilePath, StringComparison.OrdinalIgnoreCase)
+                ? blackBorderBindings
+                : collectionBindings;
+
+            if (!targetDocument.Bindings.ContainsKey(binding.SlotId))
+            {
+                targetDocument.Bindings[binding.SlotId] = binding.ScriptId;
+            }
+
+            manifestBindingsToRemove.Add(binding);
+        }
+
+        if (manifestBindingsToRemove.Count == 0)
+        {
+            return;
+        }
+
+        document.Bindings.RemoveAll(binding => manifestBindingsToRemove.Contains(binding));
+        SaveTaskBindingDocument(_blackBorderBindingsFilePath, blackBorderBindings);
+        SaveTaskBindingDocument(_collectionBindingsFilePath, collectionBindings);
+        SaveManifest(document);
+    }
+
+    private void RemoveScriptBindingsFromDedicatedFiles(string scriptId)
+    {
+        RemoveScriptBindingsFromDedicatedFile(_blackBorderBindingsFilePath, scriptId);
+        RemoveScriptBindingsFromDedicatedFile(_collectionBindingsFilePath, scriptId);
+    }
+
+    private void RemoveScriptBindingsFromDedicatedFile(string filePath, string scriptId)
+    {
+        var document = LoadTaskBindingDocument(filePath);
+        var keysToRemove = document.Bindings
+            .Where(binding => string.Equals(binding.Value, scriptId, StringComparison.OrdinalIgnoreCase))
+            .Select(binding => binding.Key)
+            .ToList();
+
+        if (keysToRemove.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var key in keysToRemove)
+        {
+            document.Bindings.Remove(key);
+        }
+
+        SaveTaskBindingDocument(filePath, document);
+    }
+
+    private bool TryGetDedicatedBindingFilePath(AutoTaskKind taskKind, out string filePath)
+    {
+        switch (taskKind)
+        {
+            case AutoTaskKind.BlackBorder:
+                filePath = _blackBorderBindingsFilePath;
+                return true;
+            case AutoTaskKind.Collection:
+                filePath = _collectionBindingsFilePath;
+                return true;
+            default:
+                filePath = string.Empty;
+                return false;
+        }
     }
 
     private static void NormalizeRecord(ManagedScriptAssetRecord record)

@@ -12,6 +12,13 @@ public sealed class ManagedScriptLibraryDocument
     public List<ManagedScriptSlotBindingRecord> Bindings { get; set; } = [];
 }
 
+public sealed class ManagedScriptTaskBindingDocument
+{
+    public int Version { get; set; } = 1;
+
+    public Dictionary<string, string> Bindings { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
 public sealed class ManagedScriptAssetRecord
 {
     public string ScriptId { get; set; } = Guid.NewGuid().ToString("N");
@@ -123,6 +130,94 @@ public sealed class ManagedScriptSlotEntry
     public bool IsBrokenBinding => HasBinding && BoundScript is null;
 }
 
+public sealed class ManagedScriptCollectionModeDefinition
+{
+    public required string Key { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required IReadOnlyList<string> Aliases { get; init; }
+}
+
+public static class ManagedScriptCollectionModeCatalog
+{
+    public static IReadOnlyList<ManagedScriptCollectionModeDefinition> Modes { get; } =
+    [
+        new ManagedScriptCollectionModeDefinition
+        {
+            Key = "simple",
+            DisplayName = "Simple Collection",
+            Aliases = ["simple", "simple-collection", "basic", "简单收集"]
+        },
+        new ManagedScriptCollectionModeDefinition
+        {
+            Key = "double-cash",
+            DisplayName = "Double Cash Collection",
+            Aliases = ["double-cash", "doublecash", "double-gold", "双金收集", "双金"]
+        },
+        new ManagedScriptCollectionModeDefinition
+        {
+            Key = "fast-track",
+            DisplayName = "Fast Track Collection",
+            Aliases = ["fast-track", "fasttrack", "quick-path", "快速路径收集", "快速路径"]
+        },
+        new ManagedScriptCollectionModeDefinition
+        {
+            Key = "double-cash-fast-track",
+            DisplayName = "Double Cash Fast Track Collection",
+            Aliases =
+            [
+                "double-cash-fast-track",
+                "doublecashfasttrack",
+                "double-gold-fast-track",
+                "双金-快速路径收集",
+                "双金快速路径收集",
+                "双金-快速路径",
+                "双金快速路径"
+            ]
+        }
+    ];
+
+    public static bool TryNormalizeKey(string? value, out string key)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            key = string.Empty;
+            return false;
+        }
+
+        var candidate = value.Trim();
+        foreach (var mode in Modes)
+        {
+            if (string.Equals(mode.Key, candidate, StringComparison.OrdinalIgnoreCase) ||
+                mode.Aliases.Any(alias => string.Equals(alias, candidate, StringComparison.OrdinalIgnoreCase)))
+            {
+                key = mode.Key;
+                return true;
+            }
+        }
+
+        key = string.Empty;
+        return false;
+    }
+
+    public static string NormalizeKey(string value)
+    {
+        if (TryNormalizeKey(value, out var key))
+        {
+            return key;
+        }
+
+        throw new InvalidOperationException($"Unsupported collection mode key '{value}'.");
+    }
+
+    public static string GetDisplayName(string key)
+    {
+        var normalizedKey = NormalizeKey(key);
+        return Modes.First(mode => string.Equals(mode.Key, normalizedKey, StringComparison.OrdinalIgnoreCase)).DisplayName;
+    }
+}
+
 public static class ManagedScriptSlotIdFactory
 {
     public static string CreateCustomDefaultSlotId()
@@ -138,9 +233,10 @@ public static class ManagedScriptSlotIdFactory
         return $"blackborder/{map}/{difficulty}/{mode}";
     }
 
-    public static string CreateCollectionSlotId(int modeIndex, int scriptIndex)
+    public static string CreateCollectionSlotId(string modeKey, GameMapType map)
     {
-        return $"collection/mode-{modeIndex:00}/slot-{scriptIndex:00}";
+        ArgumentException.ThrowIfNullOrWhiteSpace(modeKey);
+        return $"collection/{ManagedScriptCollectionModeCatalog.NormalizeKey(modeKey)}/{map}";
     }
 
     public static string CreateRaceCurrentSlotId()

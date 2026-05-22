@@ -208,67 +208,6 @@ public sealed class GameTargetOcrService
             out matchInfo);
     }
 
-    private bool TryReadGold(Mat captureRegion, int frameWidth, int frameHeight, out int gold, out string diagnostics)
-    {
-        ArgumentNullException.ThrowIfNull(captureRegion);
-        gold = 0;
-
-        if (!TryEnsureDigitRepository(out var repository))
-        {
-            diagnostics = BuildDigitRepositoryUnavailableDiagnostics("Gold");
-            return false;
-        }
-
-        var templates = repository.GetDigitTemplates(OcrValueType.Gold, frameWidth, frameHeight);
-        var templateSelection = repository.GetSelectionDescription(frameWidth, frameHeight);
-
-        if (!TryRecognizeDigits(captureRegion, templates, GoldThresholds, out var text, out var recognitionDiagnostics))
-        {
-            diagnostics = $"Gold: failed | RegionSize={captureRegion.Width}x{captureRegion.Height} | Templates={templateSelection} | {recognitionDiagnostics}";
-            return false;
-        }
-
-        if (!int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out gold))
-        {
-            diagnostics = $"Gold: parse failed | RegionSize={captureRegion.Width}x{captureRegion.Height} | Templates={templateSelection} | Text='{text}' | {recognitionDiagnostics}";
-            return false;
-        }
-
-        diagnostics = $"Gold: success | Value={gold} | RegionSize={captureRegion.Width}x{captureRegion.Height} | Templates={templateSelection} | Text='{text}' | {recognitionDiagnostics}";
-        return true;
-    }
-
-    private bool TryReadRound(Mat captureRegion, int frameWidth, int frameHeight, out int round, out string diagnostics)
-    {
-        ArgumentNullException.ThrowIfNull(captureRegion);
-        round = 0;
-
-        if (!TryEnsureDigitRepository(out var repository))
-        {
-            diagnostics = BuildDigitRepositoryUnavailableDiagnostics("Round");
-            return false;
-        }
-
-        var digitTemplates = repository.GetDigitTemplates(OcrValueType.Round, frameWidth, frameHeight);
-        var slashTemplate = repository.GetSlashTemplate(frameWidth, frameHeight);
-        var templateSelection = repository.GetSelectionDescription(frameWidth, frameHeight);
-
-        if (!TryRecognizeRoundDigits(captureRegion, digitTemplates, slashTemplate, out var text, out var recognitionDiagnostics))
-        {
-            diagnostics = $"Round: failed | RegionSize={captureRegion.Width}x{captureRegion.Height} | Templates={templateSelection} | {recognitionDiagnostics}";
-            return false;
-        }
-
-        if (!int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out round))
-        {
-            diagnostics = $"Round: parse failed | RegionSize={captureRegion.Width}x{captureRegion.Height} | Templates={templateSelection} | Text='{text}' | {recognitionDiagnostics}";
-            return false;
-        }
-
-        diagnostics = $"Round: success | Value={round} | RegionSize={captureRegion.Width}x{captureRegion.Height} | Templates={templateSelection} | Text='{text}' | {recognitionDiagnostics}";
-        return true;
-    }
-
     private bool TryRecognizeDigits(
         Mat captureRegion,
         IReadOnlyList<PreparedTemplate> templates,
@@ -292,36 +231,6 @@ public sealed class GameTargetOcrService
             }
         }
 
-        return false;
-    }
-
-    private bool TryRecognizeDigits(
-        Mat captureRegion,
-        IReadOnlyList<PreparedTemplate> templates,
-        IReadOnlyList<double> thresholds,
-        out string text,
-        out string diagnostics)
-    {
-        text = string.Empty;
-        var attempts = new List<string>(thresholds.Count);
-
-        foreach (var threshold in thresholds)
-        {
-            var rawCandidates = CollectCandidates(captureRegion, templates, threshold);
-            var candidates = FilterGoldCandidates(rawCandidates, threshold);
-            var candidateText = candidates.Count == 0 ? string.Empty : BuildDigitText(candidates);
-            attempts.Add(
-                $"threshold={threshold:F2}, rawCandidates={rawCandidates.Count}, filteredCandidates={candidates.Count}, text='{candidateText}', raw=[{FormatCandidates(rawCandidates)}], filtered=[{FormatCandidates(candidates)}]");
-
-            if (!string.IsNullOrEmpty(candidateText))
-            {
-                text = candidateText;
-                diagnostics = string.Join(" | ", attempts);
-                return true;
-            }
-        }
-
-        diagnostics = string.Join(" | ", attempts);
         return false;
     }
 
@@ -355,45 +264,6 @@ public sealed class GameTargetOcrService
 
         return false;
     }
-
-    private bool TryRecognizeRoundDigits(
-        Mat captureRegion,
-        IReadOnlyList<PreparedTemplate> digitTemplates,
-        PreparedTemplate slashTemplate,
-        out string text,
-        out string diagnostics)
-    {
-        text = string.Empty;
-        var attempts = new List<string>(RoundThresholds.Length);
-
-        foreach (var threshold in RoundThresholds)
-        {
-            var digitCandidates = CollectCandidates(captureRegion, digitTemplates, threshold);
-            if (digitCandidates.Count == 0)
-            {
-                attempts.Add($"threshold={threshold:F2}, digitCandidates=0, matches=[]");
-                continue;
-            }
-
-            var hasSlash = TryFindSlashCandidate(captureRegion, slashTemplate, threshold, out var detectedSlashCandidate);
-            double? slashCenterX = hasSlash ? detectedSlashCandidate!.CenterX : null;
-            var filteredCandidates = FilterRoundCandidates(digitCandidates, slashCenterX);
-            var candidateText = BuildDigitText(filteredCandidates);
-            attempts.Add(
-                $"threshold={threshold:F2}, digitCandidates={digitCandidates.Count}, filteredCandidates={filteredCandidates.Count}, slash={(hasSlash ? FormatCandidate(detectedSlashCandidate!) : "none")}, text='{candidateText}', raw=[{FormatCandidates(digitCandidates)}], filtered=[{FormatCandidates(filteredCandidates)}]");
-
-            if (!string.IsNullOrEmpty(candidateText))
-            {
-                text = candidateText;
-                diagnostics = string.Join(" | ", attempts);
-                return true;
-            }
-        }
-
-        diagnostics = string.Join(" | ", attempts);
-        return false;
-    }
-
     private List<OcrCandidate> CollectCandidates(Mat captureRegion, IReadOnlyList<PreparedTemplate> templates, double threshold)
     {
         var candidates = new List<OcrCandidate>();
@@ -514,16 +384,6 @@ public sealed class GameTargetOcrService
         }
 
         return found;
-    }
-
-    private static string FormatCandidates(IReadOnlyList<OcrCandidate> candidates)
-    {
-        if (candidates.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        return string.Join(", ", OrderCandidates(candidates).Select(FormatCandidate));
     }
 
     private static string FormatCandidate(OcrCandidate candidate)
@@ -737,15 +597,8 @@ public sealed class GameTargetOcrService
 
     private static void ValidateFrameSize(int frameWidth, int frameHeight)
     {
-        if (frameWidth <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(frameWidth));
-        }
-
-        if (frameHeight <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(frameHeight));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(frameWidth);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(frameHeight);
     }
 
     private static string BuildDigitAssetRootPath()
@@ -756,14 +609,6 @@ public sealed class GameTargetOcrService
     private static string BuildIconAssetRootPath()
     {
         return Path.Combine(AppContext.BaseDirectory, "Assets", "OcrIcons");
-    }
-
-    private string BuildDigitRepositoryUnavailableDiagnostics(string targetName)
-    {
-        var reason = string.IsNullOrWhiteSpace(_digitRepositoryUnavailableReason)
-            ? "Unknown repository initialization failure."
-            : _digitRepositoryUnavailableReason;
-        return $"{targetName}: repository unavailable | AssetRoot={BuildDigitAssetRootPath()} | Reason={reason}";
     }
 
     private bool TryEnsureDigitRepository(out DigitTemplateRepository repository)

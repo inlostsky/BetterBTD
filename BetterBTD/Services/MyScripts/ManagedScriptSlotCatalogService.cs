@@ -74,20 +74,24 @@ public sealed class ManagedScriptSlotCatalogService
 
     private static IEnumerable<ManagedScriptSlotDefinition> BuildCollectionSlots()
     {
-        for (var modeIndex = 1; modeIndex <= 3; modeIndex++)
+        var expertMaps = GameElementCatalog.Maps
+            .Where(map => map.Tier == MapDifficultyTier.Expert)
+            .ToList();
+
+        foreach (var mode in ManagedScriptCollectionModeCatalog.Modes)
         {
-            for (var scriptIndex = 1; scriptIndex <= 13; scriptIndex++)
+            foreach (var map in expertMaps)
             {
                 yield return new ManagedScriptSlotDefinition
                 {
-                    SlotId = ManagedScriptSlotIdFactory.CreateCollectionSlotId(modeIndex, scriptIndex),
+                    SlotId = ManagedScriptSlotIdFactory.CreateCollectionSlotId(mode.Key, map.Type),
                     TaskKind = AutoTaskKind.Collection,
-                    GroupName = $"Mode {modeIndex}",
-                    DisplayName = $"Stage Script {scriptIndex:00}",
+                    GroupName = mode.DisplayName,
+                    DisplayName = GameElementCatalog.GetMapDisplayName(map.Type),
                     Qualifiers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                     {
-                        ["modeIndex"] = modeIndex.ToString(),
-                        ["scriptIndex"] = scriptIndex.ToString()
+                        ["modeKey"] = mode.Key,
+                        ["map"] = map.Type.ToString()
                     },
                     SuggestedTags = ["collection"],
                     IsPlaceholder = true
@@ -148,8 +152,8 @@ public sealed class ManagedScriptSlotCatalogService
             StageDifficulty.Easy =>
             [
                 StageMode.Standard,
-                StageMode.PrimaryOnly,
-                StageMode.Deflation
+                StageMode.Deflation,
+                StageMode.PrimaryOnly
             ],
             StageDifficulty.Medium =>
             [

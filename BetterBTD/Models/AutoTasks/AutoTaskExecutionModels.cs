@@ -119,6 +119,8 @@ public sealed class AutoTaskRequest
 
     public required StageEntryTarget StageTarget { get; init; }
 
+    public string VariantKey { get; init; } = string.Empty;
+
     public int OperationIntervalMs { get; init; } = 200;
 
     public string PreferredScriptPath { get; init; } = string.Empty;
@@ -167,6 +169,8 @@ public sealed class AutoTaskScriptQuery
     public AutoTaskKind Kind { get; init; }
 
     public StageEntryTarget? StageTarget { get; init; }
+
+    public string VariantKey { get; init; } = string.Empty;
 
     public string PreferredFilePath { get; init; } = string.Empty;
 
