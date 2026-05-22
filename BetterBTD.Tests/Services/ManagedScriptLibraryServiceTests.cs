@@ -2,6 +2,7 @@ using BetterBTD.Models.AutoTasks;
 using BetterBTD.Models.GameElements;
 using BetterBTD.Models.MyScripts;
 using BetterBTD.Models.ScriptEditor;
+using System.Text.Json;
 
 namespace BetterBTD.Tests.Services;
 
@@ -102,6 +103,50 @@ public sealed class ManagedScriptLibraryServiceTests
     }
 
     [Fact]
+    public void ImportLegacyScriptCollection_ConvertsAndImportsEachLegacyScript()
+    {
+        var rootDirectory = Path.Combine(Path.GetTempPath(), $"betterbtd-library-{Guid.NewGuid():N}");
+        var packageFilePath = Path.Combine(rootDirectory, "source", "legacy-package.btd6s");
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(packageFilePath)!);
+            File.WriteAllText(packageFilePath, JsonSerializer.Serialize(new[]
+            {
+                CreateLegacyDocument("legacy-standard", GameMapType.MonkeyMeadow, StageDifficulty.Easy, StageMode.Standard),
+                CreateLegacyDocument("legacy-chimps", GameMapType.DarkCastle, StageDifficulty.Hard, StageMode.CHIMPS)
+            }));
+
+            var service = new ManagedScriptLibraryService(
+                Path.Combine(rootDirectory, "managed"),
+                ScriptDocumentService.Instance,
+                ManagedScriptSlotCatalogService.Instance);
+
+            var imported = service.ImportLegacyScriptCollection(packageFilePath);
+            var snapshot = service.GetSnapshot();
+
+            Assert.Equal(2, imported.Count);
+            Assert.Equal(2, snapshot.Scripts.Count);
+            Assert.All(snapshot.Scripts, script => Assert.Equal("legacy-package.btd6s", script.SourceFileName));
+            Assert.Contains(snapshot.Scripts, script => script.DisplayName == "legacy-standard" &&
+                                                        script.Map == GameMapType.MonkeyMeadow &&
+                                                        script.Difficulty == StageDifficulty.Easy &&
+                                                        script.Mode == StageMode.Standard);
+            Assert.Contains(snapshot.Scripts, script => script.DisplayName == "legacy-chimps" &&
+                                                        script.Map == GameMapType.DarkCastle &&
+                                                        script.Difficulty == StageDifficulty.Hard &&
+                                                        script.Mode == StageMode.CHIMPS);
+        }
+        finally
+        {
+            if (Directory.Exists(rootDirectory))
+            {
+                Directory.Delete(rootDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void SlotCatalog_ContainsExpectedFrameworkSlots()
     {
         var catalog = ManagedScriptSlotCatalogService.Instance;
@@ -136,6 +181,31 @@ public sealed class ManagedScriptLibraryServiceTests
                 Hero = HeroType.Quincy.ToString(),
                 Tags = [.. tags]
             }
+        };
+    }
+
+    private static LegacyScriptModel CreateLegacyDocument(
+        string scriptName,
+        GameMapType map,
+        StageDifficulty difficulty,
+        StageMode mode)
+    {
+        return new LegacyScriptModel
+        {
+            Metadata = new LegacyScriptMetadata
+            {
+                Version = "1.1",
+                ScriptName = scriptName,
+                SelectedMap = (int)Enum.Parse<LegacyMapType>(map.ToString()),
+                SelectedDifficulty = (int)Enum.Parse<LegacyLevelDifficulty>(difficulty.ToString()),
+                SelectedMode = mode == StageMode.MagicOnly
+                    ? (int)LegacyLevelMode.MagicMonkeysOnly
+                    : (int)Enum.Parse<LegacyLevelMode>(mode.ToString()),
+                SelectedHero = (int)LegacyHeroType.Quincy
+            },
+            InstructionsList = [],
+            MonkeyCounts = [],
+            MonkeyIds = []
         };
     }
 }

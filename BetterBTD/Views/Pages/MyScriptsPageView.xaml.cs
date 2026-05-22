@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using BetterBTD.Services;
 using BetterBTD.ViewModels;
 
@@ -8,13 +9,18 @@ namespace BetterBTD.Views.Pages;
 
 public partial class MyScriptsPageView : Page
 {
+    private const double PageMaxHeightOffset = 56d;
     private readonly AppDialogService _appDialogService = AppDialogService.Instance;
     private readonly ManagedScriptLibraryService _managedScriptLibraryService = ManagedScriptLibraryService.Instance;
+    private Window? _hostWindow;
 
     public MyScriptsPageView()
     {
         InitializeComponent();
         DataContext = new MyScriptsPageViewModel(LocalizationService.Instance);
+
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
 
     private void EditSelectedScriptButton_OnClick(object sender, RoutedEventArgs e)
@@ -80,5 +86,50 @@ public partial class MyScriptsPageView : Page
             Message = string.Format(localizationService.T("Editor.File.OpenError.Message"), message),
             PrimaryButtonText = localizationService.T("Editor.Dialog.Ok")
         });
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        _hostWindow = Window.GetWindow(this);
+        if (_hostWindow is null)
+        {
+            return;
+        }
+
+        _hostWindow.SizeChanged += OnHostWindowSizeChanged;
+        UpdateMaxHeightFromHostWindow();
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        if (_hostWindow is null)
+        {
+            return;
+        }
+
+        _hostWindow.SizeChanged -= OnHostWindowSizeChanged;
+        _hostWindow = null;
+    }
+
+    private void OnHostWindowSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateMaxHeightFromHostWindow();
+    }
+
+    private void UpdateMaxHeightFromHostWindow()
+    {
+        if (_hostWindow is null)
+        {
+            return;
+        }
+
+        if (!Dispatcher.CheckAccess())
+        {
+            _ = Dispatcher.InvokeAsync(UpdateMaxHeightFromHostWindow, DispatcherPriority.Loaded);
+            return;
+        }
+
+        var maxHeight = _hostWindow.ActualHeight - PageMaxHeightOffset;
+        MaxHeight = maxHeight > 0 ? maxHeight : 0;
     }
 }

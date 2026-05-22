@@ -167,7 +167,9 @@
                       ResizeBehavior="PreviousAndNext"
                       ShowsPreview="False" />
 
-        <Grid Grid.Row="3"  Margin="0,12,0,0">
+        <Grid Grid.Row="3"
+              Margin="0,12,0,0"
+              MinHeight="0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="1.18*" />
                 <ColumnDefinition Width="0.82*" />
@@ -175,8 +177,9 @@
 
             <ui:CardControl Grid.Column="0"
                             Margin="0,0,12,0"
+                            MinHeight="0"
                             Style="{StaticResource AppCardControlStyle}">
-                <Grid>
+                <Grid MinHeight="0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -196,11 +199,14 @@
                         </Border>
                     </DockPanel>
 
-                    <Grid Grid.Row="1" Margin="0,16,0,0">
+                    <Grid Grid.Row="1"
+                          Margin="0,16,0,0"
+                          MinHeight="0">
                         <ListBox Style="{StaticResource FlatScriptListStyle}"
                                  ItemContainerStyle="{StaticResource TransparentScriptListBoxItemStyle}"
                                  ItemsSource="{Binding Scripts}"
                                  SelectedItem="{Binding SelectedScript, Mode=TwoWay}"
+                                 MinHeight="0"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                                   Visibility="{Binding HasScripts, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -228,7 +234,7 @@
                                                    Margin="0,0,10,0"
                                                    VerticalAlignment="Center"
                                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                   Text="{Binding SourceFileName}"
+                                                   Text="{Binding DisplayName}"
                                                    TextTrimming="CharacterEllipsis" />
                                     </Grid>
                                 </DataTemplate>
@@ -262,8 +268,9 @@
 
             <ui:CardControl Grid.Column="1"
                             Margin="12,0,0,0"
+                            MinHeight="0"
                             Style="{StaticResource AppCardControlStyle}">
-                <Grid>
+                <Grid MinHeight="0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -274,6 +281,7 @@
 
                     <ScrollViewer Grid.Row="1"
                                   Margin="0,16,0,0"
+                                  MinHeight="0"
                                   VerticalScrollBarVisibility="Auto"
                                   Visibility="{Binding HasSelectedScript, Converter={StaticResource BoolToVisibilityConverter}}">
                         <Grid>

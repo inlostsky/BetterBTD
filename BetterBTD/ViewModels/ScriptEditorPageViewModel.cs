@@ -12,6 +12,7 @@ using BetterBTD.Core.ScriptExecution;
 using BetterBTD.Helpers;
 using BetterBTD.Models;
 using BetterBTD.Models.GameElements;
+using BetterBTD.Models.MyScripts;
 using BetterBTD.Models.ScriptEditor;
 using BetterBTD.Models.ScriptExecution;
 using BetterBTD.Services;
@@ -53,6 +54,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     private readonly ScriptTaskFlowService _scriptTaskFlowService;
     private readonly ScriptTaskFlowExecutor _scriptTaskFlowExecutor;
     private readonly ScriptInputSimulationService _scriptInputSimulationService;
+    private readonly ManagedScriptLibraryService _managedScriptLibraryService;
     private readonly List<ScriptInstructionInstance> _clipboardSequenceInstructions = [];
     private readonly Stack<List<ScriptInstructionInstance>> _undoHistory = [];
     private readonly Stack<List<ScriptInstructionInstance>> _redoHistory = [];
@@ -85,8 +87,12 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     private List<ScriptInstructionInstance> _sequenceSnapshot = [];
     private CancellationTokenSource? _scriptExecutionCancellationTokenSource;
     private ScriptExecutionWindow? _scriptExecutionWindow;
+    private string _managedScriptId = string.Empty;
+    private string _managedScriptDisplayName = string.Empty;
 
-    public ScriptEditorPageViewModel(LocalizationService localizationService)
+    public ScriptEditorPageViewModel(
+        LocalizationService localizationService,
+        ManagedScriptLibraryService? managedScriptLibraryService = null)
     {
         _localizationService = localizationService;
         _appDialogService = AppDialogService.Instance;
@@ -100,6 +106,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         _scriptTaskFlowService = ScriptTaskFlowService.Instance;
         _scriptTaskFlowExecutor = ScriptTaskFlowExecutor.Instance;
         _scriptInputSimulationService = ScriptInputSimulationService.Instance;
+        _managedScriptLibraryService = managedScriptLibraryService ?? ManagedScriptLibraryService.Instance;
         _coordinateSelectionTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromMilliseconds(33)
@@ -465,10 +472,19 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
 
     public void SaveScriptDocument(string filePath)
     {
+        var previousFilePath = CurrentScriptFilePath;
+        var previousManagedScriptId = _managedScriptId;
+        var previousManagedScriptDisplayName = _managedScriptDisplayName;
         var optimizedDocument = _scriptInstructionOptimizationService.OptimizeDocument(ExportScriptDocument());
         _scriptDocumentService.Save(filePath, optimizedDocument);
         ImportScriptDocument(optimizedDocument);
         CurrentScriptFilePath = filePath;
+        var managedScriptEntry = SyncManagedScriptAfterSave(
+            filePath,
+            previousFilePath,
+            previousManagedScriptId,
+            previousManagedScriptDisplayName);
+        SetManagedScriptAssociation(managedScriptEntry);
     }
 
     public void LoadScriptDocument(string filePath)
@@ -476,6 +492,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         var loadResult = _scriptDocumentService.LoadCompatible(filePath);
         ImportScriptDocument(loadResult.Document);
         CurrentScriptFilePath = filePath;
+        RestoreManagedScriptAssociation(filePath);
 
         if (loadResult.SourceKind == ScriptDocumentSourceKind.LegacyBtd6)
         {
@@ -489,6 +506,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         ReplaceSequenceWithInstructions([]);
         _clipboardSequenceInstructions.Clear();
         CurrentScriptFilePath = string.Empty;
+        ClearManagedScriptAssociation();
         MarkWorkspaceAsPersisted();
     }
 
@@ -996,12 +1014,74 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
 
     private string ResolveExecutionScriptDisplayName()
     {
+        if (!string.IsNullOrWhiteSpace(_managedScriptDisplayName))
+        {
+            return _managedScriptDisplayName;
+        }
+
         if (!string.IsNullOrWhiteSpace(CurrentScriptFilePath))
         {
             return Path.GetFileNameWithoutExtension(CurrentScriptFilePath);
         }
 
         return _localizationService.T("Editor.Runtime.UntitledScript");
+    }
+
+    private ManagedScriptAssetEntry SyncManagedScriptAfterSave(
+        string filePath,
+        string previousFilePath,
+        string previousManagedScriptId,
+        string previousManagedScriptDisplayName)
+    {
+        var isSaveAsToDifferentPath =
+            !string.IsNullOrWhiteSpace(previousFilePath) &&
+            !AreSameFilePath(filePath, previousFilePath);
+        var shouldReuseManagedScriptId = !isSaveAsToDifferentPath;
+        var shouldPreserveManagedDisplayName =
+            shouldReuseManagedScriptId &&
+            !string.IsNullOrWhiteSpace(previousFilePath) &&
+            !string.IsNullOrWhiteSpace(previousManagedScriptId) &&
+            !string.IsNullOrWhiteSpace(previousManagedScriptDisplayName) &&
+            _managedScriptLibraryService.TryGetManagedScriptByStoredFilePath(previousFilePath, out _);
+        var preferredDisplayName = shouldPreserveManagedDisplayName
+            ? previousManagedScriptDisplayName
+            : Path.GetFileNameWithoutExtension(filePath);
+
+        return _managedScriptLibraryService.UpsertScript(
+            filePath,
+            shouldReuseManagedScriptId ? previousManagedScriptId : null,
+            preferredDisplayName);
+    }
+
+    private void RestoreManagedScriptAssociation(string filePath)
+    {
+        if (_managedScriptLibraryService.TryGetManagedScriptByStoredFilePath(filePath, out var managedScriptEntry))
+        {
+            SetManagedScriptAssociation(managedScriptEntry);
+            return;
+        }
+
+        ClearManagedScriptAssociation();
+    }
+
+    private void SetManagedScriptAssociation(ManagedScriptAssetEntry managedScriptEntry)
+    {
+        _managedScriptId = managedScriptEntry.ScriptId;
+        _managedScriptDisplayName = managedScriptEntry.DisplayName;
+    }
+
+    private void ClearManagedScriptAssociation()
+    {
+        _managedScriptId = string.Empty;
+        _managedScriptDisplayName = string.Empty;
+    }
+
+    private static bool AreSameFilePath(string left, string right)
+    {
+        return string.Equals(
+            Path.GetFullPath(left),
+            Path.GetFullPath(right),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private void OpenScriptExecutionWindow()

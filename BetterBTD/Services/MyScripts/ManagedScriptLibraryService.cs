@@ -74,35 +74,162 @@ public sealed class ManagedScriptLibraryService
             }
 
             var loadResult = _scriptDocumentService.LoadCompatible(sourceFilePath);
-            var scriptDocument = loadResult.Document;
             var document = LoadManifest();
-
-            var scriptId = Guid.NewGuid().ToString("N");
-            var storedFileName = $"{scriptId}.btd";
-            var storedFilePath = Path.Combine(_assetsDirectory, storedFileName);
-            _scriptDocumentService.Save(storedFilePath, scriptDocument);
-
-            var now = DateTimeOffset.UtcNow;
-            var record = new ManagedScriptAssetRecord
-            {
-                ScriptId = scriptId,
-                DisplayName = Path.GetFileNameWithoutExtension(sourceFilePath),
-                SourceFileName = Path.GetFileName(sourceFilePath),
-                StoredFileName = storedFileName,
-                Description = scriptDocument.Metadata.Description,
-                Map = scriptDocument.Metadata.Map,
-                Difficulty = scriptDocument.Metadata.Difficulty,
-                Mode = scriptDocument.Metadata.Mode,
-                Hero = scriptDocument.Metadata.Hero,
-                Tags = [.. ScriptTagCatalog.NormalizeStoredTags(scriptDocument.Metadata.Tags)],
-                ImportedAt = now,
-                UpdatedAt = now
-            };
-
+            var record = CreateManagedScriptRecord(
+                loadResult.Document,
+                Path.GetFileNameWithoutExtension(sourceFilePath),
+                Path.GetFileName(sourceFilePath));
             document.Scripts.Add(record);
             SaveManifest(document);
 
-            return BuildSnapshot(document).Scripts.First(x => x.ScriptId == scriptId);
+            return BuildAssetEntry(record, document.Bindings);
+        }
+    }
+
+    public IReadOnlyList<ManagedScriptAssetEntry> ImportLegacyScriptCollection(string sourceFilePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceFilePath);
+
+        lock (_syncRoot)
+        {
+            EnsureStorage();
+
+            if (!File.Exists(sourceFilePath))
+            {
+                throw new FileNotFoundException("Legacy script package was not found.", sourceFilePath);
+            }
+
+            var document = LoadManifest();
+            var importedEntries = new List<ManagedScriptAssetEntry>();
+            using var stream = File.OpenRead(sourceFilePath);
+            var enumerator = JsonSerializer.DeserializeAsyncEnumerable<JsonElement>(stream).GetAsyncEnumerator();
+            var sourceFileName = Path.GetFileName(sourceFilePath);
+            var packageDisplayName = Path.GetFileNameWithoutExtension(sourceFilePath);
+            var index = 0;
+
+            try
+            {
+                while (enumerator.MoveNextAsync().AsTask().GetAwaiter().GetResult())
+                {
+                    var element = enumerator.Current;
+                    if (element.ValueKind == JsonValueKind.Null)
+                    {
+                        continue;
+                    }
+
+                    if (element.ValueKind != JsonValueKind.Object)
+                    {
+                        throw new InvalidDataException($"Legacy script package item at index {index} must be a JSON object.");
+                    }
+
+                    var legacyDocument = LegacyScriptDocumentService.Instance.LoadFromJson(element.GetRawText());
+                    var conversionResult = LegacyScriptConversionService.Instance.Convert(legacyDocument);
+                    var displayName = ResolveLegacyPackageScriptDisplayName(
+                        legacyDocument,
+                        packageDisplayName,
+                        index);
+                    var record = CreateManagedScriptRecord(
+                        conversionResult.Document,
+                        displayName,
+                        sourceFileName);
+                    document.Scripts.Add(record);
+                    importedEntries.Add(BuildAssetEntry(record, document.Bindings));
+                    index++;
+                }
+            }
+            finally
+            {
+                enumerator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+
+            if (importedEntries.Count == 0)
+            {
+                throw new InvalidDataException("Legacy script package does not contain any importable scripts.");
+            }
+
+            SaveManifest(document);
+            return importedEntries;
+        }
+    }
+
+    public ManagedScriptAssetEntry UpsertScript(
+        string sourceFilePath,
+        string? scriptId = null,
+        string? displayName = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceFilePath);
+
+        lock (_syncRoot)
+        {
+            EnsureStorage();
+
+            if (!File.Exists(sourceFilePath))
+            {
+                throw new FileNotFoundException("Script file was not found.", sourceFilePath);
+            }
+
+            var loadResult = _scriptDocumentService.LoadCompatible(sourceFilePath);
+            var scriptDocument = loadResult.Document;
+            var document = LoadManifest();
+            var record = FindRecordById(document, scriptId) ?? FindRecordByStoredFilePath(document, sourceFilePath);
+            var now = DateTimeOffset.UtcNow;
+
+            if (record is null)
+            {
+                var newScriptId = Guid.NewGuid().ToString("N");
+                var storedFileName = $"{newScriptId}.btd";
+                var storedFilePath = Path.Combine(_assetsDirectory, storedFileName);
+                _scriptDocumentService.Save(storedFilePath, scriptDocument);
+
+                record = new ManagedScriptAssetRecord
+                {
+                    ScriptId = newScriptId,
+                    DisplayName = ResolveDisplayName(displayName, sourceFilePath),
+                    SourceFileName = Path.GetFileName(sourceFilePath),
+                    StoredFileName = storedFileName,
+                    Description = scriptDocument.Metadata.Description,
+                    Map = scriptDocument.Metadata.Map,
+                    Difficulty = scriptDocument.Metadata.Difficulty,
+                    Mode = scriptDocument.Metadata.Mode,
+                    Hero = scriptDocument.Metadata.Hero,
+                    Tags = [.. ScriptTagCatalog.NormalizeStoredTags(scriptDocument.Metadata.Tags)],
+                    ImportedAt = now,
+                    UpdatedAt = now
+                };
+
+                document.Scripts.Add(record);
+            }
+            else
+            {
+                var storedFilePath = GetStoredFilePath(record);
+                var isManagedSourcePath = AreSameFilePath(sourceFilePath, storedFilePath);
+
+                if (!isManagedSourcePath)
+                {
+                    _scriptDocumentService.Save(storedFilePath, scriptDocument);
+                    record.SourceFileName = Path.GetFileName(sourceFilePath);
+                }
+
+                if (!string.IsNullOrWhiteSpace(displayName))
+                {
+                    record.DisplayName = displayName.Trim();
+                }
+                else if (string.IsNullOrWhiteSpace(record.DisplayName))
+                {
+                    record.DisplayName = ResolveDisplayName(displayName, sourceFilePath);
+                }
+
+                record.Description = scriptDocument.Metadata.Description;
+                record.Map = scriptDocument.Metadata.Map;
+                record.Difficulty = scriptDocument.Metadata.Difficulty;
+                record.Mode = scriptDocument.Metadata.Mode;
+                record.Hero = scriptDocument.Metadata.Hero;
+                record.Tags = [.. ScriptTagCatalog.NormalizeStoredTags(scriptDocument.Metadata.Tags)];
+                record.UpdatedAt = now;
+            }
+
+            SaveManifest(document);
+            return BuildAssetEntry(record, document.Bindings);
         }
     }
 
@@ -224,6 +351,25 @@ public sealed class ManagedScriptLibraryService
 
             filePath = GetStoredFilePath(record);
             return File.Exists(filePath);
+        }
+    }
+
+    public bool TryGetManagedScriptByStoredFilePath(string storedFilePath, out ManagedScriptAssetEntry entry)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(storedFilePath);
+
+        lock (_syncRoot)
+        {
+            var document = LoadManifest();
+            var record = FindRecordByStoredFilePath(document, storedFilePath);
+            if (record is null)
+            {
+                entry = null!;
+                return false;
+            }
+
+            entry = BuildAssetEntry(record, document.Bindings);
+            return true;
         }
     }
 
@@ -395,6 +541,51 @@ public sealed class ManagedScriptLibraryService
         return Path.Combine(_assetsDirectory, record.StoredFileName);
     }
 
+    private ManagedScriptAssetRecord CreateManagedScriptRecord(
+        ScriptDocument scriptDocument,
+        string displayName,
+        string sourceFileName)
+    {
+        ArgumentNullException.ThrowIfNull(scriptDocument);
+
+        var scriptId = Guid.NewGuid().ToString("N");
+        var storedFileName = $"{scriptId}.btd";
+        var storedFilePath = Path.Combine(_assetsDirectory, storedFileName);
+        _scriptDocumentService.Save(storedFilePath, scriptDocument);
+
+        var now = DateTimeOffset.UtcNow;
+        return new ManagedScriptAssetRecord
+        {
+            ScriptId = scriptId,
+            DisplayName = displayName.Trim(),
+            SourceFileName = sourceFileName.Trim(),
+            StoredFileName = storedFileName,
+            Description = scriptDocument.Metadata.Description,
+            Map = scriptDocument.Metadata.Map,
+            Difficulty = scriptDocument.Metadata.Difficulty,
+            Mode = scriptDocument.Metadata.Mode,
+            Hero = scriptDocument.Metadata.Hero,
+            Tags = [.. ScriptTagCatalog.NormalizeStoredTags(scriptDocument.Metadata.Tags)],
+            ImportedAt = now,
+            UpdatedAt = now
+        };
+    }
+
+    private ManagedScriptAssetRecord? FindRecordById(ManagedScriptLibraryDocument document, string? scriptId)
+    {
+        if (string.IsNullOrWhiteSpace(scriptId))
+        {
+            return null;
+        }
+
+        return document.Scripts.FirstOrDefault(x => string.Equals(x.ScriptId, scriptId.Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private ManagedScriptAssetRecord? FindRecordByStoredFilePath(ManagedScriptLibraryDocument document, string sourceFilePath)
+    {
+        return document.Scripts.FirstOrDefault(record => AreSameFilePath(GetStoredFilePath(record), sourceFilePath));
+    }
+
     private void EnsureStorage()
     {
         Directory.CreateDirectory(_rootDirectory);
@@ -427,5 +618,35 @@ public sealed class ManagedScriptLibraryService
 
         result = fallback;
         return false;
+    }
+
+    private static string ResolveDisplayName(string? displayName, string sourceFilePath)
+    {
+        return string.IsNullOrWhiteSpace(displayName)
+            ? Path.GetFileNameWithoutExtension(sourceFilePath)
+            : displayName.Trim();
+    }
+
+    private static bool AreSameFilePath(string left, string right)
+    {
+        return string.Equals(
+            Path.GetFullPath(left),
+            Path.GetFullPath(right),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ResolveLegacyPackageScriptDisplayName(
+        LegacyScriptModel legacyDocument,
+        string packageDisplayName,
+        int index)
+    {
+        ArgumentNullException.ThrowIfNull(legacyDocument);
+
+        if (!string.IsNullOrWhiteSpace(legacyDocument.Metadata.ScriptName))
+        {
+            return legacyDocument.Metadata.ScriptName.Trim();
+        }
+
+        return $"{packageDisplayName} #{index + 1:000}";
     }
 }

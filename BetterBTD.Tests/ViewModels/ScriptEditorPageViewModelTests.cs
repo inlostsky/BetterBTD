@@ -1,5 +1,7 @@
+using System.Reflection;
 using BetterBTD.Models.ScriptEditor;
 using BetterBTD.Services;
+using BetterBTD.Services.MyScripts;
 using BetterBTD.ViewModels;
 
 namespace BetterBTD.Tests.ViewModels;
@@ -7,18 +9,25 @@ namespace BetterBTD.Tests.ViewModels;
 public sealed class ScriptEditorPageViewModelTests
 {
     [Fact]
-    public void SaveScriptDocument_RefreshesInstructionSequenceWithOptimizedInstructions()
+    public void SaveScriptDocument_RefreshesInstructionSequenceWithOptimizedInstructions_AndImportsIntoLibrary()
     {
-        var viewModel = new ScriptEditorPageViewModel(LocalizationService.Instance);
-        var filePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.btd");
+        var rootDirectory = Path.Combine(Path.GetTempPath(), $"betterbtd-editor-tests-{Guid.NewGuid():N}");
+        var managedRootDirectory = Path.Combine(rootDirectory, "managed");
+        var filePath = Path.Combine(rootDirectory, "external", "optimized-script.btd");
+        var libraryService = new ManagedScriptLibraryService(
+            managedRootDirectory,
+            ScriptDocumentService.Instance,
+            ManagedScriptSlotCatalogService.Instance);
+        var viewModel = new ScriptEditorPageViewModel(LocalizationService.Instance, libraryService);
 
         try
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
             viewModel.ImportScriptDocument(new ScriptDocument
             {
                 Metadata = new ScriptMetadataDocument
                 {
-                    Tags = ["collection", "自定义标签"]
+                    Tags = ["collection", "custom-tag"]
                 },
                 Instructions =
                 [
@@ -66,13 +75,73 @@ public sealed class ScriptEditorPageViewModelTests
             Assert.Equal(2, viewModel.InstructionSequence.Count);
             Assert.Equal(3, viewModel.InstructionSequence[0].UpgradeCount);
             Assert.Equal(3, viewModel.InstructionSequence[1].NextRoundSendCount);
-            Assert.Equal(["collection", "自定义标签"], saved.Metadata.Tags);
+            Assert.Equal(["collection", "custom-tag"], saved.Metadata.Tags);
+
+            var snapshot = libraryService.GetSnapshot();
+            var importedScript = Assert.Single(snapshot.Scripts);
+            Assert.Equal("optimized-script", importedScript.DisplayName);
+            Assert.Equal("optimized-script.btd", importedScript.SourceFileName);
+            Assert.False(importedScript.HasMissingFile);
         }
         finally
         {
-            if (File.Exists(filePath))
+            if (Directory.Exists(rootDirectory))
             {
-                File.Delete(filePath);
+                Directory.Delete(rootDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void LoadManagedScript_UsesManagedDisplayNameForRuntimeTitle_AndResaveDoesNotDuplicateLibraryEntry()
+    {
+        var rootDirectory = Path.Combine(Path.GetTempPath(), $"betterbtd-editor-tests-{Guid.NewGuid():N}");
+        var externalFilePath = Path.Combine(rootDirectory, "external", "friendly-name.btd");
+        var managedRootDirectory = Path.Combine(rootDirectory, "managed");
+        var libraryService = new ManagedScriptLibraryService(
+            managedRootDirectory,
+            ScriptDocumentService.Instance,
+            ManagedScriptSlotCatalogService.Instance);
+        var viewModel = new ScriptEditorPageViewModel(LocalizationService.Instance, libraryService);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(externalFilePath)!);
+            ScriptDocumentService.Instance.Save(externalFilePath, new ScriptDocument
+            {
+                Metadata = new ScriptMetadataDocument
+                {
+                    Description = "before-update"
+                }
+            });
+
+            var importedScript = libraryService.ImportScript(externalFilePath);
+
+            viewModel.LoadScriptDocument(importedScript.StoredFilePath);
+
+            var resolveDisplayNameMethod = typeof(ScriptEditorPageViewModel).GetMethod(
+                "ResolveExecutionScriptDisplayName",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(resolveDisplayNameMethod);
+
+            var runtimeDisplayName = (string?)resolveDisplayNameMethod!.Invoke(viewModel, null);
+            Assert.Equal("friendly-name", runtimeDisplayName);
+
+            viewModel.ScriptDescription = "after-update";
+            viewModel.SaveScriptDocument(importedScript.StoredFilePath);
+
+            var snapshot = libraryService.GetSnapshot();
+            var script = Assert.Single(snapshot.Scripts);
+            Assert.Equal(importedScript.ScriptId, script.ScriptId);
+            Assert.Equal("friendly-name", script.DisplayName);
+            Assert.Equal("friendly-name.btd", script.SourceFileName);
+            Assert.Equal("after-update", script.Description);
+        }
+        finally
+        {
+            if (Directory.Exists(rootDirectory))
+            {
+                Directory.Delete(rootDirectory, recursive: true);
             }
         }
     }
@@ -82,13 +151,13 @@ public sealed class ScriptEditorPageViewModelTests
     {
         var viewModel = new ScriptEditorPageViewModel(LocalizationService.Instance);
 
-        viewModel.PendingTagInput = "黑框";
+        viewModel.PendingTagInput = "Black Border";
         viewModel.AddScriptTagCommand.Execute(null);
 
         viewModel.PendingTagInput = "custom-run";
         viewModel.AddScriptTagCommand.Execute(null);
 
-        viewModel.PendingTagInput = "Black Border";
+        viewModel.PendingTagInput = "black-border";
         viewModel.AddScriptTagCommand.Execute(null);
 
         var exported = viewModel.ExportScriptDocument();
@@ -99,7 +168,7 @@ public sealed class ScriptEditorPageViewModelTests
             first =>
             {
                 Assert.Equal("black-border", first.Code);
-                Assert.Equal("黑框 / Black Border", first.DisplayName);
+                Assert.Equal(ScriptTagCatalog.GetDisplayName("black-border"), first.DisplayName);
             },
             second =>
             {

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using BetterBTD.Helpers;
 using BetterBTD.Models;
 using BetterBTD.Models.GameElements;
@@ -106,9 +107,7 @@ public sealed class MyScriptsPageViewModel : ObservableObject
 
     public string SelectedScriptSummary => SelectedScript is null
         ? _localizationService.T("Library.Summary.None")
-        : string.Format(
-            _localizationService.T("Library.Summary.Script"),
-            SelectedScript.SourceFileName);
+        : SelectedScript.DisplayName;
 
     public bool HasSelectedScript => SelectedScript is not null;
 
@@ -288,7 +287,15 @@ public sealed class MyScriptsPageViewModel : ObservableObject
 
         try
         {
-            _managedScriptLibraryService.ImportScript(dialog.FileName);
+            if (string.Equals(Path.GetExtension(dialog.FileName), ".btd6s", StringComparison.OrdinalIgnoreCase))
+            {
+                _managedScriptLibraryService.ImportLegacyScriptCollection(dialog.FileName);
+            }
+            else
+            {
+                _managedScriptLibraryService.ImportScript(dialog.FileName);
+            }
+
             Refresh();
         }
         catch (Exception ex)

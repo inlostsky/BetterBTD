@@ -81,7 +81,7 @@ public sealed partial class LocalizationService
         ["Library.Dialog.BindingError.Title"] = "绑定失败",
         ["Library.Dialog.Primary"] = "确定",
         ["Library.Dialog.Cancel"] = "取消",
-        ["Library.File.ImportFilter"] = "BetterBTD Script (*.btd;*.btd6;*.json)|*.btd;*.btd6;*.json|All Files (*.*)|*.*",
+        ["Library.File.ImportFilter"] = "BetterBTD Script (*.btd;*.btd6;*.btd6s;*.json)|*.btd;*.btd6;*.btd6s;*.json|Legacy BTD6 Script Package (*.btd6s)|*.btd6s|All Files (*.*)|*.*",
         ["Library.File.ExportFilter"] = "BetterBTD Script (*.btd)|*.btd|JSON File (*.json)|*.json|All Files (*.*)|*.*"
     };
 
@@ -161,7 +161,7 @@ public sealed partial class LocalizationService
         ["Library.Dialog.BindingError.Title"] = "Binding Failed",
         ["Library.Dialog.Primary"] = "OK",
         ["Library.Dialog.Cancel"] = "Cancel",
-        ["Library.File.ImportFilter"] = "BetterBTD Script (*.btd;*.btd6;*.json)|*.btd;*.btd6;*.json|All Files (*.*)|*.*",
+        ["Library.File.ImportFilter"] = "BetterBTD Script (*.btd;*.btd6;*.btd6s;*.json)|*.btd;*.btd6;*.btd6s;*.json|Legacy BTD6 Script Package (*.btd6s)|*.btd6s|All Files (*.*)|*.*",
         ["Library.File.ExportFilter"] = "BetterBTD Script (*.btd)|*.btd|JSON File (*.json)|*.json|All Files (*.*)|*.*"
     };
 }
