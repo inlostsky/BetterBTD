@@ -306,45 +306,11 @@
                                        Margin="0,0,12,12"
                                        VerticalAlignment="Top"
                                        Style="{StaticResource CardDescriptionTextStyle}"
-                                       Text="{Binding PropertyNameText}" />
-                            <TextBlock Grid.Row="0"
-                                       Grid.Column="1"
-                                       Margin="0,0,0,12"
-                                       Text="{Binding SelectedScriptName}"
-                                       TextWrapping="Wrap" />
-
-                            <TextBlock Grid.Row="1"
-                                       Grid.Column="0"
-                                       Margin="0,0,12,12"
-                                       VerticalAlignment="Top"
-                                       Style="{StaticResource CardDescriptionTextStyle}"
-                                       Text="{Binding PropertyDescriptionText}" />
-                            <TextBlock Grid.Row="1"
-                                       Grid.Column="1"
-                                       Margin="0,0,0,12"
-                                       Text="{Binding SelectedScriptDescription}"
-                                       TextWrapping="Wrap" />
-
-                            <TextBlock Grid.Row="2"
-                                       Grid.Column="0"
-                                       Margin="0,0,12,12"
-                                       VerticalAlignment="Top"
-                                       Style="{StaticResource CardDescriptionTextStyle}"
                                        Text="{Binding PropertyScriptIdText}" />
-                            <Grid Grid.Row="2"
+                            <Grid Grid.Row="0"
                                   Grid.Column="1"
                                   Margin="0,0,0,12">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-
-                                <TextBlock Grid.Column="0"
-                                           Margin="0,0,8,0"
-                                           VerticalAlignment="Center"
-                                           Text="{Binding SelectedScriptId}"
-                                           TextWrapping="Wrap" />
-                                <ui:Button Grid.Column="1"
+                                <ui:Button HorizontalAlignment="Left"
                                            MinWidth="76"
                                            Padding="10,4"
                                            Appearance="Secondary"
@@ -352,6 +318,30 @@
                                            Content="{Binding CopyScriptIdText}"
                                            Icon="{ui:SymbolIcon Copy24}" />
                             </Grid>
+
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="0"
+                                       Margin="0,0,12,12"
+                                       VerticalAlignment="Top"
+                                       Style="{StaticResource CardDescriptionTextStyle}"
+                                       Text="{Binding PropertyNameText}" />
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="1"
+                                       Margin="0,0,0,12"
+                                       Text="{Binding SelectedScriptName}"
+                                       TextWrapping="Wrap" />
+
+                            <TextBlock Grid.Row="2"
+                                       Grid.Column="0"
+                                       Margin="0,0,12,12"
+                                       VerticalAlignment="Top"
+                                       Style="{StaticResource CardDescriptionTextStyle}"
+                                       Text="{Binding PropertyDescriptionText}" />
+                            <TextBlock Grid.Row="2"
+                                       Grid.Column="1"
+                                       Margin="0,0,0,12"
+                                       Text="{Binding SelectedScriptDescription}"
+                                       TextWrapping="Wrap" />
 
                             <TextBlock Grid.Row="3"
                                        Grid.Column="0"

@@ -23,6 +23,8 @@ public sealed class ManagedScriptAssetRecord
 {
     public string ScriptId { get; set; } = Guid.NewGuid().ToString("N");
 
+    public string CanonicalScriptId { get; set; } = Guid.NewGuid().ToString("N");
+
     public string DisplayName { get; set; } = string.Empty;
 
     public string SourceFileName { get; set; } = string.Empty;
@@ -67,6 +69,8 @@ public sealed class ManagedScriptLibrarySnapshot
 public sealed class ManagedScriptAssetEntry
 {
     public required string ScriptId { get; init; }
+
+    public required string CanonicalScriptId { get; init; }
 
     public required string DisplayName { get; init; }
 

@@ -10,6 +10,7 @@ using BetterBTD.Models.MyScripts;
 using BetterBTD.Services;
 using BetterBTD.Services.Shared;
 using BetterBTD.Views.Windows;
+using Microsoft.Win32;
 
 namespace BetterBTD.ViewModels;
 
@@ -26,6 +27,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
     private readonly AppDialogService _appDialogService;
     private readonly AutoTaskCoordinator _autoTaskCoordinator;
     private readonly ManagedScriptLibraryService _managedScriptLibraryService;
+    private readonly CollectionScriptSubscriptionService _collectionScriptSubscriptionService;
     private readonly Dictionary<string, TaskRuntimeWindow> _runtimeWindowsByTaskKey = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, TaskRuntimeWindowViewModel> _runtimeViewModelsByTaskKey = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, TextFileEditorWindow> _textEditorWindowsByKey = new(StringComparer.OrdinalIgnoreCase);
@@ -37,7 +39,8 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             LocalizationService.Instance,
             AppDialogService.Instance,
             AutoTaskCoordinator.Instance,
-            ManagedScriptLibraryService.Instance)
+            ManagedScriptLibraryService.Instance,
+            CollectionScriptSubscriptionService.Instance)
     {
     }
 
@@ -45,12 +48,14 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         LocalizationService localizationService,
         AppDialogService appDialogService,
         AutoTaskCoordinator autoTaskCoordinator,
-        ManagedScriptLibraryService managedScriptLibraryService)
+        ManagedScriptLibraryService managedScriptLibraryService,
+        CollectionScriptSubscriptionService collectionScriptSubscriptionService)
     {
         _localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
         _appDialogService = appDialogService ?? throw new ArgumentNullException(nameof(appDialogService));
         _autoTaskCoordinator = autoTaskCoordinator ?? throw new ArgumentNullException(nameof(autoTaskCoordinator));
         _managedScriptLibraryService = managedScriptLibraryService ?? throw new ArgumentNullException(nameof(managedScriptLibraryService));
+        _collectionScriptSubscriptionService = collectionScriptSubscriptionService ?? throw new ArgumentNullException(nameof(collectionScriptSubscriptionService));
 
         Tasks =
         [
@@ -59,13 +64,16 @@ public sealed class AutoTasksPageViewModel : ObservableObject
                 Key = AutoTaskKind.Collection.ToKey(),
                 ShowStageTargetConfiguration = false,
                 ShowCollectionVariantConfiguration = true,
-                ShowScriptConfiguration = true
+                ShowScriptConfiguration = true,
+                ShowCollectionSubscriptionActions = true
             }
         ];
 
         ToggleTaskCommand = new RelayCommand<AutoTaskConfig?>(ToggleTask);
         OpenTutorialCommand = new RelayCommand<AutoTaskConfig?>(OpenTutorial);
         OpenTaskScriptConfigCommand = new RelayCommand<AutoTaskConfig?>(OpenTaskScriptConfig);
+        ExportCollectionSubscriptionCommand = new RelayCommand<AutoTaskConfig?>(ExportCollectionSubscription);
+        ImportCollectionSubscriptionCommand = new RelayCommand<AutoTaskConfig?>(ImportCollectionSubscription);
 
         _localizationService.LanguageChanged += (_, _) => RefreshLocalizedContent();
         RefreshLocalizedContent();
@@ -78,6 +86,10 @@ public sealed class AutoTasksPageViewModel : ObservableObject
     public IRelayCommand<AutoTaskConfig?> OpenTutorialCommand { get; }
 
     public IRelayCommand<AutoTaskConfig?> OpenTaskScriptConfigCommand { get; }
+
+    public IRelayCommand<AutoTaskConfig?> ExportCollectionSubscriptionCommand { get; }
+
+    public IRelayCommand<AutoTaskConfig?> ImportCollectionSubscriptionCommand { get; }
 
     public string TutorialLinkText => _localizationService.T("Tasks.Tutorial");
 
@@ -94,6 +106,14 @@ public sealed class AutoTasksPageViewModel : ObservableObject
     public string ScriptConfigDescription => _localizationService.T("Tasks.ScriptConfigDescription");
 
     public string ScriptConfigButtonText => _localizationService.T("Tasks.ScriptConfigButton");
+
+    public string CollectionSubscriptionLabel => _localizationService.T("Tasks.CollectionSubscriptionLabel");
+
+    public string CollectionSubscriptionDescription => _localizationService.T("Tasks.CollectionSubscriptionDescription");
+
+    public string ExportCollectionSubscriptionButtonText => _localizationService.T("Tasks.CollectionSubscription.Export");
+
+    public string ImportCollectionSubscriptionButtonText => _localizationService.T("Tasks.CollectionSubscription.Import");
 
     private void ToggleTask(AutoTaskConfig? task)
     {
@@ -195,6 +215,10 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         OnPropertyChanged(nameof(ScriptConfigLabel));
         OnPropertyChanged(nameof(ScriptConfigDescription));
         OnPropertyChanged(nameof(ScriptConfigButtonText));
+        OnPropertyChanged(nameof(CollectionSubscriptionLabel));
+        OnPropertyChanged(nameof(CollectionSubscriptionDescription));
+        OnPropertyChanged(nameof(ExportCollectionSubscriptionButtonText));
+        OnPropertyChanged(nameof(ImportCollectionSubscriptionButtonText));
     }
 
     private IReadOnlyList<LanguageOption> BuildCollectionVariantOptions()
@@ -319,6 +343,60 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         catch (Exception ex)
         {
             ShowDialog("Tasks.Dialog.ScriptConfigOpenFailed.Title", ex.Message);
+        }
+    }
+
+    private void ExportCollectionSubscription(AutoTaskConfig? task)
+    {
+        if (task is null || !string.Equals(task.Key, AutoTaskKind.Collection.ToKey(), StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Filter = _localizationService.T("Tasks.CollectionSubscription.ExportFilter"),
+            FileName = "collection-subscription.btdsub"
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            _collectionScriptSubscriptionService.Export(dialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            ShowDialog("Tasks.Dialog.CollectionSubscriptionExportFailed.Title", ex.Message);
+        }
+    }
+
+    private void ImportCollectionSubscription(AutoTaskConfig? task)
+    {
+        if (task is null || !string.Equals(task.Key, AutoTaskKind.Collection.ToKey(), StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var dialog = new OpenFileDialog
+        {
+            Filter = _localizationService.T("Tasks.CollectionSubscription.ImportFilter"),
+            Multiselect = false
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            _collectionScriptSubscriptionService.Import(dialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            ShowDialog("Tasks.Dialog.CollectionSubscriptionImportFailed.Title", ex.Message);
         }
     }
 

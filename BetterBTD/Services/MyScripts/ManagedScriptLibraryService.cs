@@ -118,9 +118,28 @@ public sealed class ManagedScriptLibraryService
             MigrateDedicatedBindings(document);
             var currentBindings = LoadCurrentBindings(document);
             var targetFingerprint = BuildDocumentFingerprint(loadResult.Document);
-            var recordsByFingerprint = BuildFingerprintIndex(document);
-            if (recordsByFingerprint.TryGetValue(targetFingerprint, out var existingRecord))
+            var canonicalScriptId = loadResult.Document.Metadata.CanonicalScriptId;
+            var existingRecord = FindRecordByCanonicalId(document, canonicalScriptId);
+            if (existingRecord is not null)
             {
+                var storedFilePath = GetStoredFilePath(existingRecord);
+                _scriptDocumentService.Save(storedFilePath, loadResult.Document);
+                UpdateRecordFromDocument(existingRecord, loadResult.Document, sourceFilePath, null, targetFingerprint, preserveImportedAt: true);
+                SaveManifest(document);
+                return BuildAssetEntry(existingRecord, currentBindings);
+            }
+
+            var recordsByFingerprint = BuildFingerprintIndex(document);
+            if (recordsByFingerprint.TryGetValue(targetFingerprint, out existingRecord))
+            {
+                if (!string.Equals(existingRecord.CanonicalScriptId, canonicalScriptId, StringComparison.OrdinalIgnoreCase))
+                {
+                    existingRecord.CanonicalScriptId = canonicalScriptId;
+                }
+
+                var storedFilePath = GetStoredFilePath(existingRecord);
+                _scriptDocumentService.Save(storedFilePath, loadResult.Document);
+                UpdateRecordFromDocument(existingRecord, loadResult.Document, sourceFilePath, null, targetFingerprint, preserveImportedAt: true);
                 SaveManifest(document);
                 return BuildAssetEntry(existingRecord, currentBindings);
             }
@@ -187,8 +206,20 @@ public sealed class ManagedScriptLibraryService
                         packageDisplayName,
                         index);
                     var targetFingerprint = BuildDocumentFingerprint(conversionResult.Document);
+                    var canonicalScriptId = conversionResult.Document.Metadata.CanonicalScriptId;
                     processedCount++;
                     progress?.Report(processedCount);
+                    var existingRecord = FindRecordByCanonicalId(document, canonicalScriptId);
+                    if (existingRecord is not null)
+                    {
+                        var storedFilePath = GetStoredFilePath(existingRecord);
+                        _scriptDocumentService.Save(storedFilePath, conversionResult.Document);
+                        UpdateRecordFromDocument(existingRecord, conversionResult.Document, sourceFilePath, displayName, targetFingerprint, preserveImportedAt: true);
+                        importedEntries.Add(BuildAssetEntry(existingRecord, currentBindings));
+                        index++;
+                        continue;
+                    }
+
                     if (recordsByFingerprint.ContainsKey(targetFingerprint))
                     {
                         index++;
@@ -240,10 +271,13 @@ public sealed class ManagedScriptLibraryService
             var loadResult = _scriptDocumentService.LoadCompatible(sourceFilePath);
             var scriptDocument = loadResult.Document;
             var scriptFingerprint = BuildDocumentFingerprint(scriptDocument);
+            var canonicalScriptId = scriptDocument.Metadata.CanonicalScriptId;
             var document = LoadManifest();
             MigrateDedicatedBindings(document);
             var currentBindings = LoadCurrentBindings(document);
-            var record = FindRecordById(document, scriptId) ?? FindRecordByStoredFilePath(document, sourceFilePath);
+            var record = FindRecordById(document, scriptId)
+                         ?? FindRecordByCanonicalId(document, canonicalScriptId)
+                         ?? FindRecordByStoredFilePath(document, sourceFilePath);
             var now = DateTimeOffset.UtcNow;
 
             if (record is null)
@@ -256,6 +290,7 @@ public sealed class ManagedScriptLibraryService
                 record = new ManagedScriptAssetRecord
                 {
                     ScriptId = newScriptId,
+                    CanonicalScriptId = canonicalScriptId,
                     DisplayName = ResolveDisplayName(displayName, sourceFilePath),
                     SourceFileName = Path.GetFileName(sourceFilePath),
                     StoredFileName = storedFileName,
@@ -276,6 +311,7 @@ public sealed class ManagedScriptLibraryService
             {
                 var storedFilePath = GetStoredFilePath(record);
                 var isManagedSourcePath = AreSameFilePath(sourceFilePath, storedFilePath);
+                record.CanonicalScriptId = canonicalScriptId;
 
                 if (!isManagedSourcePath)
                 {
@@ -668,6 +704,7 @@ public sealed class ManagedScriptLibraryService
         return new ManagedScriptAssetEntry
         {
             ScriptId = record.ScriptId,
+            CanonicalScriptId = record.CanonicalScriptId,
             DisplayName = record.DisplayName,
             SourceFileName = record.SourceFileName,
             StoredFilePath = storedFilePath,
@@ -707,6 +744,7 @@ public sealed class ManagedScriptLibraryService
         return new ManagedScriptAssetRecord
         {
             ScriptId = scriptId,
+            CanonicalScriptId = scriptDocument.Metadata.CanonicalScriptId,
             DisplayName = displayName.Trim(),
             SourceFileName = sourceFileName.Trim(),
             StoredFileName = storedFileName,
@@ -737,6 +775,16 @@ public sealed class ManagedScriptLibraryService
     private ManagedScriptAssetRecord? FindRecordByStoredFilePath(ManagedScriptLibraryDocument document, string sourceFilePath)
     {
         return document.Scripts.FirstOrDefault(record => AreSameFilePath(GetStoredFilePath(record), sourceFilePath));
+    }
+
+    private ManagedScriptAssetRecord? FindRecordByCanonicalId(ManagedScriptLibraryDocument document, string? canonicalScriptId)
+    {
+        if (string.IsNullOrWhiteSpace(canonicalScriptId))
+        {
+            return null;
+        }
+
+        return document.Scripts.FirstOrDefault(x => string.Equals(x.CanonicalScriptId, canonicalScriptId.Trim(), StringComparison.OrdinalIgnoreCase));
     }
 
     private Dictionary<string, ManagedScriptAssetRecord> BuildFingerprintIndex(ManagedScriptLibraryDocument document)
@@ -776,6 +824,37 @@ public sealed class ManagedScriptLibraryService
         var scriptDocument = _scriptDocumentService.LoadCompatible(storedFilePath).Document;
         record.Fingerprint = BuildDocumentFingerprint(scriptDocument);
         return record.Fingerprint;
+    }
+
+    private static void UpdateRecordFromDocument(
+        ManagedScriptAssetRecord record,
+        ScriptDocument scriptDocument,
+        string sourceFilePath,
+        string? displayName,
+        string scriptFingerprint,
+        bool preserveImportedAt)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(scriptDocument);
+
+        var now = DateTimeOffset.UtcNow;
+        record.CanonicalScriptId = scriptDocument.Metadata.CanonicalScriptId;
+        record.DisplayName = string.IsNullOrWhiteSpace(displayName)
+            ? (string.IsNullOrWhiteSpace(record.DisplayName) ? ResolveDisplayName(displayName, sourceFilePath) : record.DisplayName)
+            : displayName.Trim();
+        record.SourceFileName = Path.GetFileName(sourceFilePath);
+        record.Description = scriptDocument.Metadata.Description;
+        record.Map = scriptDocument.Metadata.Map;
+        record.Difficulty = scriptDocument.Metadata.Difficulty;
+        record.Mode = scriptDocument.Metadata.Mode;
+        record.Hero = scriptDocument.Metadata.Hero;
+        record.Tags = [.. ScriptTagCatalog.NormalizeStoredTags(scriptDocument.Metadata.Tags)];
+        record.Fingerprint = scriptFingerprint;
+        record.UpdatedAt = now;
+        if (!preserveImportedAt)
+        {
+            record.ImportedAt = now;
+        }
     }
 
     private void EnsureStorage()
@@ -924,6 +1003,9 @@ public sealed class ManagedScriptLibraryService
         record.ScriptId = string.IsNullOrWhiteSpace(record.ScriptId)
             ? Guid.NewGuid().ToString("N")
             : record.ScriptId.Trim();
+        record.CanonicalScriptId = string.IsNullOrWhiteSpace(record.CanonicalScriptId)
+            ? Guid.NewGuid().ToString("N")
+            : record.CanonicalScriptId.Trim();
         record.DisplayName = record.DisplayName?.Trim() ?? string.Empty;
         record.SourceFileName = record.SourceFileName?.Trim() ?? string.Empty;
         record.StoredFileName = record.StoredFileName?.Trim() ?? string.Empty;
@@ -966,7 +1048,82 @@ public sealed class ManagedScriptLibraryService
     private static string BuildDocumentFingerprint(ScriptDocument scriptDocument)
     {
         ArgumentNullException.ThrowIfNull(scriptDocument);
-        return MD5Helper.ComputeMD5(JsonSerializer.Serialize(scriptDocument));
+
+        var fingerprintDocument = new ScriptDocument
+        {
+            Schema = scriptDocument.Schema,
+            FormatVersion = scriptDocument.FormatVersion,
+            Metadata = new ScriptMetadataDocument
+            {
+                CanonicalScriptId = string.Empty,
+                ScriptVersion = scriptDocument.Metadata.ScriptVersion,
+                Description = scriptDocument.Metadata.Description,
+                Map = scriptDocument.Metadata.Map,
+                Difficulty = scriptDocument.Metadata.Difficulty,
+                Mode = scriptDocument.Metadata.Mode,
+                Hero = scriptDocument.Metadata.Hero,
+                Tags = [.. scriptDocument.Metadata.Tags]
+            },
+            MonkeyObjects = scriptDocument.MonkeyObjects
+                .Select(monkeyObject => new ScriptMonkeyObjectDocument
+                {
+                    BindingId = monkeyObject.BindingId,
+                    ObjectId = monkeyObject.ObjectId,
+                    SelectionCode = monkeyObject.SelectionCode,
+                    PlacementOrder = monkeyObject.PlacementOrder
+                })
+                .ToList(),
+            Instructions = scriptDocument.Instructions
+                .Select(instruction => new ScriptInstructionDocument
+                {
+                    CommandType = instruction.CommandType,
+                    SelectedMonkeyTower = instruction.SelectedMonkeyTower,
+                    MonkeyBindingId = instruction.MonkeyBindingId,
+                    MonkeyObjectId = instruction.MonkeyObjectId,
+                    TargetMonkeyBindingId = instruction.TargetMonkeyBindingId,
+                    TargetMonkeyObjectId = instruction.TargetMonkeyObjectId,
+                    SelectedInventoryItem = instruction.SelectedInventoryItem,
+                    SelectedActivatedAbility = instruction.SelectedActivatedAbility,
+                    NextRoundAction = instruction.NextRoundAction,
+                    WaitMode = instruction.WaitMode,
+                    ClickCount = instruction.ClickCount,
+                    ClickIntervalMilliseconds = instruction.ClickIntervalMilliseconds,
+                    NextRoundSendCount = instruction.NextRoundSendCount,
+                    NextRoundOperationIntervalMilliseconds = instruction.NextRoundOperationIntervalMilliseconds,
+                    WaitTimeMilliseconds = instruction.WaitTimeMilliseconds,
+                    PlacementDetectionEnabled = instruction.PlacementDetectionEnabled,
+                    PlacementFailureAdjustmentEnabled = instruction.PlacementFailureAdjustmentEnabled,
+                    PlacementAttemptIntervalMilliseconds = instruction.PlacementAttemptIntervalMilliseconds,
+                    PlacementAdjustmentAttemptIntervalMilliseconds = instruction.PlacementAdjustmentAttemptIntervalMilliseconds,
+                    UpgradeDetectionEnabled = instruction.UpgradeDetectionEnabled,
+                    UpgradeOperationIntervalMilliseconds = instruction.UpgradeOperationIntervalMilliseconds,
+                    MonkeyPanelDetectionEnabled = instruction.MonkeyPanelDetectionEnabled,
+                    MonkeyPanelOperationIntervalMilliseconds = instruction.MonkeyPanelOperationIntervalMilliseconds,
+                    SellDetectionEnabled = instruction.SellDetectionEnabled,
+                    WaitGoldAmount = instruction.WaitGoldAmount,
+                    WaitRoundCount = instruction.WaitRoundCount,
+                    PositionX = instruction.PositionX,
+                    PositionY = instruction.PositionY,
+                    WaitColorCoordinateX = instruction.WaitColorCoordinateX,
+                    WaitColorCoordinateY = instruction.WaitColorCoordinateY,
+                    UpgradePath = instruction.UpgradePath,
+                    UpgradeCount = instruction.UpgradeCount,
+                    SwitchDirection = instruction.SwitchDirection,
+                    SwitchCount = instruction.SwitchCount,
+                    SelectedAbility = instruction.SelectedAbility,
+                    RequiresAbilityCoordinate = instruction.RequiresAbilityCoordinate,
+                    AbilityCoordinateX = instruction.AbilityCoordinateX,
+                    AbilityCoordinateY = instruction.AbilityCoordinateY,
+                    WaitColorHex = instruction.WaitColorHex,
+                    WaitColorTolerance = instruction.WaitColorTolerance,
+                    CommentContent = instruction.CommentContent,
+                    Notes = instruction.Notes,
+                    IntervalToNextInstructionMs = instruction.IntervalToNextInstructionMs
+                })
+                .ToList()
+        };
+
+        return MD5Helper.ComputeMD5(JsonSerializer.Serialize(fingerprintDocument));
     }
 
     private static string ResolveLegacyPackageScriptDisplayName(

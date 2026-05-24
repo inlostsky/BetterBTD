@@ -89,6 +89,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     private ScriptExecutionWindow? _scriptExecutionWindow;
     private string _managedScriptId = string.Empty;
     private string _managedScriptDisplayName = string.Empty;
+    private string _canonicalScriptId = Guid.NewGuid().ToString("N");
 
     public ScriptEditorPageViewModel(
         LocalizationService localizationService,
@@ -432,6 +433,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         {
             Metadata = new ScriptMetadataDocument
             {
+                CanonicalScriptId = _canonicalScriptId,
                 ScriptVersion = NormalizeScriptVersion(ScriptVersion),
                 Description = ScriptDescription,
                 Map = SelectedMap.ToString(),
@@ -1630,6 +1632,9 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     private void ApplyScriptMetadata(ScriptMetadataDocument? metadata)
     {
         metadata ??= new ScriptMetadataDocument();
+        _canonicalScriptId = string.IsNullOrWhiteSpace(metadata.CanonicalScriptId)
+            ? Guid.NewGuid().ToString("N")
+            : metadata.CanonicalScriptId.Trim();
 
         ScriptVersion = NormalizeScriptVersion(metadata.ScriptVersion);
         ScriptDescription = metadata.Description;

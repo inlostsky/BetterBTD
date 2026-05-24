@@ -24,6 +24,8 @@ public sealed class ScriptDocument
 
 public sealed class ScriptMetadataDocument
 {
+    public string CanonicalScriptId { get; set; } = Guid.NewGuid().ToString("N");
+
     public string ScriptVersion { get; set; } = ScriptDocumentFormat.DefaultScriptVersion;
 
     public string Description { get; set; } = string.Empty;

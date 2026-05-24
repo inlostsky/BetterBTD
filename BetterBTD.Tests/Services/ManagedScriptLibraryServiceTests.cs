@@ -2,6 +2,7 @@ using BetterBTD.Models.AutoTasks;
 using BetterBTD.Models.GameElements;
 using BetterBTD.Models.MyScripts;
 using BetterBTD.Models.ScriptEditor;
+using BetterBTD.Services.MyScripts;
 using System.Text.Json;
 
 namespace BetterBTD.Tests.Services;
@@ -274,13 +275,159 @@ public sealed class ManagedScriptLibraryServiceTests
     }
 
     [Fact]
+    public void ExportScript_PreservesCanonicalScriptId()
+    {
+        var rootDirectory = Path.Combine(Path.GetTempPath(), $"betterbtd-library-{Guid.NewGuid():N}");
+        var sourceFilePath = Path.Combine(rootDirectory, "source", "canonical-script.btd");
+        var exportFilePath = Path.Combine(rootDirectory, "export", "canonical-script-copy.btd");
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(sourceFilePath)!);
+            var document = CreateDocument(
+                GameMapType.MonkeyMeadow,
+                StageDifficulty.Easy,
+                StageMode.Standard,
+                ["collection"]);
+            ScriptDocumentService.Instance.Save(sourceFilePath, document);
+
+            var service = new ManagedScriptLibraryService(
+                Path.Combine(rootDirectory, "managed"),
+                ScriptDocumentService.Instance,
+                ManagedScriptSlotCatalogService.Instance);
+
+            var imported = service.ImportScript(sourceFilePath);
+            service.ExportScript(imported.ScriptId, exportFilePath);
+
+            var exported = ScriptDocumentService.Instance.Load(exportFilePath);
+            Assert.Equal(imported.CanonicalScriptId, exported.Metadata.CanonicalScriptId);
+        }
+        finally
+        {
+            if (Directory.Exists(rootDirectory))
+            {
+                Directory.Delete(rootDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void ImportScript_ReusesManagedRecordWhenCanonicalScriptIdMatches()
+    {
+        var rootDirectory = Path.Combine(Path.GetTempPath(), $"betterbtd-library-{Guid.NewGuid():N}");
+        var firstFilePath = Path.Combine(rootDirectory, "source", "canonical-first.btd");
+        var secondFilePath = Path.Combine(rootDirectory, "source", "canonical-second.btd");
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(firstFilePath)!);
+            var document = CreateDocument(
+                GameMapType.MonkeyMeadow,
+                StageDifficulty.Easy,
+                StageMode.Standard,
+                ["collection"]);
+            ScriptDocumentService.Instance.Save(firstFilePath, document);
+
+            var mutated = CreateDocument(
+                GameMapType.DarkCastle,
+                StageDifficulty.Hard,
+                StageMode.CHIMPS,
+                ["collection", "updated"]);
+            mutated.Metadata.CanonicalScriptId = document.Metadata.CanonicalScriptId;
+            ScriptDocumentService.Instance.Save(secondFilePath, mutated);
+
+            var service = new ManagedScriptLibraryService(
+                Path.Combine(rootDirectory, "managed"),
+                ScriptDocumentService.Instance,
+                ManagedScriptSlotCatalogService.Instance);
+
+            var firstImported = service.ImportScript(firstFilePath);
+            var secondImported = service.ImportScript(secondFilePath);
+            var snapshot = service.GetSnapshot();
+            var script = Assert.Single(snapshot.Scripts);
+
+            Assert.Equal(firstImported.ScriptId, secondImported.ScriptId);
+            Assert.Equal(document.Metadata.CanonicalScriptId, script.CanonicalScriptId);
+            Assert.Equal(GameMapType.DarkCastle, script.Map);
+            Assert.Equal(StageDifficulty.Hard, script.Difficulty);
+            Assert.Equal(StageMode.CHIMPS, script.Mode);
+        }
+        finally
+        {
+            if (Directory.Exists(rootDirectory))
+            {
+                Directory.Delete(rootDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void CollectionSubscription_ExportImport_RestoresBindingsByCanonicalScriptId()
+    {
+        var rootDirectory = Path.Combine(Path.GetTempPath(), $"betterbtd-library-{Guid.NewGuid():N}");
+        var sourceDirectory = Path.Combine(rootDirectory, "source");
+        var exportPackagePath = Path.Combine(rootDirectory, "export", "collection.btdsub");
+
+        try
+        {
+            Directory.CreateDirectory(sourceDirectory);
+
+            var sourceScriptPath = Path.Combine(sourceDirectory, "collection-script.btd");
+            var sourceDocument = CreateDocument(
+                GameMapType.DarkCastle,
+                StageDifficulty.Hard,
+                StageMode.CHIMPS,
+                ["collection"]);
+            ScriptDocumentService.Instance.Save(sourceScriptPath, sourceDocument);
+
+            var sourceService = new ManagedScriptLibraryService(
+                Path.Combine(rootDirectory, "managed-source"),
+                ScriptDocumentService.Instance,
+                ManagedScriptSlotCatalogService.Instance);
+            var sourceImported = sourceService.ImportScript(sourceScriptPath);
+            var slotId = ManagedScriptSlotIdFactory.CreateCollectionSlotId("simple", GameMapType.DarkCastle);
+            sourceService.SetBinding(slotId, sourceImported.ScriptId);
+
+            var subscriptionService = new CollectionScriptSubscriptionService(
+                sourceService,
+                ManagedScriptSlotCatalogService.Instance);
+            subscriptionService.Export(exportPackagePath);
+
+            var targetService = new ManagedScriptLibraryService(
+                Path.Combine(rootDirectory, "managed-target"),
+                ScriptDocumentService.Instance,
+                ManagedScriptSlotCatalogService.Instance);
+            var targetSubscriptionService = new CollectionScriptSubscriptionService(
+                targetService,
+                ManagedScriptSlotCatalogService.Instance);
+            targetSubscriptionService.Import(exportPackagePath);
+
+            var resolved = targetService.TryResolveSlotBinding(slotId, out var resolvedScriptId, out var resolvedFilePath);
+            Assert.True(resolved);
+            Assert.False(string.IsNullOrWhiteSpace(resolvedScriptId));
+            Assert.True(File.Exists(resolvedFilePath));
+
+            var importedDocument = ScriptDocumentService.Instance.Load(resolvedFilePath);
+            Assert.Equal(sourceDocument.Metadata.CanonicalScriptId, importedDocument.Metadata.CanonicalScriptId);
+        }
+        finally
+        {
+            if (Directory.Exists(rootDirectory))
+            {
+                Directory.Delete(rootDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void SlotCatalog_ContainsExpectedFrameworkSlots()
     {
         var catalog = ManagedScriptSlotCatalogService.Instance;
         var slots = catalog.GetAll();
 
         var blackBorderCount = GameElementCatalog.Maps.Count * 14;
-        var collectionCount = 3 * 13;
+        var collectionCount = ManagedScriptCollectionModeCatalog.Modes.Count *
+                              GameElementCatalog.Maps.Count(map => map.Tier == MapDifficultyTier.Expert);
         var expectedCount = blackBorderCount + collectionCount + 2;
 
         Assert.Equal(expectedCount, slots.Count);
