@@ -56,6 +56,38 @@ public sealed class ManagedScriptLibraryService
 
     public static ManagedScriptLibraryService Instance => InstanceHolder.Value;
 
+    public string GetTaskBindingFilePath(AutoTaskKind taskKind)
+    {
+        if (TryGetDedicatedBindingFilePath(taskKind, out var filePath))
+        {
+            return filePath;
+        }
+
+        throw new InvalidOperationException($"Task kind '{taskKind}' does not use a dedicated binding file.");
+    }
+
+    public string EnsureTaskBindingTemplate(AutoTaskKind taskKind)
+    {
+        if (!TryGetDedicatedBindingFilePath(taskKind, out var filePath))
+        {
+            throw new InvalidOperationException($"Task kind '{taskKind}' does not use a dedicated binding file.");
+        }
+
+        lock (_syncRoot)
+        {
+            EnsureStorage();
+
+            if (!File.Exists(filePath) || string.IsNullOrWhiteSpace(File.ReadAllText(filePath)))
+            {
+                var template = BuildTaskBindingTemplate(taskKind);
+                var json = JsonSerializer.Serialize(template, JsonOptions);
+                File.WriteAllText(filePath, json);
+            }
+
+            return filePath;
+        }
+    }
+
     public ManagedScriptLibrarySnapshot GetSnapshot()
     {
         lock (_syncRoot)
@@ -851,6 +883,24 @@ public sealed class ManagedScriptLibraryService
         }
 
         SaveTaskBindingDocument(filePath, document);
+    }
+
+    private ManagedScriptTaskBindingDocument BuildTaskBindingTemplate(AutoTaskKind taskKind)
+    {
+        var bindings = _slotCatalogService
+            .GetByTaskKind(taskKind)
+            .OrderBy(slot => slot.GroupName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(slot => slot.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                slot => slot.SlotId,
+                static _ => string.Empty,
+                StringComparer.OrdinalIgnoreCase);
+
+        return new ManagedScriptTaskBindingDocument
+        {
+            Version = 1,
+            Bindings = bindings
+        };
     }
 
     private bool TryGetDedicatedBindingFilePath(AutoTaskKind taskKind, out string filePath)

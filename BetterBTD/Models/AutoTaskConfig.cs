@@ -33,6 +33,9 @@ public partial class AutoTaskConfig : ObservableObject
     private bool _showCollectionVariantConfiguration;
 
     [ObservableProperty]
+    private bool _showScriptConfiguration;
+
+    [ObservableProperty]
     private ObservableCollection<LanguageOption> _mapOptions = [];
 
     [ObservableProperty]

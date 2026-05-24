@@ -25,24 +25,32 @@ public sealed class AutoTasksPageViewModel : ObservableObject
     private readonly LocalizationService _localizationService;
     private readonly AppDialogService _appDialogService;
     private readonly AutoTaskCoordinator _autoTaskCoordinator;
+    private readonly ManagedScriptLibraryService _managedScriptLibraryService;
     private readonly Dictionary<string, TaskRuntimeWindow> _runtimeWindowsByTaskKey = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, TaskRuntimeWindowViewModel> _runtimeViewModelsByTaskKey = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, TextFileEditorWindow> _textEditorWindowsByKey = new(StringComparer.OrdinalIgnoreCase);
 
     private string _runningTaskKey = string.Empty;
 
     public AutoTasksPageViewModel()
-        : this(LocalizationService.Instance, AppDialogService.Instance, AutoTaskCoordinator.Instance)
+        : this(
+            LocalizationService.Instance,
+            AppDialogService.Instance,
+            AutoTaskCoordinator.Instance,
+            ManagedScriptLibraryService.Instance)
     {
     }
 
     internal AutoTasksPageViewModel(
         LocalizationService localizationService,
         AppDialogService appDialogService,
-        AutoTaskCoordinator autoTaskCoordinator)
+        AutoTaskCoordinator autoTaskCoordinator,
+        ManagedScriptLibraryService managedScriptLibraryService)
     {
         _localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
         _appDialogService = appDialogService ?? throw new ArgumentNullException(nameof(appDialogService));
         _autoTaskCoordinator = autoTaskCoordinator ?? throw new ArgumentNullException(nameof(autoTaskCoordinator));
+        _managedScriptLibraryService = managedScriptLibraryService ?? throw new ArgumentNullException(nameof(managedScriptLibraryService));
 
         Tasks =
         [
@@ -50,12 +58,14 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             {
                 Key = AutoTaskKind.Collection.ToKey(),
                 ShowStageTargetConfiguration = false,
-                ShowCollectionVariantConfiguration = true
+                ShowCollectionVariantConfiguration = true,
+                ShowScriptConfiguration = true
             }
         ];
 
         ToggleTaskCommand = new RelayCommand<AutoTaskConfig?>(ToggleTask);
         OpenTutorialCommand = new RelayCommand<AutoTaskConfig?>(OpenTutorial);
+        OpenTaskScriptConfigCommand = new RelayCommand<AutoTaskConfig?>(OpenTaskScriptConfig);
 
         _localizationService.LanguageChanged += (_, _) => RefreshLocalizedContent();
         RefreshLocalizedContent();
@@ -67,6 +77,8 @@ public sealed class AutoTasksPageViewModel : ObservableObject
 
     public IRelayCommand<AutoTaskConfig?> OpenTutorialCommand { get; }
 
+    public IRelayCommand<AutoTaskConfig?> OpenTaskScriptConfigCommand { get; }
+
     public string TutorialLinkText => _localizationService.T("Tasks.Tutorial");
 
     public string OperationIntervalLabel => _localizationService.T("Tasks.OperationInterval");
@@ -76,6 +88,12 @@ public sealed class AutoTasksPageViewModel : ObservableObject
     public string CollectionOptionLabel => _localizationService.T("Tasks.CollectionOptionLabel");
 
     public string CollectionOptionDescription => _localizationService.T("Tasks.CollectionOptionDescription");
+
+    public string ScriptConfigLabel => _localizationService.T("Tasks.ScriptConfigLabel");
+
+    public string ScriptConfigDescription => _localizationService.T("Tasks.ScriptConfigDescription");
+
+    public string ScriptConfigButtonText => _localizationService.T("Tasks.ScriptConfigButton");
 
     private void ToggleTask(AutoTaskConfig? task)
     {
@@ -174,6 +192,9 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         OnPropertyChanged(nameof(OperationIntervalDescription));
         OnPropertyChanged(nameof(CollectionOptionLabel));
         OnPropertyChanged(nameof(CollectionOptionDescription));
+        OnPropertyChanged(nameof(ScriptConfigLabel));
+        OnPropertyChanged(nameof(ScriptConfigDescription));
+        OnPropertyChanged(nameof(ScriptConfigButtonText));
     }
 
     private IReadOnlyList<LanguageOption> BuildCollectionVariantOptions()
@@ -236,6 +257,69 @@ public sealed class AutoTasksPageViewModel : ObservableObject
     private void ShowDialogByKey(string titleKey, string messageKey)
     {
         ShowDialog(titleKey, _localizationService.T(messageKey));
+    }
+
+    private void OpenTaskScriptConfig(AutoTaskConfig? task)
+    {
+        if (task is null)
+        {
+            return;
+        }
+
+        var taskKind = ResolveTaskKind(task.Key);
+        var editorKey = $"{taskKind}:bindings";
+        if (_textEditorWindowsByKey.TryGetValue(editorKey, out var existingWindow))
+        {
+            RunOnUiThread(() =>
+            {
+                if (!existingWindow.IsVisible)
+                {
+                    existingWindow.Show();
+                }
+
+                existingWindow.Activate();
+            });
+            return;
+        }
+
+        try
+        {
+            var filePath = _managedScriptLibraryService.EnsureTaskBindingTemplate(taskKind);
+            var viewModel = new TextFileEditorWindowViewModel(
+                _localizationService,
+                _appDialogService,
+                filePath,
+                () =>
+                {
+                    if (_textEditorWindowsByKey.TryGetValue(editorKey, out var editorWindow))
+                    {
+                        editorWindow.Close();
+                    }
+                });
+            var window = new TextFileEditorWindow(viewModel);
+
+            var owner = Application.Current?.Windows
+                .OfType<Window>()
+                .FirstOrDefault(x => x.IsActive)
+                ?? Application.Current?.MainWindow;
+            if (owner is not null && !ReferenceEquals(owner, window))
+            {
+                window.Owner = owner;
+            }
+
+            window.Closed += OnTextEditorWindowClosed;
+            _textEditorWindowsByKey[editorKey] = window;
+
+            RunOnUiThread(() =>
+            {
+                window.Show();
+                window.Activate();
+            });
+        }
+        catch (Exception ex)
+        {
+            ShowDialog("Tasks.Dialog.ScriptConfigOpenFailed.Title", ex.Message);
+        }
     }
 
     private TaskRuntimeWindow EnsureRuntimeWindow(AutoTaskConfig task)
@@ -342,6 +426,37 @@ public sealed class AutoTasksPageViewModel : ObservableObject
 
         _runtimeWindowsByTaskKey.Remove(entry.Key);
         _runtimeViewModelsByTaskKey.Remove(entry.Key);
+    }
+
+    private void OnTextEditorWindowClosed(object? sender, EventArgs e)
+    {
+        if (sender is not TextFileEditorWindow window)
+        {
+            return;
+        }
+
+        window.Closed -= OnTextEditorWindowClosed;
+
+        var entry = _textEditorWindowsByKey
+            .FirstOrDefault(pair => ReferenceEquals(pair.Value, window));
+        if (string.IsNullOrWhiteSpace(entry.Key))
+        {
+            return;
+        }
+
+        _textEditorWindowsByKey.Remove(entry.Key);
+    }
+
+    private static AutoTaskKind ResolveTaskKind(string taskKey)
+    {
+        return taskKey?.Trim().ToLowerInvariant() switch
+        {
+            "collection" => AutoTaskKind.Collection,
+            "blackborder" => AutoTaskKind.BlackBorder,
+            "race" => AutoTaskKind.Race,
+            "custom" => AutoTaskKind.Custom,
+            _ => throw new InvalidOperationException($"Unsupported auto task key '{taskKey}'.")
+        };
     }
 
     private static LanguageOption? SelectOption(IEnumerable<LanguageOption> options, string? code)

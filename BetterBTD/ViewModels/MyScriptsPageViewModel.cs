@@ -8,6 +8,7 @@ using BetterBTD.Models.ScriptEditor;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using System.Windows;
 using Wpf.Ui.Violeta.Controls;
 
 namespace BetterBTD.ViewModels;
@@ -30,6 +31,7 @@ public sealed class MyScriptsPageViewModel : ObservableObject
     private ManagedScriptListItemViewModel? _selectedScript;
     private string _selectedScriptName = string.Empty;
     private string _selectedScriptDescription = string.Empty;
+    private string _selectedScriptId = string.Empty;
     private string _selectedScriptHero = string.Empty;
     private string _selectedScriptMap = string.Empty;
     private string _selectedScriptDifficulty = string.Empty;
@@ -48,6 +50,7 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         ImportScriptCommand = new AsyncRelayCommand(ImportScriptAsync, CanImportScript);
         ExportSelectedScriptCommand = new RelayCommand(ExportSelectedScript, CanExportSelectedScript);
         RemoveSelectedScriptCommand = new RelayCommand(RemoveSelectedScript, CanRemoveSelectedScript);
+        CopySelectedScriptIdCommand = new RelayCommand(CopySelectedScriptId, CanCopySelectedScriptId);
 
         _localizationService.LanguageChanged += (_, _) => RefreshLocalizedContent();
 
@@ -69,6 +72,8 @@ public sealed class MyScriptsPageViewModel : ObservableObject
     public IRelayCommand ExportSelectedScriptCommand { get; }
 
     public IRelayCommand RemoveSelectedScriptCommand { get; }
+
+    public IRelayCommand CopySelectedScriptIdCommand { get; }
 
     public string ImportText => _localizationService.T("Library.Action.Import");
 
@@ -118,6 +123,8 @@ public sealed class MyScriptsPageViewModel : ObservableObject
 
     public string PropertyDescriptionText => _localizationService.T("Library.Property.Description");
 
+    public string PropertyScriptIdText => _localizationService.T("Library.Property.ScriptId");
+
     public string PropertyHeroText => _localizationService.T("Library.Property.Hero");
 
     public string PropertyMapText => _localizationService.T("Library.Property.Map");
@@ -129,6 +136,8 @@ public sealed class MyScriptsPageViewModel : ObservableObject
     public string PropertyTagsText => _localizationService.T("Library.Property.Tags");
 
     public string PropertyStateText => _localizationService.T("Library.Property.State");
+
+    public string CopyScriptIdText => _localizationService.T("Library.Action.CopyScriptId");
 
     public string ScriptSearchText
     {
@@ -216,6 +225,7 @@ public sealed class MyScriptsPageViewModel : ObservableObject
             OnPropertyChanged(nameof(HasSelectedScript));
             ExportSelectedScriptCommand.NotifyCanExecuteChanged();
             RemoveSelectedScriptCommand.NotifyCanExecuteChanged();
+            CopySelectedScriptIdCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -229,6 +239,12 @@ public sealed class MyScriptsPageViewModel : ObservableObject
     {
         get => _selectedScriptDescription;
         private set => SetProperty(ref _selectedScriptDescription, value);
+    }
+
+    public string SelectedScriptId
+    {
+        get => _selectedScriptId;
+        private set => SetProperty(ref _selectedScriptId, value);
     }
 
     public string SelectedScriptHero
@@ -374,6 +390,11 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         return SelectedScript is not null;
     }
 
+    private bool CanCopySelectedScriptId()
+    {
+        return SelectedScript is not null && !string.IsNullOrWhiteSpace(SelectedScript.ScriptId);
+    }
+
     private void RemoveSelectedScript()
     {
         if (SelectedScript is null)
@@ -402,6 +423,23 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         catch (Exception ex)
         {
             ShowError("Library.Dialog.RemoveError.Title", ex.Message);
+        }
+    }
+
+    private void CopySelectedScriptId()
+    {
+        if (SelectedScript is null || string.IsNullOrWhiteSpace(SelectedScript.ScriptId))
+        {
+            return;
+        }
+
+        try
+        {
+            Clipboard.SetText(SelectedScript.ScriptId);
+        }
+        catch (Exception ex)
+        {
+            ShowError("Library.Dialog.CopyScriptIdError.Title", ex.Message);
         }
     }
 
@@ -547,6 +585,7 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         {
             SelectedScriptName = string.Empty;
             SelectedScriptDescription = string.Empty;
+            SelectedScriptId = string.Empty;
             SelectedScriptHero = string.Empty;
             SelectedScriptMap = string.Empty;
             SelectedScriptDifficulty = string.Empty;
@@ -558,6 +597,7 @@ public sealed class MyScriptsPageViewModel : ObservableObject
 
         SelectedScriptName = FormatDetailValue(SelectedScript.DisplayName);
         SelectedScriptDescription = FormatDetailValue(SelectedScript.Description);
+        SelectedScriptId = FormatDetailValue(SelectedScript.ScriptId);
         SelectedScriptHero = FormatDetailValue(SelectedScript.HeroDisplayName);
         SelectedScriptMap = FormatDetailValue(SelectedScript.MapDisplayName);
         SelectedScriptDifficulty = FormatDetailValue(SelectedScript.DifficultyDisplayName);
@@ -590,12 +630,14 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         OnPropertyChanged(nameof(HasSelectedScript));
         OnPropertyChanged(nameof(PropertyNameText));
         OnPropertyChanged(nameof(PropertyDescriptionText));
+        OnPropertyChanged(nameof(PropertyScriptIdText));
         OnPropertyChanged(nameof(PropertyHeroText));
         OnPropertyChanged(nameof(PropertyMapText));
         OnPropertyChanged(nameof(PropertyDifficultyText));
         OnPropertyChanged(nameof(PropertyModeText));
         OnPropertyChanged(nameof(PropertyTagsText));
         OnPropertyChanged(nameof(PropertyStateText));
+        OnPropertyChanged(nameof(CopyScriptIdText));
     }
 
     private void ShowError(string titleKey, string message)
