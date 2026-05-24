@@ -49,7 +49,7 @@ public sealed class CollectionScriptSubscriptionService
 
         var uniqueScripts = collectionSlots
             .Select(slot => slot.BoundScript!)
-            .GroupBy(script => script.CanonicalScriptId, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(script => script.ScriptId, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
             .OrderBy(script => script.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -65,10 +65,10 @@ public sealed class CollectionScriptSubscriptionService
         foreach (var script in uniqueScripts)
         {
             var safeFileName = SanitizeFileName(script.DisplayName);
-            var entryFileName = $"{safeFileName}-{script.CanonicalScriptId}.btd";
+            var entryFileName = $"{safeFileName}-{script.ScriptId}.btd";
             var archiveEntryName = $"{ScriptsDirectoryName}/{entryFileName}";
             archive.CreateEntryFromFile(script.StoredFilePath, archiveEntryName);
-            fileNamesByCanonicalId[script.CanonicalScriptId] = entryFileName;
+            fileNamesByCanonicalId[script.ScriptId] = entryFileName;
         }
 
         var manifest = new CollectionScriptSubscriptionDocument
@@ -76,14 +76,14 @@ public sealed class CollectionScriptSubscriptionService
             Scripts = uniqueScripts
                 .Select(script => new CollectionScriptSubscriptionScriptDocument
                 {
-                    CanonicalScriptId = script.CanonicalScriptId,
+                    CanonicalScriptId = script.ScriptId,
                     DisplayName = script.DisplayName,
-                    FileName = fileNamesByCanonicalId[script.CanonicalScriptId]
+                    FileName = fileNamesByCanonicalId[script.ScriptId]
                 })
                 .ToList(),
             Bindings = collectionSlots.ToDictionary(
                 slot => slot.Definition.SlotId,
-                slot => slot.BoundScript!.CanonicalScriptId,
+                slot => slot.BoundScript!.ScriptId,
                 StringComparer.OrdinalIgnoreCase)
         };
 
@@ -127,7 +127,7 @@ public sealed class CollectionScriptSubscriptionService
                 archiveEntry.ExtractToFile(extractedFilePath, overwrite: true);
 
                 var imported = _managedScriptLibraryService.ImportScript(extractedFilePath);
-                if (!string.Equals(imported.CanonicalScriptId, script.CanonicalScriptId, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(imported.ScriptId, script.CanonicalScriptId, StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidDataException($"Script '{script.FileName}' canonical ID does not match manifest.");
                 }

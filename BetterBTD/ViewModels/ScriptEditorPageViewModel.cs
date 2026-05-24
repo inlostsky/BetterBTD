@@ -489,6 +489,11 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         SetManagedScriptAssociation(managedScriptEntry);
     }
 
+    public void AssignNewCanonicalScriptId()
+    {
+        _canonicalScriptId = Guid.NewGuid().ToString("N");
+    }
+
     public void LoadScriptDocument(string filePath)
     {
         var loadResult = _scriptDocumentService.LoadCompatible(filePath);
@@ -794,6 +799,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
 
         try
         {
+            AssignNewCanonicalScriptId();
             SaveScriptDocument(dialog.FileName);
             return true;
         }

@@ -118,8 +118,8 @@ public sealed class ManagedScriptLibraryService
             MigrateDedicatedBindings(document);
             var currentBindings = LoadCurrentBindings(document);
             var targetFingerprint = BuildDocumentFingerprint(loadResult.Document);
-            var canonicalScriptId = loadResult.Document.Metadata.CanonicalScriptId;
-            var existingRecord = FindRecordByCanonicalId(document, canonicalScriptId);
+            var scriptId = loadResult.Document.Metadata.CanonicalScriptId;
+            var existingRecord = FindRecordById(document, scriptId);
             if (existingRecord is not null)
             {
                 var storedFilePath = GetStoredFilePath(existingRecord);
@@ -132,9 +132,9 @@ public sealed class ManagedScriptLibraryService
             var recordsByFingerprint = BuildFingerprintIndex(document);
             if (recordsByFingerprint.TryGetValue(targetFingerprint, out existingRecord))
             {
-                if (!string.Equals(existingRecord.CanonicalScriptId, canonicalScriptId, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(existingRecord.ScriptId, scriptId, StringComparison.OrdinalIgnoreCase))
                 {
-                    existingRecord.CanonicalScriptId = canonicalScriptId;
+                    RenameRecordScriptId(document, existingRecord, scriptId);
                 }
 
                 var storedFilePath = GetStoredFilePath(existingRecord);
@@ -206,10 +206,10 @@ public sealed class ManagedScriptLibraryService
                         packageDisplayName,
                         index);
                     var targetFingerprint = BuildDocumentFingerprint(conversionResult.Document);
-                    var canonicalScriptId = conversionResult.Document.Metadata.CanonicalScriptId;
+                    var scriptId = conversionResult.Document.Metadata.CanonicalScriptId;
                     processedCount++;
                     progress?.Report(processedCount);
-                    var existingRecord = FindRecordByCanonicalId(document, canonicalScriptId);
+                    var existingRecord = FindRecordById(document, scriptId);
                     if (existingRecord is not null)
                     {
                         var storedFilePath = GetStoredFilePath(existingRecord);
@@ -276,20 +276,18 @@ public sealed class ManagedScriptLibraryService
             MigrateDedicatedBindings(document);
             var currentBindings = LoadCurrentBindings(document);
             var record = FindRecordById(document, scriptId)
-                         ?? FindRecordByCanonicalId(document, canonicalScriptId)
                          ?? FindRecordByStoredFilePath(document, sourceFilePath);
             var now = DateTimeOffset.UtcNow;
 
             if (record is null)
             {
-                var newScriptId = Guid.NewGuid().ToString("N");
-                var storedFileName = $"{newScriptId}.btd";
+                var storedFileName = $"{canonicalScriptId}.btd";
                 var storedFilePath = Path.Combine(_assetsDirectory, storedFileName);
                 _scriptDocumentService.Save(storedFilePath, scriptDocument);
 
                 record = new ManagedScriptAssetRecord
                 {
-                    ScriptId = newScriptId,
+                    ScriptId = canonicalScriptId,
                     CanonicalScriptId = canonicalScriptId,
                     DisplayName = ResolveDisplayName(displayName, sourceFilePath),
                     SourceFileName = Path.GetFileName(sourceFilePath),
@@ -309,6 +307,11 @@ public sealed class ManagedScriptLibraryService
             }
             else
             {
+                if (!string.Equals(record.ScriptId, canonicalScriptId, StringComparison.OrdinalIgnoreCase))
+                {
+                    RenameRecordScriptId(document, record, canonicalScriptId);
+                }
+
                 var storedFilePath = GetStoredFilePath(record);
                 var isManagedSourcePath = AreSameFilePath(sourceFilePath, storedFilePath);
                 record.CanonicalScriptId = canonicalScriptId;
@@ -564,6 +567,8 @@ public sealed class ManagedScriptLibraryService
             NormalizeRecord(script);
         }
 
+        MigrateLegacyScriptIds(document);
+
         foreach (var binding in document.Bindings)
         {
             binding.SlotId = binding.SlotId?.Trim() ?? string.Empty;
@@ -704,7 +709,6 @@ public sealed class ManagedScriptLibraryService
         return new ManagedScriptAssetEntry
         {
             ScriptId = record.ScriptId,
-            CanonicalScriptId = record.CanonicalScriptId,
             DisplayName = record.DisplayName,
             SourceFileName = record.SourceFileName,
             StoredFilePath = storedFilePath,
@@ -735,7 +739,7 @@ public sealed class ManagedScriptLibraryService
     {
         ArgumentNullException.ThrowIfNull(scriptDocument);
 
-        var scriptId = Guid.NewGuid().ToString("N");
+        var scriptId = scriptDocument.Metadata.CanonicalScriptId;
         var storedFileName = $"{scriptId}.btd";
         var storedFilePath = Path.Combine(_assetsDirectory, storedFileName);
         _scriptDocumentService.Save(storedFilePath, scriptDocument);
@@ -744,7 +748,7 @@ public sealed class ManagedScriptLibraryService
         return new ManagedScriptAssetRecord
         {
             ScriptId = scriptId,
-            CanonicalScriptId = scriptDocument.Metadata.CanonicalScriptId,
+            CanonicalScriptId = scriptId,
             DisplayName = displayName.Trim(),
             SourceFileName = sourceFileName.Trim(),
             StoredFileName = storedFileName,
@@ -775,16 +779,6 @@ public sealed class ManagedScriptLibraryService
     private ManagedScriptAssetRecord? FindRecordByStoredFilePath(ManagedScriptLibraryDocument document, string sourceFilePath)
     {
         return document.Scripts.FirstOrDefault(record => AreSameFilePath(GetStoredFilePath(record), sourceFilePath));
-    }
-
-    private ManagedScriptAssetRecord? FindRecordByCanonicalId(ManagedScriptLibraryDocument document, string? canonicalScriptId)
-    {
-        if (string.IsNullOrWhiteSpace(canonicalScriptId))
-        {
-            return null;
-        }
-
-        return document.Scripts.FirstOrDefault(x => string.Equals(x.CanonicalScriptId, canonicalScriptId.Trim(), StringComparison.OrdinalIgnoreCase));
     }
 
     private Dictionary<string, ManagedScriptAssetRecord> BuildFingerprintIndex(ManagedScriptLibraryDocument document)
@@ -838,7 +832,8 @@ public sealed class ManagedScriptLibraryService
         ArgumentNullException.ThrowIfNull(scriptDocument);
 
         var now = DateTimeOffset.UtcNow;
-        record.CanonicalScriptId = scriptDocument.Metadata.CanonicalScriptId;
+        record.ScriptId = scriptDocument.Metadata.CanonicalScriptId;
+        record.CanonicalScriptId = record.ScriptId;
         record.DisplayName = string.IsNullOrWhiteSpace(displayName)
             ? (string.IsNullOrWhiteSpace(record.DisplayName) ? ResolveDisplayName(displayName, sourceFilePath) : record.DisplayName)
             : displayName.Trim();
@@ -862,6 +857,109 @@ public sealed class ManagedScriptLibraryService
         Directory.CreateDirectory(_rootDirectory);
         Directory.CreateDirectory(_assetsDirectory);
         Directory.CreateDirectory(_bindingsDirectory);
+    }
+
+    private void MigrateLegacyScriptIds(ManagedScriptLibraryDocument document)
+    {
+        var bindingsByOldScriptId = document.Bindings
+            .Where(binding => !string.IsNullOrWhiteSpace(binding.ScriptId))
+            .GroupBy(binding => binding.ScriptId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var record in document.Scripts)
+        {
+            var targetScriptId = record.CanonicalScriptId;
+            if (string.Equals(record.ScriptId, targetScriptId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var previousScriptId = record.ScriptId;
+            record.ScriptId = targetScriptId;
+            record.StoredFileName = $"{targetScriptId}.btd";
+
+            if (bindingsByOldScriptId.TryGetValue(previousScriptId, out var bindings))
+            {
+                foreach (var binding in bindings)
+                {
+                    binding.ScriptId = targetScriptId;
+                }
+            }
+
+            var oldFilePath = Path.Combine(_assetsDirectory, $"{previousScriptId}.btd");
+            var newFilePath = Path.Combine(_assetsDirectory, record.StoredFileName);
+            if (File.Exists(oldFilePath) && !string.Equals(oldFilePath, newFilePath, StringComparison.OrdinalIgnoreCase))
+            {
+                if (File.Exists(newFilePath))
+                {
+                    File.Delete(newFilePath);
+                }
+
+                File.Move(oldFilePath, newFilePath);
+            }
+        }
+    }
+
+    private void RenameRecordScriptId(
+        ManagedScriptLibraryDocument document,
+        ManagedScriptAssetRecord record,
+        string newScriptId)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newScriptId);
+
+        var trimmedScriptId = newScriptId.Trim();
+        if (string.Equals(record.ScriptId, trimmedScriptId, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var oldScriptId = record.ScriptId;
+        var oldFilePath = GetStoredFilePath(record);
+        record.ScriptId = trimmedScriptId;
+        record.CanonicalScriptId = trimmedScriptId;
+        record.StoredFileName = $"{trimmedScriptId}.btd";
+        var newFilePath = GetStoredFilePath(record);
+
+        foreach (var binding in document.Bindings.Where(binding => string.Equals(binding.ScriptId, oldScriptId, StringComparison.OrdinalIgnoreCase)))
+        {
+            binding.ScriptId = trimmedScriptId;
+        }
+
+        RewriteDedicatedBindingFile(_blackBorderBindingsFilePath, oldScriptId, trimmedScriptId);
+        RewriteDedicatedBindingFile(_collectionBindingsFilePath, oldScriptId, trimmedScriptId);
+
+        if (File.Exists(oldFilePath) && !string.Equals(oldFilePath, newFilePath, StringComparison.OrdinalIgnoreCase))
+        {
+            if (File.Exists(newFilePath))
+            {
+                File.Delete(newFilePath);
+            }
+
+            File.Move(oldFilePath, newFilePath);
+        }
+    }
+
+    private void RewriteDedicatedBindingFile(string filePath, string oldScriptId, string newScriptId)
+    {
+        var document = LoadTaskBindingDocument(filePath);
+        var changed = false;
+        foreach (var key in document.Bindings.Keys.ToList())
+        {
+            if (!string.Equals(document.Bindings[key], oldScriptId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            document.Bindings[key] = newScriptId;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            SaveTaskBindingDocument(filePath, document);
+        }
     }
 
     private IReadOnlyList<ManagedScriptSlotBindingRecord> LoadCurrentBindings(ManagedScriptLibraryDocument document)
@@ -1001,10 +1099,10 @@ public sealed class ManagedScriptLibraryService
     private static void NormalizeRecord(ManagedScriptAssetRecord record)
     {
         record.ScriptId = string.IsNullOrWhiteSpace(record.ScriptId)
-            ? Guid.NewGuid().ToString("N")
+            ? (string.IsNullOrWhiteSpace(record.CanonicalScriptId) ? Guid.NewGuid().ToString("N") : record.CanonicalScriptId.Trim())
             : record.ScriptId.Trim();
         record.CanonicalScriptId = string.IsNullOrWhiteSpace(record.CanonicalScriptId)
-            ? Guid.NewGuid().ToString("N")
+            ? record.ScriptId
             : record.CanonicalScriptId.Trim();
         record.DisplayName = record.DisplayName?.Trim() ?? string.Empty;
         record.SourceFileName = record.SourceFileName?.Trim() ?? string.Empty;

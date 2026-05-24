@@ -300,7 +300,7 @@ public sealed class ManagedScriptLibraryServiceTests
             service.ExportScript(imported.ScriptId, exportFilePath);
 
             var exported = ScriptDocumentService.Instance.Load(exportFilePath);
-            Assert.Equal(imported.CanonicalScriptId, exported.Metadata.CanonicalScriptId);
+            Assert.Equal(imported.ScriptId, exported.Metadata.CanonicalScriptId);
         }
         finally
         {
@@ -347,7 +347,7 @@ public sealed class ManagedScriptLibraryServiceTests
             var script = Assert.Single(snapshot.Scripts);
 
             Assert.Equal(firstImported.ScriptId, secondImported.ScriptId);
-            Assert.Equal(document.Metadata.CanonicalScriptId, script.CanonicalScriptId);
+            Assert.Equal(document.Metadata.CanonicalScriptId, script.ScriptId);
             Assert.Equal(GameMapType.DarkCastle, script.Map);
             Assert.Equal(StageDifficulty.Hard, script.Difficulty);
             Assert.Equal(StageMode.CHIMPS, script.Mode);
