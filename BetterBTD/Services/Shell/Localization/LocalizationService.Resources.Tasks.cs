@@ -122,7 +122,7 @@ public sealed partial class LocalizationService
         ["Tasks.ScriptConfigDescription"] = "Open the slot binding configuration file for this auto task and fill in script IDs by slot.",
         ["Tasks.ScriptConfigButton"] = "Configure",
         ["Tasks.CollectionSubscriptionLabel"] = "Subscription Package",
-        ["Tasks.CollectionSubscriptionDescription"] = "Export or import a collection subscription package. The package includes script files and slot bindings keyed by canonical script IDs.",
+        ["Tasks.CollectionSubscriptionDescription"] = "Export or import a collection subscription package. The package includes script files and slot bindings keyed by script IDs.",
         ["Tasks.CollectionSubscription.Export"] = "Export Package",
         ["Tasks.CollectionSubscription.Import"] = "Import Package",
         ["Tasks.CollectionSubscription.ExportFilter"] = "BetterBTD Collection Subscription (*.btdsub)|*.btdsub|ZIP Archive (*.zip)|*.zip|All Files (*.*)|*.*",

@@ -13,7 +13,7 @@ public sealed class CollectionScriptSubscriptionDocument
 
 public sealed class CollectionScriptSubscriptionScriptDocument
 {
-    public string CanonicalScriptId { get; set; } = string.Empty;
+    public string ScriptId { get; set; } = string.Empty;
 
     public string DisplayName { get; set; } = string.Empty;
 

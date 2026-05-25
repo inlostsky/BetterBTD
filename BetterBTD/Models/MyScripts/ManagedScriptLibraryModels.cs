@@ -23,9 +23,6 @@ public sealed class ManagedScriptAssetRecord
 {
     public string ScriptId { get; set; } = Guid.NewGuid().ToString("N");
 
-    // Legacy migration field for the former dual-ID model.
-    public string CanonicalScriptId { get; set; } = Guid.NewGuid().ToString("N");
-
     public string DisplayName { get; set; } = string.Empty;
 
     public string SourceFileName { get; set; } = string.Empty;

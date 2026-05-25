@@ -53,7 +53,7 @@ public sealed class CollectionScriptSubscriptionService
             .Select(group => group.First())
             .OrderBy(script => script.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var fileNamesByCanonicalId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var fileNamesByScriptId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var directory = Path.GetDirectoryName(targetFilePath);
         if (!string.IsNullOrWhiteSpace(directory))
@@ -68,7 +68,7 @@ public sealed class CollectionScriptSubscriptionService
             var entryFileName = $"{safeFileName}-{script.ScriptId}.btd";
             var archiveEntryName = $"{ScriptsDirectoryName}/{entryFileName}";
             archive.CreateEntryFromFile(script.StoredFilePath, archiveEntryName);
-            fileNamesByCanonicalId[script.ScriptId] = entryFileName;
+            fileNamesByScriptId[script.ScriptId] = entryFileName;
         }
 
         var manifest = new CollectionScriptSubscriptionDocument
@@ -76,9 +76,9 @@ public sealed class CollectionScriptSubscriptionService
             Scripts = uniqueScripts
                 .Select(script => new CollectionScriptSubscriptionScriptDocument
                 {
-                    CanonicalScriptId = script.ScriptId,
+                    ScriptId = script.ScriptId,
                     DisplayName = script.DisplayName,
-                    FileName = fileNamesByCanonicalId[script.ScriptId]
+                    FileName = fileNamesByScriptId[script.ScriptId]
                 })
                 .ToList(),
             Bindings = collectionSlots.ToDictionary(
@@ -113,7 +113,7 @@ public sealed class CollectionScriptSubscriptionService
 
         ValidateManifest(manifest);
 
-        var importedScriptIdsByCanonicalId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var importedScriptIdsByScriptId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var tempRoot = Path.Combine(Path.GetTempPath(), $"betterbtd-collection-subscription-{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempRoot);
 
@@ -127,12 +127,12 @@ public sealed class CollectionScriptSubscriptionService
                 archiveEntry.ExtractToFile(extractedFilePath, overwrite: true);
 
                 var imported = _managedScriptLibraryService.ImportScript(extractedFilePath);
-                if (!string.Equals(imported.ScriptId, script.CanonicalScriptId, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(imported.ScriptId, script.ScriptId, StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new InvalidDataException($"Script '{script.FileName}' canonical ID does not match manifest.");
+                    throw new InvalidDataException($"Script '{script.FileName}' script ID does not match manifest.");
                 }
 
-                importedScriptIdsByCanonicalId[script.CanonicalScriptId] = imported.ScriptId;
+                importedScriptIdsByScriptId[script.ScriptId] = imported.ScriptId;
             }
 
             foreach (var binding in manifest.Bindings)
@@ -142,9 +142,9 @@ public sealed class CollectionScriptSubscriptionService
                     continue;
                 }
 
-                if (!importedScriptIdsByCanonicalId.TryGetValue(binding.Value, out var localScriptId))
+                if (!importedScriptIdsByScriptId.TryGetValue(binding.Value, out var localScriptId))
                 {
-                    throw new InvalidDataException($"Binding target canonical script ID '{binding.Value}' was not imported.");
+                    throw new InvalidDataException($"Binding target script ID '{binding.Value}' was not imported.");
                 }
 
                 _managedScriptLibraryService.SetBinding(binding.Key, localScriptId);
@@ -173,7 +173,7 @@ public sealed class CollectionScriptSubscriptionService
 
         foreach (var script in manifest.Scripts)
         {
-            if (string.IsNullOrWhiteSpace(script.CanonicalScriptId) || string.IsNullOrWhiteSpace(script.FileName))
+            if (string.IsNullOrWhiteSpace(script.ScriptId) || string.IsNullOrWhiteSpace(script.FileName))
             {
                 throw new InvalidDataException("Collection subscription contains an invalid script entry.");
             }

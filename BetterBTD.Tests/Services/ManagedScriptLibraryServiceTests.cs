@@ -275,11 +275,11 @@ public sealed class ManagedScriptLibraryServiceTests
     }
 
     [Fact]
-    public void ExportScript_PreservesCanonicalScriptId()
+    public void ExportScript_PreservesScriptId()
     {
         var rootDirectory = Path.Combine(Path.GetTempPath(), $"betterbtd-library-{Guid.NewGuid():N}");
-        var sourceFilePath = Path.Combine(rootDirectory, "source", "canonical-script.btd");
-        var exportFilePath = Path.Combine(rootDirectory, "export", "canonical-script-copy.btd");
+        var sourceFilePath = Path.Combine(rootDirectory, "source", "script-id-script.btd");
+        var exportFilePath = Path.Combine(rootDirectory, "export", "script-id-script-copy.btd");
 
         try
         {
@@ -300,7 +300,7 @@ public sealed class ManagedScriptLibraryServiceTests
             service.ExportScript(imported.ScriptId, exportFilePath);
 
             var exported = ScriptDocumentService.Instance.Load(exportFilePath);
-            Assert.Equal(imported.ScriptId, exported.Metadata.CanonicalScriptId);
+            Assert.Equal(imported.ScriptId, exported.Metadata.ScriptId);
         }
         finally
         {
@@ -312,11 +312,11 @@ public sealed class ManagedScriptLibraryServiceTests
     }
 
     [Fact]
-    public void ImportScript_ReusesManagedRecordWhenCanonicalScriptIdMatches()
+    public void ImportScript_ReusesManagedRecordWhenScriptIdMatches()
     {
         var rootDirectory = Path.Combine(Path.GetTempPath(), $"betterbtd-library-{Guid.NewGuid():N}");
-        var firstFilePath = Path.Combine(rootDirectory, "source", "canonical-first.btd");
-        var secondFilePath = Path.Combine(rootDirectory, "source", "canonical-second.btd");
+        var firstFilePath = Path.Combine(rootDirectory, "source", "script-id-first.btd");
+        var secondFilePath = Path.Combine(rootDirectory, "source", "script-id-second.btd");
 
         try
         {
@@ -333,7 +333,7 @@ public sealed class ManagedScriptLibraryServiceTests
                 StageDifficulty.Hard,
                 StageMode.CHIMPS,
                 ["collection", "updated"]);
-            mutated.Metadata.CanonicalScriptId = document.Metadata.CanonicalScriptId;
+            mutated.Metadata.ScriptId = document.Metadata.ScriptId;
             ScriptDocumentService.Instance.Save(secondFilePath, mutated);
 
             var service = new ManagedScriptLibraryService(
@@ -347,7 +347,7 @@ public sealed class ManagedScriptLibraryServiceTests
             var script = Assert.Single(snapshot.Scripts);
 
             Assert.Equal(firstImported.ScriptId, secondImported.ScriptId);
-            Assert.Equal(document.Metadata.CanonicalScriptId, script.ScriptId);
+            Assert.Equal(document.Metadata.ScriptId, script.ScriptId);
             Assert.Equal(GameMapType.DarkCastle, script.Map);
             Assert.Equal(StageDifficulty.Hard, script.Difficulty);
             Assert.Equal(StageMode.CHIMPS, script.Mode);
@@ -362,7 +362,7 @@ public sealed class ManagedScriptLibraryServiceTests
     }
 
     [Fact]
-    public void CollectionSubscription_ExportImport_RestoresBindingsByCanonicalScriptId()
+    public void CollectionSubscription_ExportImport_RestoresBindingsByScriptId()
     {
         var rootDirectory = Path.Combine(Path.GetTempPath(), $"betterbtd-library-{Guid.NewGuid():N}");
         var sourceDirectory = Path.Combine(rootDirectory, "source");
@@ -408,7 +408,7 @@ public sealed class ManagedScriptLibraryServiceTests
             Assert.True(File.Exists(resolvedFilePath));
 
             var importedDocument = ScriptDocumentService.Instance.Load(resolvedFilePath);
-            Assert.Equal(sourceDocument.Metadata.CanonicalScriptId, importedDocument.Metadata.CanonicalScriptId);
+            Assert.Equal(sourceDocument.Metadata.ScriptId, importedDocument.Metadata.ScriptId);
         }
         finally
         {

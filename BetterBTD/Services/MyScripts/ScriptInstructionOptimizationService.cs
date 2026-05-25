@@ -118,7 +118,7 @@ public sealed class ScriptInstructionOptimizationService
     {
         return new ScriptMetadataDocument
         {
-            CanonicalScriptId = metadata.CanonicalScriptId,
+            ScriptId = metadata.ScriptId,
             ScriptVersion = metadata.ScriptVersion,
             Description = metadata.Description,
             Map = metadata.Map,

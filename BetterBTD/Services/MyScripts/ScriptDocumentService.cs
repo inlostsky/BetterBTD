@@ -180,7 +180,7 @@ public sealed class ScriptDocumentService
         document.Instructions ??= [];
 
         document.Metadata.ScriptVersion = NormalizeScriptVersion(document.Metadata.ScriptVersion);
-        document.Metadata.CanonicalScriptId = NormalizeCanonicalScriptId(document.Metadata.CanonicalScriptId);
+        document.Metadata.ScriptId = NormalizeScriptId(document.Metadata.ScriptId);
         document.Metadata.Description = document.Metadata.Description?.Trim() ?? string.Empty;
         document.Metadata.Map = NormalizeOrDefault(document.Metadata.Map, GameMapType.MonkeyMeadow.ToString());
         document.Metadata.Difficulty = NormalizeOrDefault(document.Metadata.Difficulty, StageDifficulty.Medium.ToString());
@@ -251,7 +251,7 @@ public sealed class ScriptDocumentService
         return string.IsNullOrWhiteSpace(value) ? ScriptDocumentFormat.DefaultScriptVersion : value.Trim();
     }
 
-    private static string NormalizeCanonicalScriptId(string? value)
+    private static string NormalizeScriptId(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? Guid.NewGuid().ToString("N") : value.Trim();
     }
