@@ -33,10 +33,16 @@ public partial class AutoTaskConfig : ObservableObject
     private bool _showCollectionVariantConfiguration;
 
     [ObservableProperty]
+    private bool _showBlackBorderVariantConfiguration;
+
+    [ObservableProperty]
     private bool _showScriptConfiguration;
 
     [ObservableProperty]
     private bool _showCollectionSubscriptionActions;
+
+    [ObservableProperty]
+    private bool _showBlackBorderSubscriptionActions;
 
     [ObservableProperty]
     private ObservableCollection<LanguageOption> _mapOptions = [];
@@ -61,4 +67,19 @@ public partial class AutoTaskConfig : ObservableObject
 
     [ObservableProperty]
     private LanguageOption? _selectedVariantOption;
+
+    [ObservableProperty]
+    private ObservableCollection<LanguageOption> _subscriptionExportTypeOptions = [];
+
+    [ObservableProperty]
+    private LanguageOption? _selectedSubscriptionExportTypeOption;
+
+    [ObservableProperty]
+    private ObservableCollection<LanguageOption> _subscriptionMapOptions = [];
+
+    [ObservableProperty]
+    private LanguageOption? _selectedSubscriptionMapOption;
+
+    [ObservableProperty]
+    private bool _showSubscriptionMapSelection;
 }

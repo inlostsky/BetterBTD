@@ -17,6 +17,9 @@ public sealed class ManagedScriptTaskBindingDocument
     public int Version { get; set; } = 1;
 
     public Dictionary<string, string> Bindings { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public Dictionary<string, Dictionary<string, Dictionary<string, string>>> StageBindings { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
 }
 
 public sealed class ManagedScriptAssetRecord
@@ -137,6 +140,93 @@ public sealed class ManagedScriptCollectionModeDefinition
     public required string DisplayName { get; init; }
 
     public required IReadOnlyList<string> Aliases { get; init; }
+}
+
+public enum BlackBorderMapCategory
+{
+    Beginner,
+    Intermediate,
+    Advanced,
+    Expert
+}
+
+public enum BlackBorderSubscriptionExportType
+{
+    BeginnerMaps,
+    IntermediateMaps,
+    AdvancedMaps,
+    ExpertMaps,
+    SingleMap
+}
+
+public static class BlackBorderMapCategoryExtensions
+{
+    public static MapDifficultyTier ToMapDifficultyTier(this BlackBorderMapCategory category)
+    {
+        return category switch
+        {
+            BlackBorderMapCategory.Beginner => MapDifficultyTier.Beginner,
+            BlackBorderMapCategory.Intermediate => MapDifficultyTier.Intermediate,
+            BlackBorderMapCategory.Advanced => MapDifficultyTier.Advanced,
+            BlackBorderMapCategory.Expert => MapDifficultyTier.Expert,
+            _ => throw new InvalidOperationException($"Unsupported black border map category '{category}'.")
+        };
+    }
+}
+
+public static class BlackBorderTaskCatalog
+{
+    public static IReadOnlyList<BlackBorderMapCategory> Categories { get; } =
+    [
+        BlackBorderMapCategory.Beginner,
+        BlackBorderMapCategory.Intermediate,
+        BlackBorderMapCategory.Advanced,
+        BlackBorderMapCategory.Expert
+    ];
+
+    public static IReadOnlyList<StageDifficulty> Difficulties { get; } =
+    [
+        StageDifficulty.Easy,
+        StageDifficulty.Medium,
+        StageDifficulty.Hard
+    ];
+
+    public static IReadOnlyList<StageMode> GetModesForDifficulty(StageDifficulty difficulty)
+    {
+        return difficulty switch
+        {
+            StageDifficulty.Easy =>
+            [
+                StageMode.Standard,
+                StageMode.Deflation,
+                StageMode.PrimaryOnly
+            ],
+            StageDifficulty.Medium =>
+            [
+                StageMode.Standard,
+                StageMode.MilitaryOnly,
+                StageMode.Apopalypse,
+                StageMode.Reverse
+            ],
+            StageDifficulty.Hard =>
+            [
+                StageMode.Standard,
+                StageMode.MagicOnly,
+                StageMode.DoubleHpMoabs,
+                StageMode.HalfCash,
+                StageMode.AlternateBloonsRounds,
+                StageMode.Impoppable,
+                StageMode.CHIMPS
+            ],
+            _ => [StageMode.Standard]
+        };
+    }
+
+    public static IEnumerable<MapDefinition> GetMapsByCategory(BlackBorderMapCategory category)
+    {
+        var tier = category.ToMapDifficultyTier();
+        return GameElementCatalog.Maps.Where(map => map.Tier == tier);
+    }
 }
 
 public static class ManagedScriptCollectionModeCatalog

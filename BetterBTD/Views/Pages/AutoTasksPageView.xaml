@@ -27,24 +27,24 @@
                                     <Run Text="{Binding Description}" />
                                     <Run Text=" - " />
                                     <Hyperlink Command="{Binding DataContext.OpenTutorialCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                CommandParameter="{Binding}"
-                                                Foreground="{ui:ThemeResource TextFillColorSecondaryBrush}">
+                                               CommandParameter="{Binding}"
+                                               Foreground="{ui:ThemeResource TextFillColorSecondaryBrush}">
                                         <Run Text="{Binding DataContext.TutorialLinkText, RelativeSource={RelativeSource AncestorType=Page}, Mode=OneWay}" />
                                     </Hyperlink>
                                 </ui:TextBlock>
 
                                 <controls:TwoStateButton Grid.Row="0"
-                                                            Grid.RowSpan="2"
-                                                            Grid.Column="1"
-                                                            Margin="0,0,24,0"
-                                                            IsChecked="{Binding IsRunning, Mode=OneWay}"
-                                                            EnableCommand="{Binding DataContext.ToggleTaskCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                            DisableCommand="{Binding DataContext.ToggleTaskCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                            EnableContent="{Binding RunningButtonText}"
-                                                            DisableContent="{Binding RunningButtonText}"
-                                                            EnableIcon="{ui:SymbolIcon Play24}"
-                                                            DisableIcon="{ui:SymbolIcon Dismiss24}"
-                                                            CommandParameter="{Binding}" />
+                                                         Grid.RowSpan="2"
+                                                         Grid.Column="1"
+                                                         Margin="0,0,24,0"
+                                                         IsChecked="{Binding IsRunning, Mode=OneWay}"
+                                                         EnableCommand="{Binding DataContext.ToggleTaskCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                         DisableCommand="{Binding DataContext.ToggleTaskCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                         EnableContent="{Binding RunningButtonText}"
+                                                         DisableContent="{Binding RunningButtonText}"
+                                                         EnableIcon="{ui:SymbolIcon Play24}"
+                                                         DisableIcon="{ui:SymbolIcon Dismiss24}"
+                                                         CommandParameter="{Binding}" />
                             </Grid>
                         </ui:CardExpander.Header>
 
@@ -63,18 +63,21 @@
                                 <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding DataContext.OperationIntervalLabel, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
                                 <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding DataContext.OperationIntervalDescription, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
                                 <ui:NumberBox Grid.Row="0"
-                                                Grid.RowSpan="2"
-                                                Grid.Column="1"
-                                                Margin="0,0,36,0"
-                                                Width="120"
-                                                Minimum="20"
-                                                Maximum="5000"
-                                                SmallChange="10"
-                                                Value="{Binding OperationIntervalMs, Mode=TwoWay}" />
+                                              Grid.RowSpan="2"
+                                              Grid.Column="1"
+                                              Margin="0,0,36,0"
+                                              Width="120"
+                                              Minimum="20"
+                                              Maximum="5000"
+                                              SmallChange="10"
+                                              Value="{Binding OperationIntervalMs, Mode=TwoWay}" />
                             </Grid>
 
-                            <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
-                            <Grid Margin="16">
+                            <Separator Margin="-18,0"
+                                       BorderThickness="0,1,0,0"
+                                       Visibility="{Binding ShowCollectionVariantConfiguration, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <Grid Margin="16"
+                                  Visibility="{Binding ShowCollectionVariantConfiguration, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
@@ -87,13 +90,117 @@
                                 <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding DataContext.CollectionOptionLabel, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
                                 <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding DataContext.CollectionOptionDescription, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
                                 <ComboBox Grid.Row="0"
-                                            Grid.RowSpan="2"
-                                            Grid.Column="1"
-                                            Width="240"
-                                            Margin="0,0,36,0"
-                                            DisplayMemberPath="DisplayName"
-                                            ItemsSource="{Binding VariantOptions}"
-                                            SelectedItem="{Binding SelectedVariantOption, Mode=TwoWay}" />
+                                          Grid.RowSpan="2"
+                                          Grid.Column="1"
+                                          Width="240"
+                                          Margin="0,0,36,0"
+                                          DisplayMemberPath="DisplayName"
+                                          ItemsSource="{Binding VariantOptions}"
+                                          SelectedItem="{Binding SelectedVariantOption, Mode=TwoWay}" />
+                            </Grid>
+
+                            <Separator Margin="-18,0"
+                                       BorderThickness="0,1,0,0"
+                                       Visibility="{Binding ShowBlackBorderVariantConfiguration, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <Grid Margin="16"
+                                  Visibility="{Binding ShowBlackBorderVariantConfiguration, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding DataContext.BlackBorderCategoryLabel, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
+                                <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding DataContext.BlackBorderCategoryDescription, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
+                                <ComboBox Grid.Row="0"
+                                          Grid.RowSpan="2"
+                                          Grid.Column="1"
+                                          Width="240"
+                                          Margin="0,0,36,0"
+                                          DisplayMemberPath="DisplayName"
+                                          ItemsSource="{Binding VariantOptions}"
+                                          SelectedItem="{Binding SelectedVariantOption, Mode=TwoWay}" />
+                            </Grid>
+
+                            <Separator Margin="-18,0"
+                                       BorderThickness="0,1,0,0"
+                                       Visibility="{Binding ShowStageTargetConfiguration, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <Grid Margin="16"
+                                  Visibility="{Binding ShowStageTargetConfiguration, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding DataContext.MapLabel, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
+                                <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding DataContext.MapDescription, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
+                                <ComboBox Grid.Row="0"
+                                          Grid.RowSpan="2"
+                                          Grid.Column="1"
+                                          Width="240"
+                                          Margin="0,0,36,0"
+                                          DisplayMemberPath="DisplayName"
+                                          ItemsSource="{Binding MapOptions}"
+                                          SelectedItem="{Binding SelectedMapOption, Mode=TwoWay}" />
+                            </Grid>
+
+                            <Separator Margin="-18,0"
+                                       BorderThickness="0,1,0,0"
+                                       Visibility="{Binding ShowStageTargetConfiguration, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <Grid Margin="16"
+                                  Visibility="{Binding ShowStageTargetConfiguration, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding DataContext.DifficultyLabel, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
+                                <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding DataContext.DifficultyDescription, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
+                                <ComboBox Grid.Row="0"
+                                          Grid.RowSpan="2"
+                                          Grid.Column="1"
+                                          Width="240"
+                                          Margin="0,0,36,0"
+                                          DisplayMemberPath="DisplayName"
+                                          ItemsSource="{Binding DifficultyOptions}"
+                                          SelectedItem="{Binding SelectedDifficultyOption, Mode=TwoWay}" />
+                            </Grid>
+
+                            <Separator Margin="-18,0"
+                                       BorderThickness="0,1,0,0"
+                                       Visibility="{Binding ShowStageTargetConfiguration, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <Grid Margin="16"
+                                  Visibility="{Binding ShowStageTargetConfiguration, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding DataContext.ModeLabel, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
+                                <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding DataContext.ModeDescription, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
+                                <ComboBox Grid.Row="0"
+                                          Grid.RowSpan="2"
+                                          Grid.Column="1"
+                                          Width="240"
+                                          Margin="0,0,36,0"
+                                          DisplayMemberPath="DisplayName"
+                                          ItemsSource="{Binding ModeOptions}"
+                                          SelectedItem="{Binding SelectedModeOption, Mode=TwoWay}" />
                             </Grid>
 
                             <Separator Margin="-18,0"
@@ -135,49 +242,140 @@
                             <Separator Margin="-18,0"
                                        BorderThickness="0,1,0,0"
                                        Visibility="{Binding ShowCollectionSubscriptionActions, Converter={StaticResource BoolToVisibilityConverter}}" />
-                            <Grid Margin="16"
-                                  Visibility="{Binding ShowCollectionSubscriptionActions, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
+                            <StackPanel Margin="16"
+                                        Visibility="{Binding ShowCollectionSubscriptionActions, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
 
-                                <ui:TextBlock Grid.Row="0"
-                                              Grid.Column="0"
-                                              FontWeight="SemiBold"
-                                              Text="{Binding DataContext.CollectionSubscriptionLabel, RelativeSource={RelativeSource AncestorType=Page}}"
-                                              TextWrapping="Wrap" />
-                                <ui:TextBlock Grid.Row="1"
-                                              Grid.Column="0"
-                                              Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                              Text="{Binding DataContext.CollectionSubscriptionDescription, RelativeSource={RelativeSource AncestorType=Page}}"
-                                              TextWrapping="Wrap" />
-                                <ui:Button Grid.Row="0"
-                                           Grid.RowSpan="2"
-                                           Grid.Column="1"
-                                           Margin="0,0,12,0"
-                                           Width="120"
-                                           Appearance="Secondary"
-                                           Command="{Binding DataContext.ImportCollectionSubscriptionCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                           CommandParameter="{Binding}"
-                                           Content="{Binding DataContext.ImportCollectionSubscriptionButtonText, RelativeSource={RelativeSource AncestorType=Page}}"
-                                           Icon="{ui:SymbolIcon ArrowUpload24}" />
-                                <ui:Button Grid.Row="0"
-                                           Grid.RowSpan="2"
-                                           Grid.Column="2"
-                                           Margin="0,0,36,0"
-                                           Width="120"
-                                           Appearance="Secondary"
-                                           Command="{Binding DataContext.ExportCollectionSubscriptionCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                           CommandParameter="{Binding}"
-                                           Content="{Binding DataContext.ExportCollectionSubscriptionButtonText, RelativeSource={RelativeSource AncestorType=Page}}"
-                                           Icon="{ui:SymbolIcon ArrowDownload24}" />
-                            </Grid>
+                                    <ui:TextBlock Grid.Row="0"
+                                                  Grid.Column="0"
+                                                  FontWeight="SemiBold"
+                                                  Text="{Binding DataContext.CollectionSubscriptionLabel, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                  TextWrapping="Wrap" />
+                                    <ui:TextBlock Grid.Row="1"
+                                                  Grid.Column="0"
+                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                  Text="{Binding DataContext.CollectionSubscriptionDescription, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                  TextWrapping="Wrap" />
+                                    <ui:Button Grid.Row="0"
+                                               Grid.RowSpan="2"
+                                               Grid.Column="1"
+                                               Margin="0,0,12,0"
+                                               Width="120"
+                                               Appearance="Secondary"
+                                               Command="{Binding DataContext.ImportSubscriptionCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                               CommandParameter="{Binding}"
+                                               Content="{Binding DataContext.SubscriptionImportButtonText, RelativeSource={RelativeSource AncestorType=Page}}"
+                                               Icon="{ui:SymbolIcon ArrowUpload24}" />
+                                    <ui:Button Grid.Row="0"
+                                               Grid.RowSpan="2"
+                                               Grid.Column="2"
+                                               Margin="0,0,36,0"
+                                               Width="120"
+                                               Appearance="Secondary"
+                                               Command="{Binding DataContext.ExportSubscriptionCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                               CommandParameter="{Binding}"
+                                               Content="{Binding DataContext.SubscriptionExportButtonText, RelativeSource={RelativeSource AncestorType=Page}}"
+                                               Icon="{ui:SymbolIcon ArrowDownload24}" />
+                                </Grid>
+                            </StackPanel>
+
+                            <Separator Margin="-18,0"
+                                       BorderThickness="0,1,0,0"
+                                       Visibility="{Binding ShowBlackBorderSubscriptionActions, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <StackPanel Margin="16"
+                                        Visibility="{Binding ShowBlackBorderSubscriptionActions, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <ui:TextBlock Grid.Row="0"
+                                                  Grid.Column="0"
+                                                  FontWeight="SemiBold"
+                                                  Text="{Binding DataContext.BlackBorderSubscriptionLabel, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                  TextWrapping="Wrap" />
+                                    <ui:TextBlock Grid.Row="1"
+                                                  Grid.Column="0"
+                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                  Text="{Binding DataContext.BlackBorderSubscriptionDescription, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                  TextWrapping="Wrap" />
+                                    <ui:Button Grid.Row="0"
+                                               Grid.RowSpan="2"
+                                               Grid.Column="1"
+                                               Margin="0,0,36,0"
+                                               Width="120"
+                                               Appearance="Secondary"
+                                               Command="{Binding DataContext.ImportSubscriptionCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                               CommandParameter="{Binding}"
+                                               Content="{Binding DataContext.SubscriptionImportButtonText, RelativeSource={RelativeSource AncestorType=Page}}"
+                                               Icon="{ui:SymbolIcon ArrowUpload24}" />
+                                </Grid>
+
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <ui:TextBlock Grid.Row="0"
+                                                  Grid.Column="0"
+                                                  FontWeight="SemiBold"
+                                                  Text="{Binding DataContext.SubscriptionExportTypeLabel, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                  TextWrapping="Wrap" />
+                                    <ui:TextBlock Grid.Row="1"
+                                                  Grid.Column="0"
+                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                  Text="{Binding DataContext.SubscriptionExportMapLabel, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                  TextWrapping="Wrap" />
+                                    <ComboBox Grid.Row="0"
+                                              Grid.RowSpan="2"
+                                              Grid.Column="1"
+                                              Width="210"
+                                              Margin="0,0,12,0"
+                                              DisplayMemberPath="DisplayName"
+                                              ItemsSource="{Binding SubscriptionExportTypeOptions}"
+                                              SelectedItem="{Binding SelectedSubscriptionExportTypeOption, Mode=TwoWay}" />
+                                    <ComboBox Grid.Row="0"
+                                              Grid.RowSpan="2"
+                                              Grid.Column="2"
+                                              Width="220"
+                                              Margin="0,0,12,0"
+                                              DisplayMemberPath="DisplayName"
+                                              ItemsSource="{Binding SubscriptionMapOptions}"
+                                              SelectedItem="{Binding SelectedSubscriptionMapOption, Mode=TwoWay}"
+                                              Visibility="{Binding ShowSubscriptionMapSelection, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <ui:Button Grid.Row="0"
+                                               Grid.RowSpan="2"
+                                               Grid.Column="3"
+                                               Margin="0,0,36,0"
+                                               Width="120"
+                                               Appearance="Secondary"
+                                               Command="{Binding DataContext.ExportSubscriptionCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                               CommandParameter="{Binding}"
+                                               Content="{Binding DataContext.SubscriptionExportButtonText, RelativeSource={RelativeSource AncestorType=Page}}"
+                                               Icon="{ui:SymbolIcon ArrowDownload24}" />
+                                </Grid>
+                            </StackPanel>
                         </StackPanel>
                     </ui:CardExpander>
                 </DataTemplate>

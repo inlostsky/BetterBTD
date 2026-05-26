@@ -104,9 +104,9 @@ public sealed class ManagedScriptSlotCatalogService
     {
         foreach (var map in GameElementCatalog.Maps)
         {
-            foreach (var difficulty in GetBlackBorderDifficulties())
+            foreach (var difficulty in BlackBorderTaskCatalog.Difficulties)
             {
-                foreach (var mode in GetModesForDifficulty(difficulty))
+                foreach (var mode in BlackBorderTaskCatalog.GetModesForDifficulty(difficulty))
                 {
                     yield return new ManagedScriptSlotDefinition
                     {
@@ -140,39 +140,4 @@ public sealed class ManagedScriptSlotCatalogService
         };
     }
 
-    private static IReadOnlyList<StageDifficulty> GetBlackBorderDifficulties()
-    {
-        return [StageDifficulty.Easy, StageDifficulty.Medium, StageDifficulty.Hard];
-    }
-
-    private static IReadOnlyList<StageMode> GetModesForDifficulty(StageDifficulty difficulty)
-    {
-        return difficulty switch
-        {
-            StageDifficulty.Easy =>
-            [
-                StageMode.Standard,
-                StageMode.Deflation,
-                StageMode.PrimaryOnly
-            ],
-            StageDifficulty.Medium =>
-            [
-                StageMode.Standard,
-                StageMode.MilitaryOnly,
-                StageMode.Apopalypse,
-                StageMode.Reverse
-            ],
-            StageDifficulty.Hard =>
-            [
-                StageMode.Standard,
-                StageMode.MagicOnly,
-                StageMode.DoubleHpMoabs,
-                StageMode.HalfCash,
-                StageMode.AlternateBloonsRounds,
-                StageMode.Impoppable,
-                StageMode.CHIMPS
-            ],
-            _ => [StageMode.Standard]
-        };
-    }
 }

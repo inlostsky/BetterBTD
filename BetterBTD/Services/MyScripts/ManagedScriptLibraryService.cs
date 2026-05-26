@@ -80,8 +80,12 @@ public sealed class ManagedScriptLibraryService
             if (!File.Exists(filePath) || string.IsNullOrWhiteSpace(File.ReadAllText(filePath)))
             {
                 var template = BuildTaskBindingTemplate(taskKind);
-                var json = JsonSerializer.Serialize(template, JsonOptions);
-                File.WriteAllText(filePath, json);
+                SaveTaskBindingDocument(filePath, template);
+            }
+            else
+            {
+                var existingDocument = LoadTaskBindingDocument(filePath);
+                SaveTaskBindingDocument(filePath, existingDocument);
             }
 
             return filePath;
@@ -599,14 +603,7 @@ public sealed class ManagedScriptLibraryService
         var json = File.ReadAllText(filePath);
         var document = JsonSerializer.Deserialize<ManagedScriptTaskBindingDocument>(json, JsonOptions)
                        ?? new ManagedScriptTaskBindingDocument();
-        document.Bindings ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        document.Bindings = document.Bindings
-            .Where(x => !string.IsNullOrWhiteSpace(x.Key))
-            .GroupBy(x => x.Key.Trim(), StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                group => group.Key,
-                group => group.Last().Value?.Trim() ?? string.Empty,
-                StringComparer.OrdinalIgnoreCase);
+        NormalizeTaskBindingDocument(filePath, document);
         return document;
     }
 
@@ -615,16 +612,27 @@ public sealed class ManagedScriptLibraryService
         ArgumentNullException.ThrowIfNull(document);
 
         EnsureStorage();
-        document.Bindings ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        document.Bindings = document.Bindings
-            .Where(x => !string.IsNullOrWhiteSpace(x.Key))
-            .GroupBy(x => x.Key.Trim(), StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                group => group.Key,
-                group => group.Last().Value?.Trim() ?? string.Empty,
-                StringComparer.OrdinalIgnoreCase);
+        NormalizeTaskBindingDocument(filePath, document);
 
-        var json = JsonSerializer.Serialize(document, JsonOptions);
+        ManagedScriptTaskBindingDocument persistedDocument;
+        if (IsBlackBorderBindingFile(filePath))
+        {
+            persistedDocument = new ManagedScriptTaskBindingDocument
+            {
+                Version = Math.Max(document.Version, 2),
+                StageBindings = BuildBlackBorderStageBindingsFromBindings(document.Bindings, includeAllSlots: true)
+            };
+        }
+        else
+        {
+            persistedDocument = new ManagedScriptTaskBindingDocument
+            {
+                Version = document.Version,
+                Bindings = new Dictionary<string, string>(document.Bindings, StringComparer.OrdinalIgnoreCase)
+            };
+        }
+
+        var json = JsonSerializer.Serialize(persistedDocument, JsonOptions);
         File.WriteAllText(filePath, json);
     }
 
@@ -1016,6 +1024,17 @@ public sealed class ManagedScriptLibraryService
 
     private ManagedScriptTaskBindingDocument BuildTaskBindingTemplate(AutoTaskKind taskKind)
     {
+        if (taskKind == AutoTaskKind.BlackBorder)
+        {
+            return new ManagedScriptTaskBindingDocument
+            {
+                Version = 2,
+                StageBindings = BuildBlackBorderStageBindingsFromBindings(
+                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                    includeAllSlots: true)
+            };
+        }
+
         var bindings = _slotCatalogService
             .GetByTaskKind(taskKind)
             .OrderBy(slot => slot.GroupName, StringComparer.OrdinalIgnoreCase)
@@ -1030,6 +1049,193 @@ public sealed class ManagedScriptLibraryService
             Version = 1,
             Bindings = bindings
         };
+    }
+
+    private bool IsBlackBorderBindingFile(string filePath)
+    {
+        return string.Equals(
+            Path.GetFullPath(filePath),
+            Path.GetFullPath(_blackBorderBindingsFilePath),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void NormalizeTaskBindingDocument(string filePath, ManagedScriptTaskBindingDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        document.Bindings = NormalizeBindingDictionary(document.Bindings);
+        document.StageBindings = NormalizeStageBindingDictionary(document.StageBindings);
+
+        if (!IsBlackBorderBindingFile(filePath))
+        {
+            return;
+        }
+
+        var mergedBindings = new Dictionary<string, string>(document.Bindings, StringComparer.OrdinalIgnoreCase);
+        foreach (var binding in FlattenBlackBorderStageBindings(document.StageBindings))
+        {
+            mergedBindings[binding.Key] = binding.Value;
+        }
+
+        document.Bindings = mergedBindings;
+        document.StageBindings = BuildBlackBorderStageBindingsFromBindings(document.Bindings, includeAllSlots: false);
+    }
+
+    private static Dictionary<string, string> NormalizeBindingDictionary(Dictionary<string, string>? bindings)
+    {
+        return (bindings ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Key))
+            .GroupBy(x => x.Key.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Last().Value?.Trim() ?? string.Empty,
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static Dictionary<string, Dictionary<string, Dictionary<string, string>>> NormalizeStageBindingDictionary(
+        Dictionary<string, Dictionary<string, Dictionary<string, string>>>? stageBindings)
+    {
+        var normalized = new Dictionary<string, Dictionary<string, Dictionary<string, string>>>(StringComparer.OrdinalIgnoreCase);
+        if (stageBindings is null)
+        {
+            return normalized;
+        }
+
+        foreach (var mapEntry in stageBindings)
+        {
+            var mapKey = mapEntry.Key?.Trim();
+            if (string.IsNullOrWhiteSpace(mapKey))
+            {
+                continue;
+            }
+
+            var normalizedDifficulties = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+            if (mapEntry.Value is not null)
+            {
+                foreach (var difficultyEntry in mapEntry.Value)
+                {
+                    var difficultyKey = difficultyEntry.Key?.Trim();
+                    if (string.IsNullOrWhiteSpace(difficultyKey))
+                    {
+                        continue;
+                    }
+
+                    var normalizedModes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    if (difficultyEntry.Value is not null)
+                    {
+                        foreach (var modeEntry in difficultyEntry.Value)
+                        {
+                            var modeKey = modeEntry.Key?.Trim();
+                            if (string.IsNullOrWhiteSpace(modeKey))
+                            {
+                                continue;
+                            }
+
+                            normalizedModes[modeKey] = modeEntry.Value?.Trim() ?? string.Empty;
+                        }
+                    }
+
+                    normalizedDifficulties[difficultyKey] = normalizedModes;
+                }
+            }
+
+            normalized[mapKey] = normalizedDifficulties;
+        }
+
+        return normalized;
+    }
+
+    private Dictionary<string, string> FlattenBlackBorderStageBindings(
+        IReadOnlyDictionary<string, Dictionary<string, Dictionary<string, string>>> stageBindings)
+    {
+        var bindings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var mapEntry in stageBindings)
+        {
+            if (!Enum.TryParse<GameMapType>(mapEntry.Key, ignoreCase: true, out var map))
+            {
+                continue;
+            }
+
+            foreach (var difficultyEntry in mapEntry.Value)
+            {
+                if (!Enum.TryParse<StageDifficulty>(difficultyEntry.Key, ignoreCase: true, out var difficulty))
+                {
+                    continue;
+                }
+
+                foreach (var modeEntry in difficultyEntry.Value)
+                {
+                    if (!Enum.TryParse<StageMode>(modeEntry.Key, ignoreCase: true, out var mode))
+                    {
+                        continue;
+                    }
+
+                    var slotId = ManagedScriptSlotIdFactory.CreateBlackBorderSlotId(map, difficulty, mode);
+                    bindings[slotId] = modeEntry.Value?.Trim() ?? string.Empty;
+                }
+            }
+        }
+
+        return bindings;
+    }
+
+    private Dictionary<string, Dictionary<string, Dictionary<string, string>>> BuildBlackBorderStageBindingsFromBindings(
+        IReadOnlyDictionary<string, string> bindings,
+        bool includeAllSlots)
+    {
+        var result = new Dictionary<string, Dictionary<string, Dictionary<string, string>>>(StringComparer.OrdinalIgnoreCase);
+        var slots = _slotCatalogService
+            .GetByTaskKind(AutoTaskKind.BlackBorder)
+            .Where(slot => slot.StageTarget is not null)
+            .OrderBy(slot => GetMapOrder(slot.StageTarget!.Map))
+            .ThenBy(slot => slot.StageTarget!.Difficulty)
+            .ThenBy(slot => slot.StageTarget!.Mode)
+            .ToList();
+
+        foreach (var slot in slots)
+        {
+            var target = slot.StageTarget!;
+            var scriptId = bindings.TryGetValue(slot.SlotId, out var boundScriptId)
+                ? boundScriptId?.Trim() ?? string.Empty
+                : string.Empty;
+            if (!includeAllSlots && !bindings.ContainsKey(slot.SlotId))
+            {
+                continue;
+            }
+
+            var mapKey = target.Map.ToString();
+            var difficultyKey = target.Difficulty.ToString();
+            var modeKey = target.Mode.ToString();
+
+            if (!result.TryGetValue(mapKey, out var difficulties))
+            {
+                difficulties = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+                result[mapKey] = difficulties;
+            }
+
+            if (!difficulties.TryGetValue(difficultyKey, out var modes))
+            {
+                modes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                difficulties[difficultyKey] = modes;
+            }
+
+            modes[modeKey] = scriptId;
+        }
+
+        return result;
+    }
+
+    private static int GetMapOrder(GameMapType map)
+    {
+        for (var index = 0; index < GameElementCatalog.Maps.Count; index++)
+        {
+            if (GameElementCatalog.Maps[index].Type == map)
+            {
+                return index;
+            }
+        }
+
+        return int.MaxValue;
     }
 
     private bool TryGetDedicatedBindingFilePath(AutoTaskKind taskKind, out string filePath)
