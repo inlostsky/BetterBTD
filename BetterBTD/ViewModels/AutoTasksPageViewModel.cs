@@ -16,6 +16,8 @@ namespace BetterBTD.ViewModels;
 
 public sealed class AutoTasksPageViewModel : ObservableObject
 {
+    private const string AllMapsOptionCode = "__all__";
+
     private static readonly StageEntryTarget CollectionPlaceholderStageTarget = new()
     {
         Map = GameMapType.DarkCastle,
@@ -111,14 +113,6 @@ public sealed class AutoTasksPageViewModel : ObservableObject
     public string MapLabel => _localizationService.T("Tasks.MapLabel");
 
     public string MapDescription => _localizationService.T("Tasks.MapDescription");
-
-    public string DifficultyLabel => _localizationService.T("Tasks.DifficultyLabel");
-
-    public string DifficultyDescription => _localizationService.T("Tasks.DifficultyDescription");
-
-    public string ModeLabel => _localizationService.T("Tasks.ModeLabel");
-
-    public string ModeDescription => _localizationService.T("Tasks.ModeDescription");
 
     public string ScriptConfigLabel => _localizationService.T("Tasks.ScriptConfigLabel");
 
@@ -235,19 +229,24 @@ public sealed class AutoTasksPageViewModel : ObservableObject
 
     private AutoTaskRequest BuildBlackBorderRequest(AutoTaskConfig task)
     {
-        var map = ParseEnumOrDefault(task.SelectedMapOption?.Code, GameMapType.MonkeyMeadow);
-        var difficulty = ParseEnumOrDefault(task.SelectedDifficultyOption?.Code, StageDifficulty.Easy);
-        var mode = ParseEnumOrDefault(task.SelectedModeOption?.Code, StageMode.Standard);
+        var category = ParseEnumOrDefault(task.SelectedVariantOption?.Code, BlackBorderMapCategory.Beginner);
+        var scopeTargets = BuildBlackBorderScopeTargets(category, task.SelectedMapOption?.Code);
+        var firstTarget = scopeTargets.FirstOrDefault()
+            ?? new StageEntryTarget
+            {
+                Map = BlackBorderTaskCatalog.GetMapsByCategory(category).First().Type,
+                Difficulty = StageDifficulty.Easy,
+                Mode = StageMode.Standard
+            };
+        var scopeMapCode = string.IsNullOrWhiteSpace(task.SelectedMapOption?.Code)
+            ? AllMapsOptionCode
+            : task.SelectedMapOption.Code;
 
         return new AutoTaskRequest
         {
             Kind = AutoTaskKind.BlackBorder,
-            StageTarget = new StageEntryTarget
-            {
-                Map = map,
-                Difficulty = difficulty,
-                Mode = mode
-            },
+            StageTarget = firstTarget,
+            VariantKey = BuildBlackBorderScopeVariantKey(category, scopeMapCode),
             OperationIntervalMs = Math.Max(20, task.OperationIntervalMs),
             Key = task.Key
         };
@@ -291,8 +290,6 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             {
                 var previousCategoryCode = task.SelectedVariantOption?.Code;
                 var previousMapCode = task.SelectedMapOption?.Code;
-                var previousDifficultyCode = task.SelectedDifficultyOption?.Code;
-                var previousModeCode = task.SelectedModeOption?.Code;
                 var previousExportTypeCode = task.SelectedSubscriptionExportTypeOption?.Code;
                 var previousSubscriptionMapCode = task.SelectedSubscriptionMapOption?.Code;
 
@@ -300,8 +297,6 @@ public sealed class AutoTasksPageViewModel : ObservableObject
                 task.SelectedVariantOption = SelectOption(task.VariantOptions, previousCategoryCode)
                     ?? task.VariantOptions.FirstOrDefault();
                 RefreshBlackBorderMapOptions(task, previousMapCode);
-                RefreshBlackBorderDifficultyOptions(task, previousDifficultyCode);
-                RefreshBlackBorderModeOptions(task, previousModeCode);
 
                 task.SubscriptionExportTypeOptions = new ObservableCollection<LanguageOption>(blackBorderExportTypeOptions);
                 task.SelectedSubscriptionExportTypeOption = SelectOption(task.SubscriptionExportTypeOptions, previousExportTypeCode)
@@ -327,10 +322,6 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         OnPropertyChanged(nameof(BlackBorderCategoryDescription));
         OnPropertyChanged(nameof(MapLabel));
         OnPropertyChanged(nameof(MapDescription));
-        OnPropertyChanged(nameof(DifficultyLabel));
-        OnPropertyChanged(nameof(DifficultyDescription));
-        OnPropertyChanged(nameof(ModeLabel));
-        OnPropertyChanged(nameof(ModeDescription));
         OnPropertyChanged(nameof(ScriptConfigLabel));
         OnPropertyChanged(nameof(ScriptConfigDescription));
         OnPropertyChanged(nameof(ScriptConfigButtonText));
@@ -357,18 +348,9 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             {
                 case nameof(AutoTaskConfig.SelectedVariantOption):
                     RefreshBlackBorderMapOptions(task, task.SelectedMapOption?.Code);
-                    RefreshBlackBorderDifficultyOptions(task, task.SelectedDifficultyOption?.Code);
-                    RefreshBlackBorderModeOptions(task, task.SelectedModeOption?.Code);
                     UpdateRuntimeSummary(task);
                     break;
                 case nameof(AutoTaskConfig.SelectedMapOption):
-                    UpdateRuntimeSummary(task);
-                    break;
-                case nameof(AutoTaskConfig.SelectedDifficultyOption):
-                    RefreshBlackBorderModeOptions(task, task.SelectedModeOption?.Code);
-                    UpdateRuntimeSummary(task);
-                    break;
-                case nameof(AutoTaskConfig.SelectedModeOption):
                     UpdateRuntimeSummary(task);
                     break;
                 case nameof(AutoTaskConfig.SelectedSubscriptionExportTypeOption):
@@ -456,47 +438,23 @@ public sealed class AutoTasksPageViewModel : ObservableObject
     private void RefreshBlackBorderMapOptions(AutoTaskConfig task, string? previousMapCode = null)
     {
         var category = ParseEnumOrDefault(task.SelectedVariantOption?.Code, BlackBorderMapCategory.Beginner);
-        var options = BlackBorderTaskCatalog.GetMapsByCategory(category)
+        var options = new List<LanguageOption>
+        {
+            new()
+            {
+                Code = AllMapsOptionCode,
+                DisplayName = _localizationService.T("Tasks.Map.All")
+            }
+        };
+        options.AddRange(BlackBorderTaskCatalog.GetMapsByCategory(category)
             .Select(map => new LanguageOption
             {
                 Code = map.Type.ToString(),
                 DisplayName = GameElementCatalog.GetMapDisplayName(map.Type)
-            })
-            .ToList();
+            }));
 
         task.MapOptions = new ObservableCollection<LanguageOption>(options);
         task.SelectedMapOption = SelectOption(task.MapOptions, previousMapCode) ?? task.MapOptions.FirstOrDefault();
-    }
-
-    private void RefreshBlackBorderDifficultyOptions(AutoTaskConfig task, string? previousDifficultyCode = null)
-    {
-        var options = BlackBorderTaskCatalog.Difficulties
-            .Select(difficulty => new LanguageOption
-            {
-                Code = difficulty.ToString(),
-                DisplayName = GameElementCatalog.GetStageDifficultyDisplayName(difficulty)
-            })
-            .ToList();
-
-        task.DifficultyOptions = new ObservableCollection<LanguageOption>(options);
-        task.SelectedDifficultyOption = SelectOption(task.DifficultyOptions, previousDifficultyCode)
-            ?? task.DifficultyOptions.FirstOrDefault();
-    }
-
-    private void RefreshBlackBorderModeOptions(AutoTaskConfig task, string? previousModeCode = null)
-    {
-        var difficulty = ParseEnumOrDefault(task.SelectedDifficultyOption?.Code, StageDifficulty.Easy);
-        var options = BlackBorderTaskCatalog.GetModesForDifficulty(difficulty)
-            .Select(mode => new LanguageOption
-            {
-                Code = mode.ToString(),
-                DisplayName = GameElementCatalog.GetStageModeDisplayName(mode)
-            })
-            .ToList();
-
-        task.ModeOptions = new ObservableCollection<LanguageOption>(options);
-        task.SelectedModeOption = SelectOption(task.ModeOptions, previousModeCode)
-            ?? task.ModeOptions.FirstOrDefault();
     }
 
     private void UpdateSubscriptionMapSelectionVisibility(AutoTaskConfig task)
@@ -817,16 +775,6 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             {
                 parts.Add($"{MapLabel}: {task.SelectedMapOption.DisplayName}");
             }
-
-            if (!string.IsNullOrWhiteSpace(task.SelectedDifficultyOption?.DisplayName))
-            {
-                parts.Add($"{DifficultyLabel}: {task.SelectedDifficultyOption.DisplayName}");
-            }
-
-            if (!string.IsNullOrWhiteSpace(task.SelectedModeOption?.DisplayName))
-            {
-                parts.Add($"{ModeLabel}: {task.SelectedModeOption.DisplayName}");
-            }
         }
 
         return string.Join(" | ", parts);
@@ -917,6 +865,36 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             BlackBorderSubscriptionExportType.ExpertMaps => BlackBorderMapCategory.Expert,
             _ => null
         };
+    }
+
+    private static IReadOnlyList<StageEntryTarget> BuildBlackBorderScopeTargets(
+        BlackBorderMapCategory category,
+        string? selectedMapCode)
+    {
+        var maps = selectedMapCode is not null &&
+                   !string.Equals(selectedMapCode, AllMapsOptionCode, StringComparison.OrdinalIgnoreCase) &&
+                   Enum.TryParse<GameMapType>(selectedMapCode, ignoreCase: true, out var selectedMap)
+            ? GameElementCatalog.Maps.Where(map => map.Type == selectedMap)
+            : BlackBorderTaskCatalog.GetMapsByCategory(category);
+
+        return maps
+            .SelectMany(
+                map => BlackBorderTaskCatalog.Difficulties,
+                (map, difficulty) => new { map.Type, Difficulty = difficulty })
+            .SelectMany(
+                item => BlackBorderTaskCatalog.GetModesForDifficulty(item.Difficulty),
+                (item, mode) => new StageEntryTarget
+                {
+                    Map = item.Type,
+                    Difficulty = item.Difficulty,
+                    Mode = mode
+                })
+            .ToList();
+    }
+
+    private static string BuildBlackBorderScopeVariantKey(BlackBorderMapCategory category, string mapCode)
+    {
+        return $"category={category};map={mapCode}";
     }
 
     private static void RunOnUiThread(Action action)

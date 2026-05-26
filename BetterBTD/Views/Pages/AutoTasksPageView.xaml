@@ -118,7 +118,7 @@
                                 <ComboBox Grid.Row="0"
                                           Grid.RowSpan="2"
                                           Grid.Column="1"
-                                          Width="240"
+                                          Width="120"
                                           Margin="0,0,36,0"
                                           DisplayMemberPath="DisplayName"
                                           ItemsSource="{Binding VariantOptions}"
@@ -144,63 +144,11 @@
                                 <ComboBox Grid.Row="0"
                                           Grid.RowSpan="2"
                                           Grid.Column="1"
-                                          Width="240"
+                                          Width="120"
                                           Margin="0,0,36,0"
                                           DisplayMemberPath="DisplayName"
                                           ItemsSource="{Binding MapOptions}"
                                           SelectedItem="{Binding SelectedMapOption, Mode=TwoWay}" />
-                            </Grid>
-
-                            <Separator Margin="-18,0"
-                                       BorderThickness="0,1,0,0"
-                                       Visibility="{Binding ShowStageTargetConfiguration, Converter={StaticResource BoolToVisibilityConverter}}" />
-                            <Grid Margin="16"
-                                  Visibility="{Binding ShowStageTargetConfiguration, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-
-                                <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding DataContext.DifficultyLabel, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
-                                <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding DataContext.DifficultyDescription, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
-                                <ComboBox Grid.Row="0"
-                                          Grid.RowSpan="2"
-                                          Grid.Column="1"
-                                          Width="240"
-                                          Margin="0,0,36,0"
-                                          DisplayMemberPath="DisplayName"
-                                          ItemsSource="{Binding DifficultyOptions}"
-                                          SelectedItem="{Binding SelectedDifficultyOption, Mode=TwoWay}" />
-                            </Grid>
-
-                            <Separator Margin="-18,0"
-                                       BorderThickness="0,1,0,0"
-                                       Visibility="{Binding ShowStageTargetConfiguration, Converter={StaticResource BoolToVisibilityConverter}}" />
-                            <Grid Margin="16"
-                                  Visibility="{Binding ShowStageTargetConfiguration, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-
-                                <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding DataContext.ModeLabel, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
-                                <ui:TextBlock Grid.Row="1" Grid.Column="0" Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}" Text="{Binding DataContext.ModeDescription, RelativeSource={RelativeSource AncestorType=Page}}" TextWrapping="Wrap" />
-                                <ComboBox Grid.Row="0"
-                                          Grid.RowSpan="2"
-                                          Grid.Column="1"
-                                          Width="240"
-                                          Margin="0,0,36,0"
-                                          DisplayMemberPath="DisplayName"
-                                          ItemsSource="{Binding ModeOptions}"
-                                          SelectedItem="{Binding SelectedModeOption, Mode=TwoWay}" />
                             </Grid>
 
                             <Separator Margin="-18,0"
@@ -350,20 +298,20 @@
                                     <ComboBox Grid.Row="0"
                                               Grid.RowSpan="2"
                                               Grid.Column="1"
-                                              Width="210"
-                                              Margin="0,0,12,0"
-                                              DisplayMemberPath="DisplayName"
-                                              ItemsSource="{Binding SubscriptionExportTypeOptions}"
-                                              SelectedItem="{Binding SelectedSubscriptionExportTypeOption, Mode=TwoWay}" />
-                                    <ComboBox Grid.Row="0"
-                                              Grid.RowSpan="2"
-                                              Grid.Column="2"
-                                              Width="220"
+                                              Width="120"
                                               Margin="0,0,12,0"
                                               DisplayMemberPath="DisplayName"
                                               ItemsSource="{Binding SubscriptionMapOptions}"
                                               SelectedItem="{Binding SelectedSubscriptionMapOption, Mode=TwoWay}"
                                               Visibility="{Binding ShowSubscriptionMapSelection, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <ComboBox Grid.Row="0"
+                                              Grid.RowSpan="2"
+                                              Grid.Column="2"
+                                              Width="120"
+                                              Margin="0,0,12,0"
+                                              DisplayMemberPath="DisplayName"
+                                              ItemsSource="{Binding SubscriptionExportTypeOptions}"
+                                              SelectedItem="{Binding SelectedSubscriptionExportTypeOption, Mode=TwoWay}" />
                                     <ui:Button Grid.Row="0"
                                                Grid.RowSpan="2"
                                                Grid.Column="3"
