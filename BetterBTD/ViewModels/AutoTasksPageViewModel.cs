@@ -179,10 +179,10 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             return;
         }
 
-        _ = OpenTaskRuntimeWindowAsync(task);
+        OpenTaskRuntimeWindow(task);
     }
 
-    private async Task OpenTaskRuntimeWindowAsync(AutoTaskConfig task)
+    private void OpenTaskRuntimeWindow(AutoTaskConfig task)
     {
         var runtimeWindow = EnsureRuntimeWindow(task);
 
@@ -195,12 +195,6 @@ public sealed class AutoTasksPageViewModel : ObservableObject
 
             runtimeWindow.Activate();
         });
-
-        if (runtimeWindow.DataContext is TaskRuntimeWindowViewModel viewModel &&
-            viewModel.StartCommand.CanExecute(null))
-        {
-            await viewModel.StartCommand.ExecuteAsync(null);
-        }
     }
 
     private AutoTaskRequest BuildRequest(AutoTaskConfig task)

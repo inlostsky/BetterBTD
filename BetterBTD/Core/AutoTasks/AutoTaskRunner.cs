@@ -8,7 +8,7 @@ namespace BetterBTD.Core.AutoTasks;
 
 public sealed class AutoTaskRunner
 {
-    private const int CollectionScriptUiMonitorIntervalMs = 250;
+    private const int StageScriptUiMonitorIntervalMs = 250;
 
     private readonly IAutoTaskStrategyRegistry _strategyRegistry;
     private readonly AutoTaskRuntimeServices _defaultRuntimeServices;
@@ -229,7 +229,7 @@ public sealed class AutoTaskRunner
                                 state.Phase = AutoTaskPhase.SettlingResult;
                                 session.MarkPhase(
                                     state.Phase,
-                                    $"Detected collection result UI '{scriptInterruptedSnapshot.State}'. Stopped the running script and continued the stage result flow.");
+                                    $"Detected stage result UI '{scriptInterruptedSnapshot.State}'. Stopped the running script and continued the result flow.");
                                 break;
                             }
 
@@ -332,7 +332,7 @@ public sealed class AutoTaskRunner
             scriptExecutionOptions,
             linkedScriptCancellationSource.Token);
 
-        if (request.Kind != AutoTaskKind.Collection)
+        if (!ShouldMonitorStageScriptUi(request.Kind))
         {
             return (await scriptTask.ConfigureAwait(false), null);
         }
@@ -341,7 +341,7 @@ public sealed class AutoTaskRunner
         while (!scriptTask.IsCompleted)
         {
             var completedTask = await Task
-                .WhenAny(scriptTask, Task.Delay(CollectionScriptUiMonitorIntervalMs, cancellationToken))
+                .WhenAny(scriptTask, Task.Delay(StageScriptUiMonitorIntervalMs, cancellationToken))
                 .ConfigureAwait(false);
 
             if (completedTask == scriptTask)
@@ -353,7 +353,7 @@ public sealed class AutoTaskRunner
                 .CaptureSnapshotAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            if (!ShouldInterruptCollectionScript(snapshot.State))
+            if (!ShouldInterruptStageScript(snapshot.State))
             {
                 continue;
             }
@@ -362,7 +362,7 @@ public sealed class AutoTaskRunner
             state.RecordUiSnapshot(snapshot);
             session.UpdateUiSnapshot(
                 snapshot,
-                $"Detected collection result UI '{snapshot.State}' while the script was running.");
+                $"Detected stage result UI '{snapshot.State}' while the script was running.");
             linkedScriptCancellationSource.Cancel();
             break;
         }
@@ -370,7 +370,12 @@ public sealed class AutoTaskRunner
         return (await scriptTask.ConfigureAwait(false), interruptedSnapshot);
     }
 
-    private static bool ShouldInterruptCollectionScript(GameUiStateId state)
+    private static bool ShouldMonitorStageScriptUi(AutoTaskKind kind)
+    {
+        return kind is AutoTaskKind.Collection or AutoTaskKind.BlackBorder;
+    }
+
+    private static bool ShouldInterruptStageScript(GameUiStateId state)
     {
         return state is GameUiStateId.Defeat or GameUiStateId.Victory or GameUiStateId.StageSettlement;
     }
