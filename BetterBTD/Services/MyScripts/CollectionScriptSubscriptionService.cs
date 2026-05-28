@@ -61,7 +61,8 @@ public sealed class CollectionScriptSubscriptionService
             Directory.CreateDirectory(directory);
         }
 
-        using var archive = ZipFile.Open(targetFilePath, ZipArchiveMode.Create);
+        using var fileStream = new FileStream(targetFilePath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+        using var archive = new ZipArchive(fileStream, ZipArchiveMode.Create);
         foreach (var script in uniqueScripts)
         {
             var safeFileName = SanitizeFileName(script.DisplayName);

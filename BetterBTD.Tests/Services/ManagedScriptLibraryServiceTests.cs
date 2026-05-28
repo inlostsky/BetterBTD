@@ -420,6 +420,109 @@ public sealed class ManagedScriptLibraryServiceTests
     }
 
     [Fact]
+    public void CollectionSubscription_Export_OverwritesExistingFile()
+    {
+        var rootDirectory = Path.Combine(Path.GetTempPath(), $"betterbtd-library-{Guid.NewGuid():N}");
+        var sourceDirectory = Path.Combine(rootDirectory, "source");
+        var exportPackagePath = Path.Combine(rootDirectory, "export", "collection.btdsub");
+
+        try
+        {
+            Directory.CreateDirectory(sourceDirectory);
+            Directory.CreateDirectory(Path.GetDirectoryName(exportPackagePath)!);
+            File.WriteAllText(exportPackagePath, "placeholder");
+
+            var sourceScriptPath = Path.Combine(sourceDirectory, "collection-script.btd");
+            var sourceDocument = CreateDocument(
+                GameMapType.DarkCastle,
+                StageDifficulty.Hard,
+                StageMode.CHIMPS,
+                ["collection"]);
+            ScriptDocumentService.Instance.Save(sourceScriptPath, sourceDocument);
+
+            var sourceService = new ManagedScriptLibraryService(
+                Path.Combine(rootDirectory, "managed-source"),
+                ScriptDocumentService.Instance,
+                ManagedScriptSlotCatalogService.Instance);
+            var sourceImported = sourceService.ImportScript(sourceScriptPath);
+            var slotId = ManagedScriptSlotIdFactory.CreateCollectionSlotId("simple", GameMapType.DarkCastle);
+            sourceService.SetBinding(slotId, sourceImported.ScriptId);
+
+            var subscriptionService = new CollectionScriptSubscriptionService(
+                sourceService,
+                ManagedScriptSlotCatalogService.Instance);
+
+            subscriptionService.Export(exportPackagePath);
+
+            Assert.True(File.Exists(exportPackagePath));
+            Assert.NotEqual("placeholder", File.ReadAllText(exportPackagePath));
+        }
+        finally
+        {
+            if (Directory.Exists(rootDirectory))
+            {
+                Directory.Delete(rootDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void BlackBorderSubscription_Export_OverwritesExistingFile()
+    {
+        var rootDirectory = Path.Combine(Path.GetTempPath(), $"betterbtd-library-{Guid.NewGuid():N}");
+        var sourceDirectory = Path.Combine(rootDirectory, "source");
+        var exportPackagePath = Path.Combine(rootDirectory, "export", "blackborder.btdsub");
+
+        try
+        {
+            Directory.CreateDirectory(sourceDirectory);
+            Directory.CreateDirectory(Path.GetDirectoryName(exportPackagePath)!);
+            File.WriteAllText(exportPackagePath, "placeholder");
+
+            var sourceScriptPath = Path.Combine(sourceDirectory, "blackborder-script.btd");
+            var sourceDocument = CreateDocument(
+                GameMapType.MonkeyMeadow,
+                StageDifficulty.Easy,
+                StageMode.Standard,
+                ["black-border"]);
+            ScriptDocumentService.Instance.Save(sourceScriptPath, sourceDocument);
+
+            var sourceService = new ManagedScriptLibraryService(
+                Path.Combine(rootDirectory, "managed-source"),
+                ScriptDocumentService.Instance,
+                ManagedScriptSlotCatalogService.Instance);
+            var sourceImported = sourceService.ImportScript(sourceScriptPath);
+            var slotId = ManagedScriptSlotIdFactory.CreateBlackBorderSlotId(
+                GameMapType.MonkeyMeadow,
+                StageDifficulty.Easy,
+                StageMode.Standard);
+            sourceService.SetBinding(slotId, sourceImported.ScriptId);
+
+            var subscriptionService = new BlackBorderScriptSubscriptionService(
+                sourceService,
+                ManagedScriptSlotCatalogService.Instance);
+
+            subscriptionService.Export(
+                exportPackagePath,
+                new BlackBorderSubscriptionDescriptor
+                {
+                    ExportType = BlackBorderSubscriptionExportType.SingleMap,
+                    Map = GameMapType.MonkeyMeadow
+                });
+
+            Assert.True(File.Exists(exportPackagePath));
+            Assert.NotEqual("placeholder", File.ReadAllText(exportPackagePath));
+        }
+        finally
+        {
+            if (Directory.Exists(rootDirectory))
+            {
+                Directory.Delete(rootDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void SlotCatalog_ContainsExpectedFrameworkSlots()
     {
         var catalog = ManagedScriptSlotCatalogService.Instance;
