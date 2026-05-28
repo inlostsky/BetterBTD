@@ -126,7 +126,10 @@ public sealed class CollectionScriptSubscriptionService
                 var extractedFilePath = Path.Combine(tempRoot, script.FileName);
                 archiveEntry.ExtractToFile(extractedFilePath, overwrite: true);
 
-                var imported = _managedScriptLibraryService.ImportScript(extractedFilePath);
+                var imported = _managedScriptLibraryService.UpsertScript(
+                    extractedFilePath,
+                    scriptId: script.ScriptId,
+                    displayName: script.DisplayName);
                 if (!string.Equals(imported.ScriptId, script.ScriptId, StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidDataException($"Script '{script.FileName}' script ID does not match manifest.");
