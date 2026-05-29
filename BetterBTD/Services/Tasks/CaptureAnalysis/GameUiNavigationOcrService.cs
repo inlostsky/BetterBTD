@@ -12,6 +12,7 @@ public sealed class GameUiNavigationOcrService
     private static readonly double[] HeroThresholds = [0.92d, 0.88d, 0.84d, 0.80d];
     private static readonly double[] MapThresholds = [0.94d, 0.90d, 0.86d, 0.82d];
     private static readonly double[] ButtonThresholds = [0.94d, 0.90d, 0.86d, 0.82d];
+    private static readonly TemplateMatchOptions IconMatchOptions = TemplateMatchOptions.CCoeffNormedNoMask;
 
     private readonly object _syncRoot = new();
     private readonly TemplateMatchService _templateMatchService;
@@ -74,6 +75,7 @@ public sealed class GameUiNavigationOcrService
             _templateMatchService,
             captureRegion,
             templates,
+            IconMatchOptions,
             HeroThresholds,
             frameWidth,
             frameHeight,
@@ -134,6 +136,7 @@ public sealed class GameUiNavigationOcrService
             _templateMatchService,
             captureRegion,
             [template],
+            IconMatchOptions,
             MapThresholds,
             frameWidth,
             frameHeight,
@@ -217,7 +220,11 @@ public sealed class GameUiNavigationOcrService
             candidateTemplates.Add(new CandidateTemplate<GameMapType>(mapType, template));
         }
 
-        var rawCandidateMatches = GameOcrIconMatcher.BuildCandidateMatches(_templateMatchService, captureRegion, candidateTemplates);
+        var rawCandidateMatches = GameOcrIconMatcher.BuildCandidateMatches(
+            _templateMatchService,
+            captureRegion,
+            candidateTemplates,
+            IconMatchOptions);
         candidateMatches = rawCandidateMatches
             .Select(match => new MapTemplateMatchResult(
                 match.Candidate,
@@ -300,6 +307,7 @@ public sealed class GameUiNavigationOcrService
             _templateMatchService,
             captureRegion,
             [template],
+            IconMatchOptions,
             ButtonThresholds,
             frameWidth,
             frameHeight,

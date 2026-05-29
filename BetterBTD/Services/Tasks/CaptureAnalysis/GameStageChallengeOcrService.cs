@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.IO;
+using System.Diagnostics;
 using System.Text;
+using BetterBTD.Models;
 using OpenCvSharp;
 using OpenCvRect = OpenCvSharp.Rect;
 
@@ -11,8 +13,11 @@ public sealed class GameStageChallengeOcrService
     private static readonly Lazy<GameStageChallengeOcrService> InstanceHolder = new(() => new GameStageChallengeOcrService());
     private static readonly double[] GoldThresholds = [0.90d, 0.84d, 0.78d];
     private static readonly double[] RoundThresholds = [0.90d, 0.84d, 0.78d];
+    private static readonly TemplateMatchOptions DigitMatchOptions = TemplateMatchOptions.SqDiffNormedMasked;
     private const double GoldOneScoreDelta = 0.04d;
     private const int GoldOneTopTolerance = 2;
+    private const double NmsIouThreshold = 0.30d;
+    private const double SameGlyphCenterDistanceRatio = 0.35d;
 
     private readonly object _syncRoot = new();
     private readonly TemplateMatchService _templateMatchService;
@@ -90,23 +95,34 @@ public sealed class GameStageChallengeOcrService
         out string text)
     {
         text = string.Empty;
+        ThresholdRecognitionResult? bestResult = null;
 
         foreach (var threshold in thresholds)
         {
             var candidates = FilterGoldCandidates(CollectCandidates(captureRegion, templates, threshold), threshold);
-            if (candidates.Count == 0)
+            var recognizedText = candidates.Count == 0 ? string.Empty : BuildDigitText(candidates);
+            var result = new ThresholdRecognitionResult(threshold, candidates, recognizedText);
+            //DebugWriteThresholdResult("[GameStageOCR] gold", result);
+
+            if (string.IsNullOrEmpty(recognizedText))
             {
                 continue;
             }
 
-            text = BuildDigitText(candidates);
-            if (!string.IsNullOrEmpty(text))
+            if (bestResult is null || result.IsBetterThan(bestResult))
             {
-                return true;
+                bestResult = result;
             }
         }
 
-        return false;
+        if (bestResult is null)
+        {
+            return false;
+        }
+
+        text = bestResult.Text;
+        //Debug.WriteLine($"[GameStageOCR] gold selected threshold={bestResult.Threshold:F3} text={text}");
+        return true;
     }
 
     private bool TryRecognizeRoundDigits(
@@ -116,12 +132,14 @@ public sealed class GameStageChallengeOcrService
         out string text)
     {
         text = string.Empty;
+        ThresholdRecognitionResult? bestResult = null;
 
         foreach (var threshold in RoundThresholds)
         {
             var digitCandidates = CollectCandidates(captureRegion, digitTemplates, threshold);
             if (digitCandidates.Count == 0)
             {
+                //DebugWriteThresholdResult("[GameStageOCR] round", new ThresholdRecognitionResult(threshold, [], string.Empty));
                 continue;
             }
 
@@ -130,19 +148,36 @@ public sealed class GameStageChallengeOcrService
                 : null;
 
             var filteredCandidates = FilterRoundCandidates(digitCandidates, slashCenterX);
-            text = BuildDigitText(filteredCandidates);
-            if (!string.IsNullOrEmpty(text))
+            var recognizedText = BuildDigitText(filteredCandidates);
+            var result = new ThresholdRecognitionResult(threshold, filteredCandidates, recognizedText);
+            //DebugWriteThresholdResult("[GameStageOCR] round", result);
+
+            if (string.IsNullOrEmpty(recognizedText))
             {
-                return true;
+                continue;
+            }
+
+            if (bestResult is null || result.IsBetterThan(bestResult))
+            {
+                bestResult = result;
             }
         }
 
-        return false;
+        if (bestResult is null)
+        {
+            return false;
+        }
+
+        text = bestResult.Text;
+        //Debug.WriteLine($"[GameStageOCR] round selected threshold={bestResult.Threshold:F3} text={text}");
+        return true;
     }
 
     private List<OcrCandidate> CollectCandidates(Mat captureRegion, IReadOnlyList<PreparedTemplate> templates, double threshold)
     {
         var candidates = new List<OcrCandidate>();
+        //Debug.WriteLine(
+        //    $"[GameStageOCR] CollectCandidates threshold={threshold:F3} capture={captureRegion.Width}x{captureRegion.Height} templates={templates.Count}");
 
         foreach (var template in templates)
         {
@@ -151,27 +186,20 @@ public sealed class GameStageChallengeOcrService
                 continue;
             }
 
-            using var matchResult = _templateMatchService.CreateMatchResult(captureRegion, template.Image, template.Mask);
-            using var working = matchResult.Clone();
-            var maxIterations = Math.Max(1, working.Width * working.Height);
-
-            for (var iteration = 0; iteration < maxIterations; iteration++)
-            {
-                Cv2.MinMaxLoc(working, out _, out var maxValue, out _, out var maxLocation);
-                if (!double.IsFinite(maxValue) || maxValue < threshold)
-                {
-                    break;
-                }
-
-                var bounds = new OpenCvRect(maxLocation.X, maxLocation.Y, template.Width, template.Height);
-                candidates.Add(new OcrCandidate(template.Symbol, bounds, maxValue));
-
-                using var suppressionRegion = new Mat(working, ClampRect(bounds, working.Width, working.Height));
-                suppressionRegion.SetTo(Scalar.All(0));
-            }
+            using var matchResult = _templateMatchService.CreateMatchResult(
+                captureRegion,
+                template.Image,
+                template.Mask,
+                DigitMatchOptions);
+            var templateCandidates = FindLocalMaximaCandidates(matchResult, template.Symbol, template.Width, template.Height, threshold);
+            //DebugWriteCandidates($"[GameStageOCR] template={template.Symbol} raw", templateCandidates);
+            candidates.AddRange(templateCandidates);
         }
 
-        return SuppressCandidates(candidates);
+        //DebugWriteCandidates("[GameStageOCR] raw combined", candidates);
+        var suppressedCandidates = ApplyNonMaximumSuppression(candidates);
+        //DebugWriteCandidates("[GameStageOCR] nms", suppressedCandidates);
+        return suppressedCandidates;
     }
 
     private bool TryFindSlashCandidate(Mat captureRegion, PreparedTemplate slashTemplate, double threshold, out OcrCandidate? bestMatch)
@@ -280,19 +308,12 @@ public sealed class GameStageChallengeOcrService
         OcrCandidate? previous = null;
         foreach (var candidate in ordered)
         {
-            if (previous is not null)
-            {
-                var overlapAllowance = Math.Min(previous.Bounds.Width, candidate.Bounds.Width) * 0.30d;
-                if (candidate.Bounds.X < previous.Bounds.Right - overlapAllowance)
-                {
-                    continue;
-                }
-            }
-
             builder.Append(candidate.Symbol);
             previous = candidate;
         }
 
+        //DebugWriteCandidates("[GameStageOCR] ordered", ordered);
+        //Debug.WriteLine($"[GameStageOCR] text={builder}");
         return builder.ToString();
     }
 
@@ -319,13 +340,13 @@ public sealed class GameStageChallengeOcrService
             .ToList();
     }
 
-    private static List<OcrCandidate> SuppressCandidates(IReadOnlyList<OcrCandidate> candidates)
+    private static List<OcrCandidate> ApplyNonMaximumSuppression(IReadOnlyList<OcrCandidate> candidates)
     {
         var kept = new List<OcrCandidate>();
 
         foreach (var candidate in candidates.OrderByDescending(x => x.Score))
         {
-            if (kept.Any(existing => RepresentsSameGlyph(existing, candidate)))
+            if (kept.Any(existing => ShouldSuppress(existing, candidate)))
             {
                 continue;
             }
@@ -333,10 +354,13 @@ public sealed class GameStageChallengeOcrService
             kept.Add(candidate);
         }
 
-        return kept;
+        return kept
+            .OrderBy(x => x.Bounds.X)
+            .ThenByDescending(x => x.Score)
+            .ToList();
     }
 
-    private static bool RepresentsSameGlyph(OcrCandidate left, OcrCandidate right)
+    private static bool ShouldSuppress(OcrCandidate left, OcrCandidate right)
     {
         var overlap = GetIntersection(left.Bounds, right.Bounds);
         if (overlap.Width > 0 && overlap.Height > 0)
@@ -344,8 +368,9 @@ public sealed class GameStageChallengeOcrService
             var overlapArea = overlap.Width * overlap.Height;
             var leftArea = left.Bounds.Width * left.Bounds.Height;
             var rightArea = right.Bounds.Width * right.Bounds.Height;
-            var overlapRatio = overlapArea / (double)Math.Min(leftArea, rightArea);
-            if (overlapRatio >= 0.45d)
+            var unionArea = leftArea + rightArea - overlapArea;
+            var overlapRatio = unionArea <= 0 ? 0d : overlapArea / (double)unionArea;
+            if (overlapRatio >= NmsIouThreshold)
             {
                 return true;
             }
@@ -353,8 +378,8 @@ public sealed class GameStageChallengeOcrService
 
         var deltaX = Math.Abs(left.CenterX - right.CenterX);
         var deltaY = Math.Abs(left.CenterY - right.CenterY);
-        return deltaX <= Math.Min(left.Bounds.Width, right.Bounds.Width) * 0.35d &&
-               deltaY <= Math.Min(left.Bounds.Height, right.Bounds.Height) * 0.35d;
+        return deltaX <= Math.Min(left.Bounds.Width, right.Bounds.Width) * SameGlyphCenterDistanceRatio &&
+               deltaY <= Math.Min(left.Bounds.Height, right.Bounds.Height) * SameGlyphCenterDistanceRatio;
     }
 
     private static OpenCvRect GetIntersection(OpenCvRect left, OpenCvRect right)
@@ -368,13 +393,84 @@ public sealed class GameStageChallengeOcrService
         return new OpenCvRect(x, y, width, height);
     }
 
-    private static OpenCvRect ClampRect(OpenCvRect rect, int width, int height)
+    private static List<OcrCandidate> FindLocalMaximaCandidates(
+        Mat matchResult,
+        string symbol,
+        int templateWidth,
+        int templateHeight,
+        double threshold)
     {
-        var x = Math.Clamp(rect.X, 0, width - 1);
-        var y = Math.Clamp(rect.Y, 0, height - 1);
-        var right = Math.Clamp(rect.Right, x + 1, width);
-        var bottom = Math.Clamp(rect.Bottom, y + 1, height);
-        return new OpenCvRect(x, y, right - x, bottom - y);
+        var candidates = new List<OcrCandidate>();
+        for (var y = 0; y < matchResult.Rows; y++)
+        {
+            for (var x = 0; x < matchResult.Cols; x++)
+            {
+                var score = matchResult.At<float>(y, x);
+                if (!double.IsFinite(score) || score < threshold)
+                {
+                    continue;
+                }
+
+                if (!IsLocalMaximum(matchResult, x, y, score))
+                {
+                    continue;
+                }
+
+                candidates.Add(new OcrCandidate(symbol, new OpenCvRect(x, y, templateWidth, templateHeight), score));
+            }
+        }
+
+        return candidates;
+    }
+
+    private static bool IsLocalMaximum(Mat matchResult, int x, int y, float score)
+    {
+        for (var offsetY = -1; offsetY <= 1; offsetY++)
+        {
+            var neighborY = y + offsetY;
+            if (neighborY < 0 || neighborY >= matchResult.Rows)
+            {
+                continue;
+            }
+
+            for (var offsetX = -1; offsetX <= 1; offsetX++)
+            {
+                if (offsetX == 0 && offsetY == 0)
+                {
+                    continue;
+                }
+
+                var neighborX = x + offsetX;
+                if (neighborX < 0 || neighborX >= matchResult.Cols)
+                {
+                    continue;
+                }
+
+                var neighborScore = matchResult.At<float>(neighborY, neighborX);
+                if (neighborScore > score)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private static void DebugWriteCandidates(string header, IReadOnlyList<OcrCandidate> candidates)
+    {
+        Debug.WriteLine($"{header} count={candidates.Count}");
+        foreach (var candidate in candidates.OrderBy(x => x.Bounds.X).ThenByDescending(x => x.Score))
+        {
+            Debug.WriteLine(
+                $"{header} {candidate.Symbol} x={candidate.Bounds.X} y={candidate.Bounds.Y} w={candidate.Bounds.Width} h={candidate.Bounds.Height} score={candidate.Score:F4}");
+        }
+    }
+
+    private static void DebugWriteThresholdResult(string header, ThresholdRecognitionResult result)
+    {
+        Debug.WriteLine(
+            $"{header} threshold={result.Threshold:F3} count={result.Candidates.Count} text={result.Text}");
     }
 
     private bool TryEnsureDigitRepository(out DigitTemplateRepository repository)
@@ -413,5 +509,25 @@ public sealed class GameStageChallengeOcrService
         public double CenterX => Bounds.X + Bounds.Width / 2d;
 
         public double CenterY => Bounds.Y + Bounds.Height / 2d;
+    }
+
+    private sealed record ThresholdRecognitionResult(double Threshold, IReadOnlyList<OcrCandidate> Candidates, string Text)
+    {
+        public bool IsBetterThan(ThresholdRecognitionResult other)
+        {
+            if (Text.Length != other.Text.Length)
+            {
+                return Text.Length > other.Text.Length;
+            }
+
+            var averageScore = Candidates.Count == 0 ? double.NegativeInfinity : Candidates.Average(x => x.Score);
+            var otherAverageScore = other.Candidates.Count == 0 ? double.NegativeInfinity : other.Candidates.Average(x => x.Score);
+            if (!double.Equals(averageScore, otherAverageScore))
+            {
+                return averageScore > otherAverageScore;
+            }
+
+            return Threshold < other.Threshold;
+        }
     }
 }

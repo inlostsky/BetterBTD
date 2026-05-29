@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using BetterBTD.Models;
@@ -19,10 +19,23 @@ public sealed class TemplateMatchService
 
     public TemplateMatchInfo Match(Bitmap sourceImage, Bitmap templateImage, double threshold = DefaultThreshold)
     {
-        return Match(sourceImage, templateImage, null, threshold);
+        return Match(sourceImage, templateImage, null, threshold, TemplateMatchOptions.CCoeffNormedNoMask);
     }
 
     public TemplateMatchInfo Match(Bitmap sourceImage, Bitmap templateImage, Bitmap? templateMask, double threshold = DefaultThreshold)
+    {
+        var defaultOptions = templateMask is null
+            ? TemplateMatchOptions.CCoeffNormedNoMask
+            : TemplateMatchOptions.CCorrNormedMasked;
+        return Match(sourceImage, templateImage, templateMask, threshold, defaultOptions);
+    }
+
+    public TemplateMatchInfo Match(
+        Bitmap sourceImage,
+        Bitmap templateImage,
+        Bitmap? templateMask,
+        double threshold,
+        TemplateMatchOptions options)
     {
         ArgumentNullException.ThrowIfNull(sourceImage);
         ArgumentNullException.ThrowIfNull(templateImage);
@@ -33,7 +46,7 @@ public sealed class TemplateMatchService
 
         try
         {
-            return Match(sourceMat, templateMat, maskMat, threshold);
+            return Match(sourceMat, templateMat, maskMat, threshold, options);
         }
         finally
         {
@@ -43,14 +56,27 @@ public sealed class TemplateMatchService
 
     public TemplateMatchInfo Match(Mat sourceImage, Mat templateImage, double threshold = DefaultThreshold)
     {
-        return Match(sourceImage, templateImage, null, threshold);
+        return Match(sourceImage, templateImage, null, threshold, TemplateMatchOptions.CCoeffNormedNoMask);
     }
 
     public TemplateMatchInfo Match(Mat sourceImage, Mat templateImage, Mat? templateMask, double threshold = DefaultThreshold)
     {
+        var defaultOptions = templateMask is null
+            ? TemplateMatchOptions.CCoeffNormedNoMask
+            : TemplateMatchOptions.CCorrNormedMasked;
+        return Match(sourceImage, templateImage, templateMask, threshold, defaultOptions);
+    }
+
+    public TemplateMatchInfo Match(
+        Mat sourceImage,
+        Mat templateImage,
+        Mat? templateMask,
+        double threshold,
+        TemplateMatchOptions options)
+    {
         ArgumentNullException.ThrowIfNull(sourceImage);
         ArgumentNullException.ThrowIfNull(templateImage);
-        using var result = CreateMatchResult(sourceImage, templateImage, templateMask);
+        using var result = CreateMatchResult(sourceImage, templateImage, templateMask, options);
         Cv2.MinMaxLoc(result, out _, out var maxValue, out _, out var maxLocation);
         return new TemplateMatchInfo(maxLocation.X, maxLocation.Y, templateImage.Width, templateImage.Height, maxValue, threshold);
     }
@@ -67,6 +93,18 @@ public sealed class TemplateMatchService
         return matchInfo.IsMatch;
     }
 
+    public bool TryMatch(
+        Bitmap sourceImage,
+        Bitmap templateImage,
+        Bitmap? templateMask,
+        out TemplateMatchInfo matchInfo,
+        double threshold,
+        TemplateMatchOptions options)
+    {
+        matchInfo = Match(sourceImage, templateImage, templateMask, threshold, options);
+        return matchInfo.IsMatch;
+    }
+
     public bool TryMatch(Mat sourceImage, Mat templateImage, out TemplateMatchInfo matchInfo, double threshold = DefaultThreshold)
     {
         matchInfo = Match(sourceImage, templateImage, threshold);
@@ -79,7 +117,31 @@ public sealed class TemplateMatchService
         return matchInfo.IsMatch;
     }
 
+    public bool TryMatch(
+        Mat sourceImage,
+        Mat templateImage,
+        Mat? templateMask,
+        out TemplateMatchInfo matchInfo,
+        double threshold,
+        TemplateMatchOptions options)
+    {
+        matchInfo = Match(sourceImage, templateImage, templateMask, threshold, options);
+        return matchInfo.IsMatch;
+    }
+
     public Mat CreateMatchResult(Mat sourceImage, Mat templateImage, Mat? templateMask = null)
+    {
+        var defaultOptions = templateMask is null
+            ? TemplateMatchOptions.CCoeffNormedNoMask
+            : TemplateMatchOptions.CCorrNormedMasked;
+        return CreateMatchResult(sourceImage, templateImage, templateMask, defaultOptions);
+    }
+
+    public Mat CreateMatchResult(
+        Mat sourceImage,
+        Mat templateImage,
+        Mat? templateMask,
+        TemplateMatchOptions options)
     {
         ArgumentNullException.ThrowIfNull(sourceImage);
         ArgumentNullException.ThrowIfNull(templateImage);
@@ -101,26 +163,52 @@ public sealed class TemplateMatchService
 
         using var preparedSource = PrepareForTemplateMatch(sourceImage);
         using var preparedTemplate = PrepareForTemplateMatch(templateImage);
-        var preparedMask = PrepareMask(templateMask, new OpenCvSharp.Size(preparedTemplate.Width, preparedTemplate.Height));
+        using var preparedMask = options.UseMask
+            ? PrepareMask(templateMask, new OpenCvSharp.Size(preparedTemplate.Width, preparedTemplate.Height))
+            : null;
 
-        try
+        if (options.UseMask && preparedMask is null)
         {
-            var result = new Mat();
-            if (preparedMask is null)
-            {
-                Cv2.MatchTemplate(preparedSource, preparedTemplate, result, TemplateMatchModes.CCoeffNormed);
-            }
-            else
-            {
-                Cv2.MatchTemplate(preparedSource, preparedTemplate, result, TemplateMatchModes.CCorrNormed, preparedMask);
-            }
+            throw new ArgumentNullException(nameof(templateMask), "A template mask is required for the selected match options.");
+        }
 
-            return result;
-        }
-        finally
+        if (options.UseMask && !SupportsMask(options.Method))
         {
-            preparedMask?.Dispose();
+            throw new NotSupportedException($"Template matching method {options.Method} does not support masks.");
         }
+
+        var result = new Mat();
+        if (preparedMask is null)
+        {
+            Cv2.MatchTemplate(preparedSource, preparedTemplate, result, options.Method);
+        }
+        else
+        {
+            Cv2.MatchTemplate(preparedSource, preparedTemplate, result, options.Method, preparedMask);
+        }
+
+        NormalizeMatchResult(result, options.Method);
+        return result;
+    }
+
+    private static void NormalizeMatchResult(Mat result, TemplateMatchModes method)
+    {
+        if (!IsLowerValueBetter(method))
+        {
+            return;
+        }
+
+        Cv2.Subtract(Scalar.All(1d), result, result);
+    }
+
+    private static bool SupportsMask(TemplateMatchModes method)
+    {
+        return method is TemplateMatchModes.SqDiff or TemplateMatchModes.SqDiffNormed or TemplateMatchModes.CCorrNormed;
+    }
+
+    private static bool IsLowerValueBetter(TemplateMatchModes method)
+    {
+        return method is TemplateMatchModes.SqDiff or TemplateMatchModes.SqDiffNormed;
     }
 
     private static Mat PrepareForTemplateMatch(Mat image)
@@ -214,4 +302,3 @@ public sealed class TemplateMatchService
         }
     }
 }
-

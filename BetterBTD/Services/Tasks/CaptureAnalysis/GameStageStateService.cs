@@ -480,7 +480,7 @@ public sealed class GameStageStateService : IGameStageStateService
         if (!isVisible)
         {
             var emptyPath = new UpgradePathReadResult(0, []);
-            WriteUpgradePanelDebugOutput(panelName, false, visibleChecks, emptyPath, emptyPath, emptyPath);
+            //WriteUpgradePanelDebugOutput(panelName, false, visibleChecks, emptyPath, emptyPath, emptyPath);
 
             return new GameStageUpgradePanelState
             {
@@ -495,7 +495,7 @@ public sealed class GameStageStateService : IGameStageStateService
         var middlePath = ReadUpgradePathLevel(frame, middlePathPoints);
         var bottomPath = ReadUpgradePathLevel(frame, bottomPathPoints);
 
-        WriteUpgradePanelDebugOutput(panelName, true, visibleChecks, topPath, middlePath, bottomPath);
+        //WriteUpgradePanelDebugOutput(panelName, true, visibleChecks, topPath, middlePath, bottomPath);
 
         return new GameStageUpgradePanelState
         {

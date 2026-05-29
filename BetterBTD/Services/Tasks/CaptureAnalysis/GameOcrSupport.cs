@@ -127,6 +127,7 @@ internal static class GameOcrIconMatcher
         TemplateMatchService templateMatchService,
         Mat captureRegion,
         IReadOnlyList<PreparedTemplate> templates,
+        TemplateMatchOptions matchOptions,
         IReadOnlyList<double> thresholds,
         int frameWidth,
         int frameHeight,
@@ -147,7 +148,7 @@ internal static class GameOcrIconMatcher
 
         foreach (var threshold in thresholds)
         {
-            if (!TryFindBestTemplateMatch(templateMatchService, captureRegion, templates, threshold, out var localMatchInfo))
+            if (!TryFindBestTemplateMatch(templateMatchService, captureRegion, templates, matchOptions, threshold, out var localMatchInfo))
             {
                 continue;
             }
@@ -170,6 +171,7 @@ internal static class GameOcrIconMatcher
         TemplateMatchService templateMatchService,
         Mat captureRegion,
         IReadOnlyList<CandidateTemplate<TCandidate>> templates,
+        TemplateMatchOptions matchOptions,
         IReadOnlyList<double> thresholds,
         int frameWidth,
         int frameHeight,
@@ -190,7 +192,7 @@ internal static class GameOcrIconMatcher
             return false;
         }
 
-        var candidateMatches = BuildCandidateMatches(templateMatchService, captureRegion, templates);
+        var candidateMatches = BuildCandidateMatches(templateMatchService, captureRegion, templates, matchOptions);
         foreach (var threshold in thresholds)
         {
             if (!TrySelectBestCandidateMatch(candidateMatches, threshold, out var matchedCandidate, out var localMatchInfo))
@@ -217,6 +219,7 @@ internal static class GameOcrIconMatcher
         TemplateMatchService templateMatchService,
         Mat captureRegion,
         IReadOnlyList<PreparedTemplate> templates,
+        TemplateMatchOptions matchOptions,
         double threshold,
         out TemplateMatchInfo matchInfo)
     {
@@ -230,7 +233,12 @@ internal static class GameOcrIconMatcher
                 continue;
             }
 
-            var candidate = templateMatchService.Match(captureRegion, template.Image, template.Mask, threshold);
+            var candidate = templateMatchService.Match(
+                captureRegion,
+                template.Image,
+                matchOptions.UseMask ? template.Mask : null,
+                threshold,
+                matchOptions);
             if (!candidate.IsMatch)
             {
                 continue;
@@ -250,18 +258,20 @@ internal static class GameOcrIconMatcher
         TemplateMatchService templateMatchService,
         Mat captureRegion,
         IReadOnlyList<CandidateTemplate<TCandidate>> templates,
+        TemplateMatchOptions matchOptions,
         double threshold,
         out TCandidate candidate,
         out TemplateMatchInfo matchInfo)
     {
-        var candidateMatches = BuildCandidateMatches(templateMatchService, captureRegion, templates);
+        var candidateMatches = BuildCandidateMatches(templateMatchService, captureRegion, templates, matchOptions);
         return TrySelectBestCandidateMatch(candidateMatches, threshold, out candidate, out matchInfo);
     }
 
     internal static IReadOnlyList<CandidateMatch<TCandidate>> BuildCandidateMatches<TCandidate>(
         TemplateMatchService templateMatchService,
         Mat captureRegion,
-        IReadOnlyList<CandidateTemplate<TCandidate>> templates)
+        IReadOnlyList<CandidateTemplate<TCandidate>> templates,
+        TemplateMatchOptions matchOptions)
     {
         var candidateMatches = new List<CandidateMatch<TCandidate>>(templates.Count);
         foreach (var template in templates)
@@ -274,8 +284,9 @@ internal static class GameOcrIconMatcher
             var currentMatchInfo = templateMatchService.Match(
                 captureRegion,
                 template.Template.Image,
-                template.Template.Mask,
-                double.NegativeInfinity);
+                matchOptions.UseMask ? template.Template.Mask : null,
+                double.NegativeInfinity,
+                matchOptions);
             candidateMatches.Add(new CandidateMatch<TCandidate>(template.Candidate, currentMatchInfo));
         }
 
