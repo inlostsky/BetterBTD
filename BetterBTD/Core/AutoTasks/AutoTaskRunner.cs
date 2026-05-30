@@ -372,7 +372,7 @@ public sealed class AutoTaskRunner
 
     private static bool ShouldMonitorStageScriptUi(AutoTaskKind kind)
     {
-        return kind is AutoTaskKind.Collection or AutoTaskKind.BlackBorder;
+        return kind is AutoTaskKind.Collection or AutoTaskKind.BlackBorder or AutoTaskKind.LoopStage;
     }
 
     private static bool ShouldInterruptStageScript(GameUiStateId state)

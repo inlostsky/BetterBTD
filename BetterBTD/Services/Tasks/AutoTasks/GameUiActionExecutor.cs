@@ -32,11 +32,14 @@ public sealed class GameUiActionExecutor : IGameUiActionExecutor
         _inputSimulationService = inputSimulationService ?? throw new ArgumentNullException(nameof(inputSimulationService));
         _elementLocator = elementLocator ?? throw new ArgumentNullException(nameof(elementLocator));
 
-        _taskHandlers = new IGameUiTaskActionHandler[]
+        var collectionHandler = new CollectionGameUiActionHandler(inputSimulationService, gameCaptureService, navigationOcrService);
+        var blackBorderHandler = new BlackBorderGameUiActionHandler(inputSimulationService, gameCaptureService, navigationOcrService);
+        _taskHandlers = new Dictionary<AutoTaskKind, IGameUiTaskActionHandler>
         {
-            new CollectionGameUiActionHandler(inputSimulationService, gameCaptureService, navigationOcrService),
-            new BlackBorderGameUiActionHandler(inputSimulationService, gameCaptureService, navigationOcrService)
-        }.ToDictionary(handler => handler.Kind);
+            [AutoTaskKind.Collection] = collectionHandler,
+            [AutoTaskKind.BlackBorder] = blackBorderHandler,
+            [AutoTaskKind.LoopStage] = blackBorderHandler
+        };
     }
 
     public static GameUiActionExecutor Instance => InstanceHolder.Value;

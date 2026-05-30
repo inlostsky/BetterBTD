@@ -14,7 +14,7 @@ public sealed class AutoTaskSkeletonTests
     {
         var options = new AutoTaskExecutionOptions();
 
-        Assert.Equal(10000, options.MaxLoopIterations);
+        Assert.Equal(20000, options.MaxLoopIterations);
     }
 
     [Theory]

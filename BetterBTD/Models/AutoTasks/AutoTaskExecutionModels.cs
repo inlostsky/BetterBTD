@@ -9,6 +9,7 @@ public enum AutoTaskKind
     Custom,
     Collection,
     BlackBorder,
+    LoopStage,
     Race
 }
 
@@ -473,6 +474,7 @@ public static class AutoTaskKindExtensions
             AutoTaskKind.Custom => "custom",
             AutoTaskKind.Collection => "collection",
             AutoTaskKind.BlackBorder => "blackborder",
+            AutoTaskKind.LoopStage => "loopstage",
             AutoTaskKind.Race => "race",
             _ => kind.ToString().ToLowerInvariant()
         };

@@ -139,5 +139,4 @@ public sealed class ManagedScriptSlotCatalogService
             IsPlaceholder = true
         };
     }
-
 }

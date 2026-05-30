@@ -39,7 +39,13 @@ public partial class AutoTaskConfig : ObservableObject
     private bool _showScriptConfiguration;
 
     [ObservableProperty]
+    private bool _showScriptIdConfiguration;
+
+    [ObservableProperty]
     private bool _showCollectionSubscriptionActions;
+
+    [ObservableProperty]
+    private string _scriptId = string.Empty;
 
     [ObservableProperty]
     private bool _showBlackBorderSubscriptionActions;

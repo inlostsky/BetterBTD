@@ -16,6 +16,7 @@ public sealed class AutoTaskStrategyRegistry : IAutoTaskStrategyRegistry
                 new CustomAutoTaskStrategy(),
                 new CollectionAutoTaskStrategy(),
                 new BlackBorderAutoTaskStrategy(),
+                new LoopStageAutoTaskStrategy(),
                 new RaceAutoTaskStrategy()
             ])
     {

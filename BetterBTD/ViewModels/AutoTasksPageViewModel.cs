@@ -25,6 +25,13 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         Mode = StageMode.CHIMPS
     };
 
+    private static readonly StageEntryTarget LoopStagePlaceholderStageTarget = new()
+    {
+        Map = GameMapType.MonkeyMeadow,
+        Difficulty = StageDifficulty.Easy,
+        Mode = StageMode.Standard
+    };
+
     private readonly LocalizationService _localizationService;
     private readonly AppDialogService _appDialogService;
     private readonly AutoTaskCoordinator _autoTaskCoordinator;
@@ -66,7 +73,8 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         Tasks =
         [
             CreateCollectionTask(),
-            CreateBlackBorderTask()
+            CreateBlackBorderTask(),
+            CreateLoopStageTask()
         ];
 
         foreach (var task in Tasks)
@@ -120,6 +128,10 @@ public sealed class AutoTasksPageViewModel : ObservableObject
 
     public string ScriptConfigButtonText => _localizationService.T("Tasks.ScriptConfigButton");
 
+    public string ScriptIdLabel => _localizationService.T("Tasks.ScriptIdLabel");
+
+    public string ScriptIdDescription => _localizationService.T("Tasks.ScriptIdDescription");
+
     public string CollectionSubscriptionLabel => _localizationService.T("Tasks.CollectionSubscriptionLabel");
 
     public string CollectionSubscriptionDescription => _localizationService.T("Tasks.CollectionSubscriptionDescription");
@@ -157,6 +169,16 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             ShowBlackBorderVariantConfiguration = true,
             ShowScriptConfiguration = true,
             ShowBlackBorderSubscriptionActions = true
+        };
+    }
+
+    private AutoTaskConfig CreateLoopStageTask()
+    {
+        return new AutoTaskConfig
+        {
+            Key = AutoTaskKind.LoopStage.ToKey(),
+            ShowStageTargetConfiguration = false,
+            ShowScriptIdConfiguration = true
         };
     }
 
@@ -204,6 +226,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         {
             AutoTaskKind.Collection => BuildCollectionRequest(task),
             AutoTaskKind.BlackBorder => BuildBlackBorderRequest(task),
+            AutoTaskKind.LoopStage => BuildLoopStageRequest(task),
             _ => throw new InvalidOperationException($"Auto task '{taskKind}' is not supported on this page.")
         };
     }
@@ -242,6 +265,30 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             StageTarget = firstTarget,
             VariantKey = BuildBlackBorderScopeVariantKey(category, scopeMapCode),
             OperationIntervalMs = Math.Max(20, task.OperationIntervalMs),
+            Key = task.Key
+        };
+    }
+
+    private AutoTaskRequest BuildLoopStageRequest(AutoTaskConfig task)
+    {
+        var scriptId = task.ScriptId?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(scriptId))
+        {
+            throw new InvalidOperationException("Loop-stage script ID is required.");
+        }
+
+        if (!_managedScriptLibraryService.TryGetManagedScriptFilePath(scriptId, out var filePath))
+        {
+            throw new InvalidOperationException($"Managed script ID '{scriptId}' was not found.");
+        }
+
+        return new AutoTaskRequest
+        {
+            Kind = AutoTaskKind.LoopStage,
+            StageTarget = LoopStagePlaceholderStageTarget,
+            OperationIntervalMs = Math.Max(20, task.OperationIntervalMs),
+            PreferredScriptPath = filePath,
+            VariantKey = scriptId,
             Key = task.Key
         };
     }
@@ -319,6 +366,8 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         OnPropertyChanged(nameof(ScriptConfigLabel));
         OnPropertyChanged(nameof(ScriptConfigDescription));
         OnPropertyChanged(nameof(ScriptConfigButtonText));
+        OnPropertyChanged(nameof(ScriptIdLabel));
+        OnPropertyChanged(nameof(ScriptIdDescription));
         OnPropertyChanged(nameof(CollectionSubscriptionLabel));
         OnPropertyChanged(nameof(CollectionSubscriptionDescription));
         OnPropertyChanged(nameof(BlackBorderSubscriptionLabel));
@@ -354,6 +403,11 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         }
         else if (string.Equals(task.Key, AutoTaskKind.Collection.ToKey(), StringComparison.OrdinalIgnoreCase) &&
                  e.PropertyName == nameof(AutoTaskConfig.SelectedVariantOption))
+        {
+            UpdateRuntimeSummary(task);
+        }
+        else if (string.Equals(task.Key, AutoTaskKind.LoopStage.ToKey(), StringComparison.OrdinalIgnoreCase) &&
+                 e.PropertyName == nameof(AutoTaskConfig.ScriptId))
         {
             UpdateRuntimeSummary(task);
         }
@@ -771,6 +825,11 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             }
         }
 
+        if (task.ShowScriptIdConfiguration && !string.IsNullOrWhiteSpace(task.ScriptId))
+        {
+            parts.Add($"{ScriptIdLabel}: {task.ScriptId.Trim()}");
+        }
+
         return string.Join(" | ", parts);
     }
 
@@ -827,6 +886,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         {
             "collection" => AutoTaskKind.Collection,
             "blackborder" => AutoTaskKind.BlackBorder,
+            "loopstage" => AutoTaskKind.LoopStage,
             "race" => AutoTaskKind.Race,
             "custom" => AutoTaskKind.Custom,
             _ => throw new InvalidOperationException($"Unsupported auto task key '{taskKey}'.")
