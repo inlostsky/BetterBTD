@@ -77,10 +77,19 @@
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
 
+                <ui:NavigationViewItem Content="{Binding NavigationItems[4].Title}"
+                                       Tag="tools"
+                                       NavigationCacheMode="Enabled"
+                                       TargetPageType="{x:Type pages:ToolsPageView}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="Table24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+
             </ui:NavigationView.MenuItems>
 
             <ui:NavigationView.FooterMenuItems>
-                <ui:NavigationViewItem Content="{Binding NavigationItems[4].Title}"
+                <ui:NavigationViewItem Content="{Binding NavigationItems[5].Title}"
                                        Tag="settings"
                                        NavigationCacheMode="Enabled"
                                        TargetPageType="{x:Type pages:SettingsPageView}">

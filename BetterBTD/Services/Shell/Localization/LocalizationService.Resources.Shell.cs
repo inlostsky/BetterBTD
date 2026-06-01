@@ -18,6 +18,8 @@ public sealed partial class LocalizationService
         ["Nav.Editor.Description"] = "编辑与调试指令",
         ["Nav.Library.Title"] = "我的脚本",
         ["Nav.Library.Description"] = "分类管理脚本库",
+        ["Nav.Tools.Title"] = "小工具",
+        ["Nav.Tools.Description"] = "计算器与辅助面板",
         ["Nav.Settings.Title"] = "选项设置",
         ["Nav.Settings.Description"] = "设置中心",
 
@@ -40,6 +42,8 @@ public sealed partial class LocalizationService
         ["Nav.Editor.Description"] = "Edit and debug commands",
         ["Nav.Library.Title"] = "My Scripts",
         ["Nav.Library.Description"] = "Categorized script library",
+        ["Nav.Tools.Title"] = "Tools",
+        ["Nav.Tools.Description"] = "Calculators and utility panels",
         ["Nav.Settings.Title"] = "Options",
         ["Nav.Settings.Description"] = "Settings center",
 
