@@ -20,13 +20,11 @@ public sealed partial class LocalizationService
         ["Nav.Library.Description"] = "分类管理脚本库",
         ["Nav.Settings.Title"] = "选项设置",
         ["Nav.Settings.Description"] = "设置中心",
-        ["Nav.Logs.Title"] = "运行日志",
-        ["Nav.Logs.Description"] = "执行反馈与排错",
 
         ["Header.Start.Title"] = "开始页面",
         ["Header.Start.Subtitle"] = "快速启动游戏与截图工具",
         ["Header.Tasks.Title"] = "自动任务",
-        ["Header.Tasks.Subtitle"] = "自定义模式、刷收集、刷黑框、刷竞速"
+        ["Header.Tasks.Subtitle"] = "自定义模式、刷收藏、刷黑框、竞速"
     };
 
     private static Dictionary<string, string> BuildEnUsShellResources() => new(StringComparer.OrdinalIgnoreCase)
@@ -44,8 +42,6 @@ public sealed partial class LocalizationService
         ["Nav.Library.Description"] = "Categorized script library",
         ["Nav.Settings.Title"] = "Options",
         ["Nav.Settings.Description"] = "Settings center",
-        ["Nav.Logs.Title"] = "Logs",
-        ["Nav.Logs.Description"] = "Execution feedback and diagnostics",
 
         ["Header.Start.Title"] = "Start",
         ["Header.Start.Subtitle"] = "Quick launch for game and capture utility",

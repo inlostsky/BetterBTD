@@ -77,14 +77,6 @@
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
 
-                <ui:NavigationViewItem Content="{Binding NavigationItems[5].Title}"
-                                       Tag="logs"
-                                       NavigationCacheMode="Enabled"
-                                       TargetPageType="{x:Type pages:LogsPageView}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Document24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
             </ui:NavigationView.MenuItems>
 
             <ui:NavigationView.FooterMenuItems>

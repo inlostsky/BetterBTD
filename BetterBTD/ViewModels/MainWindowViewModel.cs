@@ -35,6 +35,5 @@ public sealed class MainWindowViewModel : ObservableObject
         NavigationItems.Add(new NavigationItem("editor", "Edit24", _localizationService.T("Nav.Editor.Title"), _localizationService.T("Nav.Editor.Description")));
         NavigationItems.Add(new NavigationItem("library", "Folder24", _localizationService.T("Nav.Library.Title"), _localizationService.T("Nav.Library.Description")));
         NavigationItems.Add(new NavigationItem("settings", "Settings24", _localizationService.T("Nav.Settings.Title"), _localizationService.T("Nav.Settings.Description")));
-        NavigationItems.Add(new NavigationItem("logs", "Document24", _localizationService.T("Nav.Logs.Title"), _localizationService.T("Nav.Logs.Description")));
     }
 }
