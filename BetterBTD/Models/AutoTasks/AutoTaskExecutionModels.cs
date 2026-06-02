@@ -8,6 +8,7 @@ public enum AutoTaskKind
 {
     Custom,
     Collection,
+    GoldBalloon,
     BlackBorder,
     LoopStage,
     Race
@@ -473,6 +474,7 @@ public static class AutoTaskKindExtensions
         {
             AutoTaskKind.Custom => "custom",
             AutoTaskKind.Collection => "collection",
+            AutoTaskKind.GoldBalloon => "goldballoon",
             AutoTaskKind.BlackBorder => "blackborder",
             AutoTaskKind.LoopStage => "loopstage",
             AutoTaskKind.Race => "race",

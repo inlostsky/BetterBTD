@@ -24,6 +24,7 @@ public sealed class ManagedScriptLibraryService
     private readonly string _manifestFilePath;
     private readonly string _blackBorderBindingsFilePath;
     private readonly string _collectionBindingsFilePath;
+    private readonly string _goldBalloonBindingsFilePath;
     private readonly ScriptDocumentService _scriptDocumentService;
     private readonly ManagedScriptSlotCatalogService _slotCatalogService;
     private readonly object _syncRoot = new();
@@ -50,6 +51,7 @@ public sealed class ManagedScriptLibraryService
         _manifestFilePath = Path.Combine(_rootDirectory, "library.json");
         _blackBorderBindingsFilePath = Path.Combine(_bindingsDirectory, "blackborder.json");
         _collectionBindingsFilePath = Path.Combine(_bindingsDirectory, "collection.json");
+        _goldBalloonBindingsFilePath = Path.Combine(_bindingsDirectory, "goldballoon.json");
         _scriptDocumentService = scriptDocumentService ?? throw new ArgumentNullException(nameof(scriptDocumentService));
         _slotCatalogService = slotCatalogService ?? throw new ArgumentNullException(nameof(slotCatalogService));
     }
@@ -878,6 +880,7 @@ public sealed class ManagedScriptLibraryService
 
         RewriteDedicatedBindingFile(_blackBorderBindingsFilePath, oldScriptId, trimmedScriptId);
         RewriteDedicatedBindingFile(_collectionBindingsFilePath, oldScriptId, trimmedScriptId);
+        RewriteDedicatedBindingFile(_goldBalloonBindingsFilePath, oldScriptId, trimmedScriptId);
 
         if (File.Exists(oldFilePath) && !string.Equals(oldFilePath, newFilePath, StringComparison.OrdinalIgnoreCase))
         {
@@ -929,6 +932,7 @@ public sealed class ManagedScriptLibraryService
 
         bindings.AddRange(LoadDedicatedBindingRecords(_blackBorderBindingsFilePath));
         bindings.AddRange(LoadDedicatedBindingRecords(_collectionBindingsFilePath));
+        bindings.AddRange(LoadDedicatedBindingRecords(_goldBalloonBindingsFilePath));
         return bindings;
     }
 
@@ -951,6 +955,7 @@ public sealed class ManagedScriptLibraryService
 
         var blackBorderBindings = LoadTaskBindingDocument(_blackBorderBindingsFilePath);
         var collectionBindings = LoadTaskBindingDocument(_collectionBindingsFilePath);
+        var goldBalloonBindings = LoadTaskBindingDocument(_goldBalloonBindingsFilePath);
         var manifestBindingsToRemove = new List<ManagedScriptSlotBindingRecord>();
 
         foreach (var binding in document.Bindings)
@@ -961,9 +966,11 @@ public sealed class ManagedScriptLibraryService
                 continue;
             }
 
-            var targetDocument = string.Equals(filePath, _blackBorderBindingsFilePath, StringComparison.OrdinalIgnoreCase)
-                ? blackBorderBindings
-                : collectionBindings;
+            var targetDocument = GetDedicatedBindingDocument(
+                filePath,
+                blackBorderBindings,
+                collectionBindings,
+                goldBalloonBindings);
 
             if (!targetDocument.Bindings.ContainsKey(binding.SlotId))
             {
@@ -981,6 +988,7 @@ public sealed class ManagedScriptLibraryService
         document.Bindings.RemoveAll(binding => manifestBindingsToRemove.Contains(binding));
         SaveTaskBindingDocument(_blackBorderBindingsFilePath, blackBorderBindings);
         SaveTaskBindingDocument(_collectionBindingsFilePath, collectionBindings);
+        SaveTaskBindingDocument(_goldBalloonBindingsFilePath, goldBalloonBindings);
         SaveManifest(document);
     }
 
@@ -988,6 +996,7 @@ public sealed class ManagedScriptLibraryService
     {
         RemoveScriptBindingsFromDedicatedFile(_blackBorderBindingsFilePath, scriptId);
         RemoveScriptBindingsFromDedicatedFile(_collectionBindingsFilePath, scriptId);
+        RemoveScriptBindingsFromDedicatedFile(_goldBalloonBindingsFilePath, scriptId);
     }
 
     private void RemoveScriptBindingsFromDedicatedFile(string filePath, string scriptId)
@@ -1027,6 +1036,30 @@ public sealed class ManagedScriptLibraryService
             Version = taskKind == AutoTaskKind.BlackBorder ? 2 : 1,
             Bindings = bindings
         };
+    }
+
+    private ManagedScriptTaskBindingDocument GetDedicatedBindingDocument(
+        string filePath,
+        ManagedScriptTaskBindingDocument blackBorderBindings,
+        ManagedScriptTaskBindingDocument collectionBindings,
+        ManagedScriptTaskBindingDocument goldBalloonBindings)
+    {
+        if (string.Equals(filePath, _blackBorderBindingsFilePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return blackBorderBindings;
+        }
+
+        if (string.Equals(filePath, _collectionBindingsFilePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return collectionBindings;
+        }
+
+        if (string.Equals(filePath, _goldBalloonBindingsFilePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return goldBalloonBindings;
+        }
+
+        throw new InvalidOperationException($"Unsupported dedicated binding file '{filePath}'.");
     }
 
     private bool IsBlackBorderBindingFile(string filePath)
@@ -1166,6 +1199,9 @@ public sealed class ManagedScriptLibraryService
                 return true;
             case AutoTaskKind.Collection:
                 filePath = _collectionBindingsFilePath;
+                return true;
+            case AutoTaskKind.GoldBalloon:
+                filePath = _goldBalloonBindingsFilePath;
                 return true;
             default:
                 filePath = string.Empty;

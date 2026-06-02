@@ -25,6 +25,13 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         Mode = StageMode.CHIMPS
     };
 
+    private static readonly StageEntryTarget GoldBalloonPlaceholderStageTarget = new()
+    {
+        Map = GameMapType.MonkeyMeadow,
+        Difficulty = StageDifficulty.Easy,
+        Mode = StageMode.Standard
+    };
+
     private static readonly StageEntryTarget LoopStagePlaceholderStageTarget = new()
     {
         Map = GameMapType.MonkeyMeadow,
@@ -37,6 +44,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
     private readonly AutoTaskCoordinator _autoTaskCoordinator;
     private readonly ManagedScriptLibraryService _managedScriptLibraryService;
     private readonly CollectionScriptSubscriptionService _collectionScriptSubscriptionService;
+    private readonly GoldBalloonScriptSubscriptionService _goldBalloonScriptSubscriptionService;
     private readonly BlackBorderScriptSubscriptionService _blackBorderScriptSubscriptionService;
     private readonly Dictionary<string, TaskRuntimeWindow> _runtimeWindowsByTaskKey = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, TaskRuntimeWindowViewModel> _runtimeViewModelsByTaskKey = new(StringComparer.OrdinalIgnoreCase);
@@ -51,6 +59,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             AutoTaskCoordinator.Instance,
             ManagedScriptLibraryService.Instance,
             CollectionScriptSubscriptionService.Instance,
+            GoldBalloonScriptSubscriptionService.Instance,
             BlackBorderScriptSubscriptionService.Instance)
     {
     }
@@ -61,6 +70,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         AutoTaskCoordinator autoTaskCoordinator,
         ManagedScriptLibraryService managedScriptLibraryService,
         CollectionScriptSubscriptionService collectionScriptSubscriptionService,
+        GoldBalloonScriptSubscriptionService goldBalloonScriptSubscriptionService,
         BlackBorderScriptSubscriptionService blackBorderScriptSubscriptionService)
     {
         _localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
@@ -68,11 +78,13 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         _autoTaskCoordinator = autoTaskCoordinator ?? throw new ArgumentNullException(nameof(autoTaskCoordinator));
         _managedScriptLibraryService = managedScriptLibraryService ?? throw new ArgumentNullException(nameof(managedScriptLibraryService));
         _collectionScriptSubscriptionService = collectionScriptSubscriptionService ?? throw new ArgumentNullException(nameof(collectionScriptSubscriptionService));
+        _goldBalloonScriptSubscriptionService = goldBalloonScriptSubscriptionService ?? throw new ArgumentNullException(nameof(goldBalloonScriptSubscriptionService));
         _blackBorderScriptSubscriptionService = blackBorderScriptSubscriptionService ?? throw new ArgumentNullException(nameof(blackBorderScriptSubscriptionService));
 
         Tasks =
         [
             CreateCollectionTask(),
+            CreateGoldBalloonTask(),
             CreateBlackBorderTask(),
             CreateLoopStageTask()
         ];
@@ -136,6 +148,10 @@ public sealed class AutoTasksPageViewModel : ObservableObject
 
     public string CollectionSubscriptionDescription => _localizationService.T("Tasks.CollectionSubscriptionDescription");
 
+    public string GoldBalloonSubscriptionLabel => _localizationService.T("Tasks.GoldBalloonSubscriptionLabel");
+
+    public string GoldBalloonSubscriptionDescription => _localizationService.T("Tasks.GoldBalloonSubscriptionDescription");
+
     public string BlackBorderSubscriptionLabel => _localizationService.T("Tasks.BlackBorderSubscriptionLabel");
 
     public string BlackBorderSubscriptionDescription => _localizationService.T("Tasks.BlackBorderSubscriptionDescription");
@@ -155,6 +171,17 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             Key = AutoTaskKind.Collection.ToKey(),
             ShowStageTargetConfiguration = false,
             ShowCollectionVariantConfiguration = true,
+            ShowScriptConfiguration = true,
+            ShowCollectionSubscriptionActions = true
+        };
+    }
+
+    private AutoTaskConfig CreateGoldBalloonTask()
+    {
+        return new AutoTaskConfig
+        {
+            Key = AutoTaskKind.GoldBalloon.ToKey(),
+            ShowStageTargetConfiguration = false,
             ShowScriptConfiguration = true,
             ShowCollectionSubscriptionActions = true
         };
@@ -225,6 +252,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         return taskKind switch
         {
             AutoTaskKind.Collection => BuildCollectionRequest(task),
+            AutoTaskKind.GoldBalloon => BuildGoldBalloonRequest(task),
             AutoTaskKind.BlackBorder => BuildBlackBorderRequest(task),
             AutoTaskKind.LoopStage => BuildLoopStageRequest(task),
             _ => throw new InvalidOperationException($"Auto task '{taskKind}' is not supported on this page.")
@@ -239,6 +267,17 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             Kind = AutoTaskKind.Collection,
             StageTarget = CollectionPlaceholderStageTarget,
             VariantKey = selectedVariantKey,
+            OperationIntervalMs = Math.Max(20, task.OperationIntervalMs),
+            Key = task.Key
+        };
+    }
+
+    private AutoTaskRequest BuildGoldBalloonRequest(AutoTaskConfig task)
+    {
+        return new AutoTaskRequest
+        {
+            Kind = AutoTaskKind.GoldBalloon,
+            StageTarget = GoldBalloonPlaceholderStageTarget,
             OperationIntervalMs = Math.Max(20, task.OperationIntervalMs),
             Key = task.Key
         };
@@ -319,6 +358,8 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             task.Description = _localizationService.T($"Tasks.{task.Key}.Description");
             task.TutorialUrl = _localizationService.T("Tasks.TutorialUrl");
             task.RunningButtonText = task.IsRunning ? _localizationService.T("Tasks.Stop") : _localizationService.T("Tasks.Start");
+            task.SubscriptionLabel = ResolveSubscriptionLabel(task.Key);
+            task.SubscriptionDescription = ResolveSubscriptionDescription(task.Key);
 
             if (string.Equals(task.Key, AutoTaskKind.Collection.ToKey(), StringComparison.OrdinalIgnoreCase))
             {
@@ -370,6 +411,8 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         OnPropertyChanged(nameof(ScriptIdDescription));
         OnPropertyChanged(nameof(CollectionSubscriptionLabel));
         OnPropertyChanged(nameof(CollectionSubscriptionDescription));
+        OnPropertyChanged(nameof(GoldBalloonSubscriptionLabel));
+        OnPropertyChanged(nameof(GoldBalloonSubscriptionDescription));
         OnPropertyChanged(nameof(BlackBorderSubscriptionLabel));
         OnPropertyChanged(nameof(BlackBorderSubscriptionDescription));
         OnPropertyChanged(nameof(SubscriptionImportButtonText));
@@ -624,6 +667,9 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             case AutoTaskKind.Collection:
                 ExportCollectionSubscription();
                 return;
+            case AutoTaskKind.GoldBalloon:
+                ExportGoldBalloonSubscription();
+                return;
             case AutoTaskKind.BlackBorder:
                 ExportBlackBorderSubscription(task);
                 return;
@@ -651,6 +697,28 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         catch (Exception ex)
         {
             ShowDialog("Tasks.Dialog.CollectionSubscriptionExportFailed.Title", ex.Message);
+        }
+    }
+
+    private void ExportGoldBalloonSubscription()
+    {
+        var dialog = new SaveFileDialog
+        {
+            Filter = _localizationService.T("Tasks.Subscription.ExportFilter"),
+            FileName = "goldballoon-subscription.btdsub"
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            _goldBalloonScriptSubscriptionService.Export(dialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            ShowDialog("Tasks.Dialog.GoldBalloonSubscriptionExportFailed.Title", ex.Message);
         }
     }
 
@@ -717,16 +785,39 @@ public sealed class AutoTasksPageViewModel : ObservableObject
                 return;
             }
 
+            if (GoldBalloonScriptSubscriptionService.IsGoldBalloonSubscriptionPackage(dialog.FileName))
+            {
+                _goldBalloonScriptSubscriptionService.Import(dialog.FileName);
+                return;
+            }
+
             _collectionScriptSubscriptionService.Import(dialog.FileName);
         }
         catch (Exception ex)
         {
             var taskKind = ResolveTaskKind(task.Key);
-            var titleKey = taskKind == AutoTaskKind.BlackBorder
-                ? "Tasks.Dialog.BlackBorderSubscriptionImportFailed.Title"
-                : "Tasks.Dialog.CollectionSubscriptionImportFailed.Title";
+            var titleKey = taskKind switch
+            {
+                AutoTaskKind.BlackBorder => "Tasks.Dialog.BlackBorderSubscriptionImportFailed.Title",
+                AutoTaskKind.GoldBalloon => "Tasks.Dialog.GoldBalloonSubscriptionImportFailed.Title",
+                _ => "Tasks.Dialog.CollectionSubscriptionImportFailed.Title"
+            };
             ShowDialog(titleKey, ex.Message);
         }
+    }
+
+    private string ResolveSubscriptionLabel(string taskKey)
+    {
+        return string.Equals(taskKey, AutoTaskKind.GoldBalloon.ToKey(), StringComparison.OrdinalIgnoreCase)
+            ? GoldBalloonSubscriptionLabel
+            : CollectionSubscriptionLabel;
+    }
+
+    private string ResolveSubscriptionDescription(string taskKey)
+    {
+        return string.Equals(taskKey, AutoTaskKind.GoldBalloon.ToKey(), StringComparison.OrdinalIgnoreCase)
+            ? GoldBalloonSubscriptionDescription
+            : CollectionSubscriptionDescription;
     }
 
     private TaskRuntimeWindow EnsureRuntimeWindow(AutoTaskConfig task)
@@ -885,6 +976,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         return taskKey?.Trim().ToLowerInvariant() switch
         {
             "collection" => AutoTaskKind.Collection,
+            "goldballoon" => AutoTaskKind.GoldBalloon,
             "blackborder" => AutoTaskKind.BlackBorder,
             "loopstage" => AutoTaskKind.LoopStage,
             "race" => AutoTaskKind.Race,

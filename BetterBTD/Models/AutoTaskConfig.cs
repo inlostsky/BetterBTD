@@ -45,6 +45,12 @@ public partial class AutoTaskConfig : ObservableObject
     private bool _showCollectionSubscriptionActions;
 
     [ObservableProperty]
+    private string _subscriptionLabel = string.Empty;
+
+    [ObservableProperty]
+    private string _subscriptionDescription = string.Empty;
+
+    [ObservableProperty]
     private string _scriptId = string.Empty;
 
     [ObservableProperty]

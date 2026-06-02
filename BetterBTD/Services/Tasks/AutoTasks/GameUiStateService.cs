@@ -18,7 +18,12 @@ public sealed class GameUiStateService : IGameUiStateService
         .Where(static definition => definition.Tier == MapDifficultyTier.Expert)
         .Select(static definition => definition.Type)
         .ToArray();
+    private static readonly GameMapType[] GoldBalloonBeginnerMaps = GameElementCatalog.Maps
+        .Where(static definition => definition.Tier == MapDifficultyTier.Beginner)
+        .Select(static definition => definition.Type)
+        .ToArray();
     private static readonly OpenCvRect CollectionExpertMapReferenceRegion = new(360, 520, 360, 250);
+    private static readonly OpenCvRect GoldBalloonBeginnerMapReferenceRegion = new(360, 207, 360, 250);
 
     private readonly GameCaptureService _gameCaptureService;
     private readonly GameStageStateService _gameStageStateService;
@@ -210,6 +215,20 @@ public sealed class GameUiStateService : IGameUiStateService
             }
         }
 
+        if (snapshot.State == GameUiStateId.MapSearchResults &&
+            TryRecognizeGoldBalloonMap(context.Frame, out var goldBalloonMap, out var goldBalloonMapMatches))
+        {
+            if (goldBalloonMapMatches.Count > 0)
+            {
+                facts["goldBalloonMapMatches"] = goldBalloonMapMatches;
+            }
+
+            if (goldBalloonMap.HasValue)
+            {
+                facts["goldBalloonMap"] = goldBalloonMap.Value;
+            }
+        }
+
         if (snapshot.State == GameUiStateId.Defeat &&
             _navigationOcrService.TryLocateHomeButton(context.Frame, out var homeButtonPoint))
         {
@@ -237,16 +256,44 @@ public sealed class GameUiStateService : IGameUiStateService
         out GameMapType? map,
         out IReadOnlyList<MapTemplateMatchResult> candidateMatches)
     {
-        var expertMapRegion = GameOcrSupport.ScaleReferenceRect(CollectionExpertMapReferenceRegion, frame.Width, frame.Height);
-        using var expertMapCapture = new Mat(frame, expertMapRegion);
+        return TryRecognizeTaskMap(
+            frame,
+            CollectionExpertMapReferenceRegion,
+            CollectionExpertMaps,
+            out map,
+            out candidateMatches);
+    }
+
+    private bool TryRecognizeGoldBalloonMap(
+        Mat frame,
+        out GameMapType? map,
+        out IReadOnlyList<MapTemplateMatchResult> candidateMatches)
+    {
+        return TryRecognizeTaskMap(
+            frame,
+            GoldBalloonBeginnerMapReferenceRegion,
+            GoldBalloonBeginnerMaps,
+            out map,
+            out candidateMatches);
+    }
+
+    private bool TryRecognizeTaskMap(
+        Mat frame,
+        OpenCvRect referenceRegion,
+        IReadOnlyList<GameMapType> candidateMaps,
+        out GameMapType? map,
+        out IReadOnlyList<MapTemplateMatchResult> candidateMatches)
+    {
+        var scaledRegion = GameOcrSupport.ScaleReferenceRect(referenceRegion, frame.Width, frame.Height);
+        using var mapCapture = new Mat(frame, scaledRegion);
 
         var recognized = _navigationOcrService.TryLocateBestMap(
-            expertMapCapture,
-            CollectionExpertMaps,
+            mapCapture,
+            candidateMaps,
             frame.Width,
             frame.Height,
-            expertMapRegion.X,
-            expertMapRegion.Y,
+            scaledRegion.X,
+            scaledRegion.Y,
             out var recognizedMap,
             out _,
             out _,

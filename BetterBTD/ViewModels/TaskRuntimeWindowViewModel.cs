@@ -683,6 +683,11 @@ public sealed class TaskRuntimeWindowViewModel : ObservableObject
             return GameElementCatalog.GetMapDisplayName(map);
         }
 
+        if (snapshot.Facts.TryGetValue("goldBalloonMap", out rawMap) && rawMap is GameMapType goldBalloonMap)
+        {
+            return GameElementCatalog.GetMapDisplayName(goldBalloonMap);
+        }
+
         return string.Empty;
     }
 

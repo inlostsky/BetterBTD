@@ -81,6 +81,8 @@ public sealed class ManagedAutoTaskScriptResolver : IAutoTaskScriptResolver
             AutoTaskKind.Collection when query.StageTarget is not null &&
                                          ManagedScriptCollectionModeCatalog.TryNormalizeKey(query.VariantKey, out var variantKey) =>
                 ManagedScriptSlotIdFactory.CreateCollectionSlotId(variantKey, query.StageTarget.Map),
+            AutoTaskKind.GoldBalloon when query.StageTarget is not null =>
+                ManagedScriptSlotIdFactory.CreateGoldBalloonSlotId(query.StageTarget.Map),
             AutoTaskKind.BlackBorder when query.StageTarget is not null => ManagedScriptSlotIdFactory.CreateBlackBorderSlotId(
                 query.StageTarget.Map,
                 query.StageTarget.Difficulty,
@@ -105,6 +107,11 @@ public sealed class ManagedAutoTaskScriptResolver : IAutoTaskScriptResolver
         if (query.Kind == AutoTaskKind.Collection)
         {
             return "Collection task variant key is not configured.";
+        }
+
+        if (query.Kind == AutoTaskKind.GoldBalloon)
+        {
+            return "Gold balloon task could not determine the beginner-map script slot.";
         }
 
         return "Auto-task script resolution could not determine a managed script slot yet.";

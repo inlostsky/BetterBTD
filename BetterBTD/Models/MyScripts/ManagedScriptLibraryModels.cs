@@ -329,6 +329,11 @@ public static class ManagedScriptSlotIdFactory
         return $"collection/{ManagedScriptCollectionModeCatalog.NormalizeKey(modeKey)}/{map}";
     }
 
+    public static string CreateGoldBalloonSlotId(GameMapType map)
+    {
+        return $"goldballoon/{map}";
+    }
+
     public static string CreateRaceCurrentSlotId()
     {
         return "race/current";

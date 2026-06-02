@@ -56,6 +56,7 @@ public sealed class ManagedScriptSlotCatalogService
         var slots = new List<ManagedScriptSlotDefinition>();
         slots.AddRange(BuildCustomSlots());
         slots.AddRange(BuildCollectionSlots());
+        slots.AddRange(BuildGoldBalloonSlots());
         slots.AddRange(BuildBlackBorderSlots());
         slots.AddRange(BuildRaceSlots());
         return slots;
@@ -97,6 +98,30 @@ public sealed class ManagedScriptSlotCatalogService
                     IsPlaceholder = true
                 };
             }
+        }
+    }
+
+    private static IEnumerable<ManagedScriptSlotDefinition> BuildGoldBalloonSlots()
+    {
+        var beginnerMaps = GameElementCatalog.Maps
+            .Where(map => map.Tier == MapDifficultyTier.Beginner)
+            .ToList();
+
+        foreach (var map in beginnerMaps)
+        {
+            yield return new ManagedScriptSlotDefinition
+            {
+                SlotId = ManagedScriptSlotIdFactory.CreateGoldBalloonSlotId(map.Type),
+                TaskKind = AutoTaskKind.GoldBalloon,
+                GroupName = "Gold Balloon",
+                DisplayName = GameElementCatalog.GetMapDisplayName(map.Type),
+                Qualifiers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["map"] = map.Type.ToString()
+                },
+                SuggestedTags = ["gold-balloon"],
+                IsPlaceholder = true
+            };
         }
     }
 

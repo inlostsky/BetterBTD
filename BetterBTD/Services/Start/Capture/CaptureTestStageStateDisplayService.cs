@@ -85,7 +85,7 @@ public sealed class CaptureTestStageStateDisplayService
             details.Add($"{localizationService.T("CaptureTest.StageTarget")}: {FormatText(localizationService, snapshot?.StageTarget)}");
         }
 
-        var mapRecognitionText = FormatCollectionMapRecognition(localizationService, gameUiSnapshot);
+        var mapRecognitionText = FormatMapRecognition(localizationService, gameUiSnapshot);
         if (!string.IsNullOrWhiteSpace(mapRecognitionText))
         {
             details.Add($"{localizationService.T("CaptureTest.MapRecognition")}: {mapRecognitionText}");
@@ -94,7 +94,7 @@ public sealed class CaptureTestStageStateDisplayService
         return string.Join(" | ", details);
     }
 
-    private static string FormatCollectionMapRecognition(
+    private static string FormatMapRecognition(
         LocalizationService localizationService,
         GameUiSnapshot? gameUiSnapshot)
     {
@@ -104,7 +104,18 @@ public sealed class CaptureTestStageStateDisplayService
             return string.Empty;
         }
 
-        if (!gameUiSnapshot.Facts.TryGetValue("collectionMapMatches", out var rawMatches) ||
+        var recognizedMapKey = gameUiSnapshot.Facts.ContainsKey("collectionMap")
+            ? "collectionMap"
+            : gameUiSnapshot.Facts.ContainsKey("goldBalloonMap")
+                ? "goldBalloonMap"
+                : gameUiSnapshot.Facts.ContainsKey("collectionMapMatches")
+                    ? "collectionMap"
+                    : "goldBalloonMap";
+        var matchesKey = string.Equals(recognizedMapKey, "goldBalloonMap", StringComparison.Ordinal)
+            ? "goldBalloonMapMatches"
+            : "collectionMapMatches";
+
+        if (!gameUiSnapshot.Facts.TryGetValue(matchesKey, out var rawMatches) ||
             rawMatches is not IReadOnlyList<MapTemplateMatchResult> matches ||
             matches.Count == 0)
         {
@@ -112,7 +123,7 @@ public sealed class CaptureTestStageStateDisplayService
         }
 
         GameMapType? recognizedMap = null;
-        if (gameUiSnapshot.Facts.TryGetValue("collectionMap", out var rawMap) && rawMap is GameMapType map)
+        if (gameUiSnapshot.Facts.TryGetValue(recognizedMapKey, out var rawMap) && rawMap is GameMapType map)
         {
             recognizedMap = map;
         }

@@ -33,10 +33,12 @@ public sealed class GameUiActionExecutor : IGameUiActionExecutor
         _elementLocator = elementLocator ?? throw new ArgumentNullException(nameof(elementLocator));
 
         var collectionHandler = new CollectionGameUiActionHandler(inputSimulationService, gameCaptureService, navigationOcrService);
+        var goldBalloonHandler = new GoldBalloonGameUiActionHandler(inputSimulationService, gameCaptureService, navigationOcrService);
         var blackBorderHandler = new BlackBorderGameUiActionHandler(inputSimulationService, gameCaptureService, navigationOcrService);
         _taskHandlers = new Dictionary<AutoTaskKind, IGameUiTaskActionHandler>
         {
             [AutoTaskKind.Collection] = collectionHandler,
+            [AutoTaskKind.GoldBalloon] = goldBalloonHandler,
             [AutoTaskKind.BlackBorder] = blackBorderHandler,
             [AutoTaskKind.LoopStage] = blackBorderHandler
         };
