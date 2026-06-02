@@ -39,6 +39,13 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         Mode = StageMode.Standard
     };
 
+    private static readonly StageEntryTarget OdysseyPlaceholderStageTarget = new()
+    {
+        Map = GameMapType.MonkeyMeadow,
+        Difficulty = StageDifficulty.Easy,
+        Mode = StageMode.Standard
+    };
+
     private readonly LocalizationService _localizationService;
     private readonly AppDialogService _appDialogService;
     private readonly AutoTaskCoordinator _autoTaskCoordinator;
@@ -86,7 +93,8 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             CreateCollectionTask(),
             CreateGoldBalloonTask(),
             CreateBlackBorderTask(),
-            CreateLoopStageTask()
+            CreateLoopStageTask(),
+            CreateOdysseyTask()
         ];
 
         foreach (var task in Tasks)
@@ -143,6 +151,10 @@ public sealed class AutoTasksPageViewModel : ObservableObject
     public string ScriptIdLabel => _localizationService.T("Tasks.ScriptIdLabel");
 
     public string ScriptIdDescription => _localizationService.T("Tasks.ScriptIdDescription");
+
+    public string OdysseyScriptIdsLabel => _localizationService.T("Tasks.OdysseyScriptIdsLabel");
+
+    public string OdysseyScriptIdsDescription => _localizationService.T("Tasks.OdysseyScriptIdsDescription");
 
     public string CollectionSubscriptionLabel => _localizationService.T("Tasks.CollectionSubscriptionLabel");
 
@@ -209,6 +221,16 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         };
     }
 
+    private AutoTaskConfig CreateOdysseyTask()
+    {
+        return new AutoTaskConfig
+        {
+            Key = AutoTaskKind.Odyssey.ToKey(),
+            ShowStageTargetConfiguration = false,
+            ShowOdysseyScriptIdConfiguration = true
+        };
+    }
+
     private void ToggleTask(AutoTaskConfig? task)
     {
         if (task is null)
@@ -255,6 +277,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             AutoTaskKind.GoldBalloon => BuildGoldBalloonRequest(task),
             AutoTaskKind.BlackBorder => BuildBlackBorderRequest(task),
             AutoTaskKind.LoopStage => BuildLoopStageRequest(task),
+            AutoTaskKind.Odyssey => BuildOdysseyRequest(task),
             _ => throw new InvalidOperationException($"Auto task '{taskKind}' is not supported on this page.")
         };
     }
@@ -328,6 +351,63 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             OperationIntervalMs = Math.Max(20, task.OperationIntervalMs),
             PreferredScriptPath = filePath,
             VariantKey = scriptId,
+            Key = task.Key
+        };
+    }
+
+    private AutoTaskRequest BuildOdysseyRequest(AutoTaskConfig task)
+    {
+        var rawScriptIds = new[]
+        {
+            task.ScriptId,
+            task.ScriptId2,
+            task.ScriptId3,
+            task.ScriptId4,
+            task.ScriptId5
+        };
+
+        var scriptIds = new List<string>(rawScriptIds.Length);
+        var encounteredGap = false;
+        foreach (var rawScriptId in rawScriptIds)
+        {
+            var scriptId = rawScriptId?.Trim() ?? string.Empty;
+            if (scriptId.Length == 0)
+            {
+                encounteredGap = true;
+                continue;
+            }
+
+            if (encounteredGap)
+            {
+                throw new InvalidOperationException("Odyssey script IDs must be filled in order without gaps.");
+            }
+
+            scriptIds.Add(scriptId);
+        }
+
+        if (scriptIds.Count < 3)
+        {
+            throw new InvalidOperationException("Odyssey requires at least 3 script IDs.");
+        }
+
+        var filePaths = new List<string>(scriptIds.Count);
+        foreach (var scriptId in scriptIds)
+        {
+            if (!_managedScriptLibraryService.TryGetManagedScriptFilePath(scriptId, out var filePath))
+            {
+                throw new InvalidOperationException($"Managed script ID '{scriptId}' was not found.");
+            }
+
+            filePaths.Add(filePath);
+        }
+
+        return new AutoTaskRequest
+        {
+            Kind = AutoTaskKind.Odyssey,
+            StageTarget = OdysseyPlaceholderStageTarget,
+            OperationIntervalMs = Math.Max(20, task.OperationIntervalMs),
+            PreferredScriptPaths = filePaths,
+            VariantKey = string.Join(";", scriptIds),
             Key = task.Key
         };
     }
@@ -409,6 +489,8 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         OnPropertyChanged(nameof(ScriptConfigButtonText));
         OnPropertyChanged(nameof(ScriptIdLabel));
         OnPropertyChanged(nameof(ScriptIdDescription));
+        OnPropertyChanged(nameof(OdysseyScriptIdsLabel));
+        OnPropertyChanged(nameof(OdysseyScriptIdsDescription));
         OnPropertyChanged(nameof(CollectionSubscriptionLabel));
         OnPropertyChanged(nameof(CollectionSubscriptionDescription));
         OnPropertyChanged(nameof(GoldBalloonSubscriptionLabel));
@@ -451,6 +533,15 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         }
         else if (string.Equals(task.Key, AutoTaskKind.LoopStage.ToKey(), StringComparison.OrdinalIgnoreCase) &&
                  e.PropertyName == nameof(AutoTaskConfig.ScriptId))
+        {
+            UpdateRuntimeSummary(task);
+        }
+        else if (string.Equals(task.Key, AutoTaskKind.Odyssey.ToKey(), StringComparison.OrdinalIgnoreCase) &&
+                 e.PropertyName is nameof(AutoTaskConfig.ScriptId)
+                     or nameof(AutoTaskConfig.ScriptId2)
+                     or nameof(AutoTaskConfig.ScriptId3)
+                     or nameof(AutoTaskConfig.ScriptId4)
+                     or nameof(AutoTaskConfig.ScriptId5))
         {
             UpdateRuntimeSummary(task);
         }
@@ -921,6 +1012,15 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             parts.Add($"{ScriptIdLabel}: {task.ScriptId.Trim()}");
         }
 
+        if (task.ShowOdysseyScriptIdConfiguration)
+        {
+            var scriptIds = GetOdysseyScriptIds(task);
+            if (scriptIds.Count > 0)
+            {
+                parts.Add($"{OdysseyScriptIdsLabel}: {string.Join(", ", scriptIds)}");
+            }
+        }
+
         return string.Join(" | ", parts);
     }
 
@@ -979,10 +1079,25 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             "goldballoon" => AutoTaskKind.GoldBalloon,
             "blackborder" => AutoTaskKind.BlackBorder,
             "loopstage" => AutoTaskKind.LoopStage,
+            "odyssey" => AutoTaskKind.Odyssey,
             "race" => AutoTaskKind.Race,
             "custom" => AutoTaskKind.Custom,
             _ => throw new InvalidOperationException($"Unsupported auto task key '{taskKey}'.")
         };
+    }
+
+    private static IReadOnlyList<string> GetOdysseyScriptIds(AutoTaskConfig task)
+    {
+        return new[]
+        {
+            task.ScriptId?.Trim() ?? string.Empty,
+            task.ScriptId2?.Trim() ?? string.Empty,
+            task.ScriptId3?.Trim() ?? string.Empty,
+            task.ScriptId4?.Trim() ?? string.Empty,
+            task.ScriptId5?.Trim() ?? string.Empty
+        }
+        .Where(static scriptId => !string.IsNullOrWhiteSpace(scriptId))
+        .ToList();
     }
 
     private static LanguageOption? SelectOption(IEnumerable<LanguageOption> options, string? code)

@@ -18,6 +18,7 @@ public sealed class AutoTaskStrategyRegistry : IAutoTaskStrategyRegistry
                 new GoldBalloonAutoTaskStrategy(),
                 new BlackBorderAutoTaskStrategy(),
                 new LoopStageAutoTaskStrategy(),
+                new OdysseyAutoTaskStrategy(),
                 new RaceAutoTaskStrategy()
             ])
     {

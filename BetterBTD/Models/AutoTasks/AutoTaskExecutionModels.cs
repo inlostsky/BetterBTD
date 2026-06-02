@@ -11,6 +11,7 @@ public enum AutoTaskKind
     GoldBalloon,
     BlackBorder,
     LoopStage,
+    Odyssey,
     Race
 }
 
@@ -73,8 +74,14 @@ public enum GameUiStateId
     CollectionEvent,
     CollectionEventClaimable,
     StageSettings,
+    OdysseyStart,
+    OdysseyCrew,
+    OdysseyLoading,
     Loading,
     InLevel,
+    OdysseyStageVictory,
+    OdysseySettlement,
+    OdysseyReward,
     StageSettlement,
     Victory,
     Defeat,
@@ -126,6 +133,8 @@ public sealed class AutoTaskRequest
     public int OperationIntervalMs { get; init; } = 200;
 
     public string PreferredScriptPath { get; init; } = string.Empty;
+
+    public IReadOnlyList<string> PreferredScriptPaths { get; init; } = [];
 
     public string Key { get; init; } = string.Empty;
 }
@@ -477,6 +486,7 @@ public static class AutoTaskKindExtensions
             AutoTaskKind.GoldBalloon => "goldballoon",
             AutoTaskKind.BlackBorder => "blackborder",
             AutoTaskKind.LoopStage => "loopstage",
+            AutoTaskKind.Odyssey => "odyssey",
             AutoTaskKind.Race => "race",
             _ => kind.ToString().ToLowerInvariant()
         };

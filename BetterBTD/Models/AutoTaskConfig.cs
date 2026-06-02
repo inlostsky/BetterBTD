@@ -42,6 +42,9 @@ public partial class AutoTaskConfig : ObservableObject
     private bool _showScriptIdConfiguration;
 
     [ObservableProperty]
+    private bool _showOdysseyScriptIdConfiguration;
+
+    [ObservableProperty]
     private bool _showCollectionSubscriptionActions;
 
     [ObservableProperty]
@@ -52,6 +55,18 @@ public partial class AutoTaskConfig : ObservableObject
 
     [ObservableProperty]
     private string _scriptId = string.Empty;
+
+    [ObservableProperty]
+    private string _scriptId2 = string.Empty;
+
+    [ObservableProperty]
+    private string _scriptId3 = string.Empty;
+
+    [ObservableProperty]
+    private string _scriptId4 = string.Empty;
+
+    [ObservableProperty]
+    private string _scriptId5 = string.Empty;
 
     [ObservableProperty]
     private bool _showBlackBorderSubscriptionActions;

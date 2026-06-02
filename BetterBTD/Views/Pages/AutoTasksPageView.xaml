@@ -221,6 +221,82 @@
 
                             <Separator Margin="-18,0"
                                        BorderThickness="0,1,0,0"
+                                       Visibility="{Binding ShowOdysseyScriptIdConfiguration, Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <Grid Margin="16"
+                                  Visibility="{Binding ShowOdysseyScriptIdConfiguration, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <ui:TextBlock FontWeight="SemiBold"
+                                                  Text="{Binding DataContext.OdysseyScriptIdsLabel, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                  TextWrapping="Wrap" />
+                                    <ui:TextBlock Margin="0,4,0,0"
+                                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                                  Text="{Binding DataContext.OdysseyScriptIdsDescription, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                  TextWrapping="Wrap" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1"
+                                            Width="280"
+                                            Margin="0,0,36,0">
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <ui:TextBlock VerticalAlignment="Center" Text="1" />
+                                        <TextBox Grid.Column="1"
+                                                 Margin="12,0,0,0"
+                                                 Text="{Binding ScriptId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <ui:TextBlock VerticalAlignment="Center" Text="2" />
+                                        <TextBox Grid.Column="1"
+                                                 Margin="12,0,0,0"
+                                                 Text="{Binding ScriptId2, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <ui:TextBlock VerticalAlignment="Center" Text="3" />
+                                        <TextBox Grid.Column="1"
+                                                 Margin="12,0,0,0"
+                                                 Text="{Binding ScriptId3, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <ui:TextBlock VerticalAlignment="Center" Text="4" />
+                                        <TextBox Grid.Column="1"
+                                                 Margin="12,0,0,0"
+                                                 Text="{Binding ScriptId4, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <ui:TextBlock VerticalAlignment="Center" Text="5" />
+                                        <TextBox Grid.Column="1"
+                                                 Margin="12,0,0,0"
+                                                 Text="{Binding ScriptId5, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+
+                            <Separator Margin="-18,0"
+                                       BorderThickness="0,1,0,0"
                                        Visibility="{Binding ShowCollectionSubscriptionActions, Converter={StaticResource BoolToVisibilityConverter}}" />
                             <StackPanel Margin="16"
                                         Visibility="{Binding ShowCollectionSubscriptionActions, Converter={StaticResource BoolToVisibilityConverter}}">

@@ -108,6 +108,43 @@ public sealed class GameUiNavigator : IGameUiNavigator
                 Description = "Claim the available collection reward chest.",
                 ExpectedNextStates = [GameUiStateId.CollectionEvent, GameUiStateId.TwoChests, GameUiStateId.ThreeChests]
             },
+            GameUiStateId.OdysseyStart => new GameUiNavigationStep
+            {
+                ActionKind = GameUiActionKind.OpenMapSelection,
+                Description = "Start the Odyssey run.",
+                ExpectedNextStates = [GameUiStateId.OdysseyCrew, GameUiStateId.OdysseyLoading, GameUiStateId.InLevel]
+            },
+            GameUiStateId.OdysseyCrew => new GameUiNavigationStep
+            {
+                ActionKind = GameUiActionKind.SelectMode,
+                Description = "Confirm the Odyssey crew screen and enter the next stage.",
+                ExpectedNextStates = [GameUiStateId.OdysseyLoading, GameUiStateId.InLevel]
+            },
+            GameUiStateId.OdysseyLoading => new GameUiNavigationStep
+            {
+                ActionKind = GameUiActionKind.Wait,
+                Description = "Wait for the Odyssey stage to finish loading.",
+                PostActionDelayMs = 600,
+                ExpectedNextStates = [GameUiStateId.InLevel]
+            },
+            GameUiStateId.OdysseyStageVictory => new GameUiNavigationStep
+            {
+                ActionKind = GameUiActionKind.CollectReward,
+                Description = "Continue past the Odyssey victory screen.",
+                ExpectedNextStates = [GameUiStateId.OdysseySettlement, GameUiStateId.OdysseyReward, GameUiStateId.OdysseyCrew, GameUiStateId.OdysseyStart]
+            },
+            GameUiStateId.OdysseySettlement => new GameUiNavigationStep
+            {
+                ActionKind = GameUiActionKind.CollectReward,
+                Description = "Continue past the Odyssey settlement screen.",
+                ExpectedNextStates = [GameUiStateId.OdysseyReward, GameUiStateId.OdysseyCrew, GameUiStateId.OdysseyStart]
+            },
+            GameUiStateId.OdysseyReward => new GameUiNavigationStep
+            {
+                ActionKind = GameUiActionKind.CollectReward,
+                Description = "Collect the Odyssey reward and continue.",
+                ExpectedNextStates = [GameUiStateId.OdysseyCrew, GameUiStateId.OdysseyStart]
+            },
             GameUiStateId.StageSettings => new GameUiNavigationStep
             {
                 ActionKind = GameUiActionKind.ConfirmDialog,

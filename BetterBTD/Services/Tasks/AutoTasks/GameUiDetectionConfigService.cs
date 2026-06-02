@@ -133,7 +133,7 @@ public sealed class GameUiDetectionConfigService
     {
         ArgumentNullException.ThrowIfNull(config);
 
-        return new GameUiDetectionConfig
+        var normalized = new GameUiDetectionConfig
         {
             Version = Math.Max(1, config.Version),
             ReferenceWidth = config.ReferenceWidth > 0 ? config.ReferenceWidth : 1920,
@@ -144,6 +144,11 @@ public sealed class GameUiDetectionConfigService
                 .Select(NormalizeRule)
                 .ToList()
         };
+
+        var defaults = CreateDefaultConfig();
+        MergeMissingDefaultRules(normalized, defaults);
+        normalized.Version = Math.Max(normalized.Version, defaults.Version);
+        return normalized;
     }
 
     private static GameUiDetectionRule NormalizeRule(GameUiDetectionRule rule)
@@ -216,7 +221,7 @@ public sealed class GameUiDetectionConfigService
     {
         return new GameUiDetectionConfig
         {
-            Version = 1,
+            Version = 2,
             ReferenceWidth = 1920,
             ReferenceHeight = 1080,
             DefaultTolerance = 50,
@@ -276,6 +281,18 @@ public sealed class GameUiDetectionConfigService
                     Eq(750, 60, "#912DC9"), Eq(1100, 60, "#912DC9")),
                 CreateRule("collection_event_gold", "收集活动界面", GameUiStateId.CollectionEvent, 615,
                     Eq(750, 60, "#FFD400"), Eq(1100, 60, "#FFD400")),
+                CreateRule("odyssey_start", "Odyssey start", GameUiStateId.OdysseyStart, 614,
+                    Eq(1760, 960, "#FFFFFF"), Eq(600, 70, "#AB927C"), Eq(1320, 70, "#AB927C"), Eq(1000, 940, "#1190FF")),
+                CreateRule("odyssey_crew", "Odyssey crew", GameUiStateId.OdysseyCrew, 613,
+                    Eq(330, 500, "#CBA774"), Eq(1360, 350, "#B4874F"), Eq(1360, 650, "#B4874F")),
+                CreateRule("odyssey_loading", "Odyssey loading", GameUiStateId.OdysseyLoading, 612,
+                    Eq(1760, 960, "#A4B9D2"), Eq(600, 70, "#AB927C"), Eq(1320, 70, "#AB927C"), Eq(1000, 940, "#1190FF")),
+                CreateRule("odyssey_settlement", "Odyssey settlement", GameUiStateId.OdysseySettlement, 947,
+                    Eq(330, 500, "#CBA774"), Eq(1360, 350, "#B4874F"), Eq(1360, 650, "#B4874F"), Eq(1070, 300, "#CF2C0C"), Eq(1450, 300, "#CF2C0C")),
+                CreateRule("odyssey_stage_victory", "Odyssey stage victory", GameUiStateId.OdysseyStageVictory, 946,
+                    Eq(560, 190, "#FFFFFF"), Eq(1220, 145, "#FFFFFF"), Eq(950, 780, "#DCC3A8")),
+                CreateRule("odyssey_reward", "Odyssey reward", GameUiStateId.OdysseyReward, 944,
+                    Eq(600, 680, "#A58B71"), Eq(1300, 680, "#A58B71"), Eq(870, 840, "#64E300")),
                 CreateRule("stage_settlement", "关卡结算界面", GameUiStateId.StageSettlement, 930,
                     Eq(555, 197, "#FFFFFF"), Eq(1365, 324, "#FFFFFF"), Eq(791, 193, "#F34A12")),
                 CreateRule("stage_victory", "关卡通关界面", GameUiStateId.Victory, 935,
@@ -294,6 +311,27 @@ public sealed class GameUiDetectionConfigService
                     Eq(68, 54, "#FFFFFF"))
             ]
         };
+    }
+
+    private static void MergeMissingDefaultRules(GameUiDetectionConfig target, GameUiDetectionConfig defaults)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(defaults);
+
+        var existingKeys = new HashSet<string>(
+            target.Rules.Select(static rule => rule.Key),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var rule in defaults.Rules.Select(NormalizeRule))
+        {
+            if (string.IsNullOrWhiteSpace(rule.Key) || existingKeys.Contains(rule.Key))
+            {
+                continue;
+            }
+
+            target.Rules.Add(rule);
+            existingKeys.Add(rule.Key);
+        }
     }
 
     private static GameUiDetectionRule CreateRule(

@@ -372,12 +372,18 @@ public sealed class AutoTaskRunner
 
     private static bool ShouldMonitorStageScriptUi(AutoTaskKind kind)
     {
-        return kind is AutoTaskKind.Collection or AutoTaskKind.GoldBalloon or AutoTaskKind.BlackBorder or AutoTaskKind.LoopStage;
+        return kind is AutoTaskKind.Collection or AutoTaskKind.GoldBalloon or AutoTaskKind.BlackBorder or AutoTaskKind.LoopStage or AutoTaskKind.Odyssey;
     }
 
     private static bool ShouldInterruptStageScript(GameUiStateId state)
     {
-        return state is GameUiStateId.Defeat or GameUiStateId.Victory or GameUiStateId.StageSettlement;
+        return state is
+            GameUiStateId.Defeat or
+            GameUiStateId.Victory or
+            GameUiStateId.StageSettlement or
+            GameUiStateId.OdysseyStageVictory or
+            GameUiStateId.OdysseySettlement or
+            GameUiStateId.OdysseyReward;
     }
 
     private AutoTaskRuntimeScriptPreview TryLoadScriptPreview(string filePath)
