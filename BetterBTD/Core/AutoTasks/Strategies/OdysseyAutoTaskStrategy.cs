@@ -20,6 +20,7 @@ public sealed class OdysseyAutoTaskStrategy : IAutoTaskStrategy
         cancellationToken.ThrowIfCancellationRequested();
 
         EnsureScriptQueueInitialized(state);
+        ResetExecutionOrderIfNeeded(state, snapshot);
         AdvanceStageProgressIfNeeded(state, snapshot);
         RecoverScriptLifecycleIfNeeded(state, snapshot);
 
@@ -135,19 +136,27 @@ public sealed class OdysseyAutoTaskStrategy : IAutoTaskStrategy
             return;
         }
 
-        switch (snapshot.State)
+        if (snapshot.State == GameUiStateId.OdysseyStageVictory &&
+            !IsCurrentStageLastConfigured(state))
         {
-            case GameUiStateId.OdysseyCrew:
-            case GameUiStateId.OdysseyLoading:
-                AdvanceToNextStage(state);
-                break;
-            case GameUiStateId.OdysseyStart:
-                ResetToFirstStage(state);
-                break;
-            case GameUiStateId.InLevel when state.Phase == AutoTaskPhase.AdvancingObjective:
-                AdvanceToNextStage(state);
-                break;
+            AdvanceToNextStage(state);
         }
+    }
+
+    private static void ResetExecutionOrderIfNeeded(AutoTaskRuntimeState state, GameUiSnapshot snapshot)
+    {
+        if (snapshot.State != GameUiStateId.OdysseySettlement)
+        {
+            return;
+        }
+
+        if (GetCurrentStageIndex(state) == 0 &&
+            GetScriptRunState(state) == OdysseyAutoTaskScriptRunState.NotStarted)
+        {
+            return;
+        }
+
+        ResetToFirstStage(state);
     }
 
     private static void RecoverScriptLifecycleIfNeeded(AutoTaskRuntimeState state, GameUiSnapshot snapshot)
@@ -212,6 +221,17 @@ public sealed class OdysseyAutoTaskStrategy : IAutoTaskStrategy
         return state.TryGetProperty<int>(OdysseyAutoTaskStateKeys.CurrentStageIndex, out var currentIndex)
             ? currentIndex
             : 0;
+    }
+
+    private static bool IsCurrentStageLastConfigured(AutoTaskRuntimeState state)
+    {
+        if (!state.TryGetProperty<IReadOnlyList<string>>(OdysseyAutoTaskStateKeys.ScriptQueue, out var scriptQueue) ||
+            scriptQueue.Count == 0)
+        {
+            return false;
+        }
+
+        return GetCurrentStageIndex(state) >= scriptQueue.Count - 1;
     }
 
     private static OdysseyAutoTaskScriptRunState GetScriptRunState(AutoTaskRuntimeState state)
