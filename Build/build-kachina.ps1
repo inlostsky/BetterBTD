@@ -16,6 +16,22 @@ $ErrorActionPreference = "Stop"
 $builder = (Resolve-Path $BuilderPath).Path
 $config = (Resolve-Path $ConfigPath).Path
 $publishDir = (Resolve-Path $InputDir).Path
+$customPanelPath = Join-Path $PSScriptRoot "kachina-left.webp"
+$customCssPath = Join-Path $PSScriptRoot "kachina-custom.css"
+$customIconPath = Join-Path $PSScriptRoot "kachina-icon.ico"
+
+$brandingArgs = @()
+if (Test-Path $customIconPath) {
+    $brandingArgs += @("--icon", (Resolve-Path $customIconPath).Path)
+}
+
+if (Test-Path $customCssPath) {
+    $brandingArgs += @("-m", (Resolve-Path $customCssPath).Path)
+}
+
+if (Test-Path $customPanelPath) {
+    $brandingArgs += @("-m", (Resolve-Path $customPanelPath).Path)
+}
 
 if (-not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir | Out-Null
@@ -43,7 +59,7 @@ if (Test-Path $installerPath) {
     Remove-Item -LiteralPath $installerPath -Force
 }
 
-& $builder pack -c $config -o $updaterPath
+& $builder pack -c $config -o $updaterPath @brandingArgs
 if ($LASTEXITCODE -ne 0) {
     throw "Kachina updater generation failed."
 }
@@ -55,7 +71,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "Kachina metadata generation failed."
 }
 
-& $builder pack -c $config -m $metadataPath -d $hashedDir -o $installerPath
+& $builder pack -c $config -m $metadataPath -d $hashedDir -o $installerPath @brandingArgs
 if ($LASTEXITCODE -ne 0) {
     throw "Kachina installer generation failed."
 }
