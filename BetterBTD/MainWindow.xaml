@@ -7,6 +7,7 @@
                  xmlns:pages="clr-namespace:BetterBTD.Views.Pages"
                  mc:Ignorable="d"
                  Title="BetterBTD"
+                 Icon="Assets/AppIcon.ico"
                  Width="920"
                  Height="591"
                  MinWidth="760"
@@ -27,7 +28,7 @@
 
         <ui:TitleBar Grid.Row="0" Title="BetterBTD">
             <ui:TitleBar.Icon>
-                <ui:SymbolIcon Symbol="Home24" />
+                <ui:ImageIcon Source="Assets/AppIcon.ico" />
             </ui:TitleBar.Icon>
         </ui:TitleBar>
 
