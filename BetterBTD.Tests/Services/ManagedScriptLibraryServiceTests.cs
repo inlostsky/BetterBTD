@@ -760,11 +760,13 @@ public sealed class ManagedScriptLibraryServiceTests
         var blackBorderCount = GameElementCatalog.Maps.Count * 14;
         var collectionCount = ManagedScriptCollectionModeCatalog.Modes.Count *
                               GameElementCatalog.Maps.Count(map => map.Tier == MapDifficultyTier.Expert);
-        var expectedCount = blackBorderCount + collectionCount + 2;
+        var goldBalloonCount = GameElementCatalog.Maps.Count(map => map.Tier == MapDifficultyTier.Beginner);
+        var expectedCount = blackBorderCount + collectionCount + goldBalloonCount + 2;
 
         Assert.Equal(expectedCount, slots.Count);
         Assert.Contains(slots, x => x.SlotId == ManagedScriptSlotIdFactory.CreateCustomDefaultSlotId());
         Assert.Contains(slots, x => x.SlotId == ManagedScriptSlotIdFactory.CreateRaceCurrentSlotId());
+        Assert.Contains(slots, x => x.SlotId == ManagedScriptSlotIdFactory.CreateGoldBalloonSlotId(GameMapType.MonkeyMeadow));
         Assert.Contains(slots, x => x.SlotId == ManagedScriptSlotIdFactory.CreateBlackBorderSlotId(
             GameMapType.MonkeyMeadow,
             StageDifficulty.Easy,

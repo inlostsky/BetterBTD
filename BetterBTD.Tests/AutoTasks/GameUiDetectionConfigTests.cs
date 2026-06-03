@@ -118,10 +118,10 @@ public sealed class GameUiDetectionConfigTests
             var service = new GameUiDetectionConfigService(configFilePath);
             var reloaded = service.Reload();
 
-            Assert.Single(reloaded.Rules);
-            Assert.Equal("custom_rule", reloaded.Rules[0].Key);
-            Assert.Equal(GameUiStateId.Returnable, reloaded.Rules[0].State);
+            var customRule = Assert.Single(reloaded.Rules, rule => rule.Key == "custom_rule");
+            Assert.Equal(GameUiStateId.Returnable, customRule.State);
             Assert.Equal(3, reloaded.DefaultTolerance);
+            Assert.Contains(reloaded.Rules, rule => rule.State == GameUiStateId.MainMenu);
         }
         finally
         {

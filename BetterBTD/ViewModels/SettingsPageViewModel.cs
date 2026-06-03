@@ -1,10 +1,12 @@
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using BetterBTD.Models;
 using BetterBTD.Services;
+using BetterBTD.Services.Updates;
 using BetterBTD.Views.Pages;
 using BetterBTD.Views.Windows;
 
@@ -15,6 +17,8 @@ public sealed class SettingsPageViewModel : ObservableObject
     private readonly ConfigurationService _configurationService;
     private readonly LocalizationService _localizationService;
     private readonly ThemeService _themeService;
+    private readonly ApplicationUpdateService _applicationUpdateService;
+    private readonly AppDialogService _appDialogService;
 
     private LanguageOption? _selectedUiLanguage;
     private LanguageOption? _selectedGameLanguage;
@@ -24,12 +28,15 @@ public sealed class SettingsPageViewModel : ObservableObject
     private string _stopHotkey = string.Empty;
     private string _gameStartHotkey = string.Empty;
     private string _gameStopHotkey = string.Empty;
+    private string _updateStatusText = string.Empty;
 
     public SettingsPageViewModel()
     {
         _configurationService = ConfigurationService.Instance;
         _localizationService = LocalizationService.Instance;
         _themeService = ThemeService.Instance;
+        _applicationUpdateService = ApplicationUpdateService.Instance;
+        _appDialogService = AppDialogService.Instance;
 
         UiLanguageOptions = [];
         GameLanguageOptions = [];
@@ -37,9 +44,9 @@ public sealed class SettingsPageViewModel : ObservableObject
 
         UpdateUiLanguageCommand = new RelayCommand(UpdateUiLanguage);
         OpenKeyBindingsWindowCommand = new RelayCommand(OpenKeyBindingsWindow);
-        CheckUpdateCommand = new RelayCommand(() => { });
-        CheckUpdateAlphaCommand = new RelayCommand(() => { });
-        OpenAboutCommand = new RelayCommand(() => { });
+        CheckUpdateCommand = new AsyncRelayCommand(() => CheckForUpdatesAsync(includePrerelease: false));
+        CheckUpdateAlphaCommand = new AsyncRelayCommand(() => CheckForUpdatesAsync(includePrerelease: true));
+        OpenAboutCommand = new RelayCommand(OpenAbout);
         SaveCommand = new RelayCommand(Save);
         ResetCommand = new RelayCommand(ResetDefaults);
 
@@ -122,9 +129,9 @@ public sealed class SettingsPageViewModel : ObservableObject
 
     public IRelayCommand OpenKeyBindingsWindowCommand { get; }
 
-    public IRelayCommand CheckUpdateCommand { get; }
+    public IAsyncRelayCommand CheckUpdateCommand { get; }
 
-    public IRelayCommand CheckUpdateAlphaCommand { get; }
+    public IAsyncRelayCommand CheckUpdateAlphaCommand { get; }
 
     public IRelayCommand OpenAboutCommand { get; }
 
@@ -172,6 +179,12 @@ public sealed class SettingsPageViewModel : ObservableObject
     public string CardAboutTitle => _localizationService.T("Settings.Card.About.Title");
     public string CardAboutDescription => _localizationService.T("Settings.Card.About.Description");
     public string OpenText => _localizationService.T("Settings.Open");
+    public string CurrentVersionText => $"Current version: {_applicationUpdateService.CurrentVersion}";
+    public string UpdateStatusText
+    {
+        get => _updateStatusText;
+        private set => SetProperty(ref _updateStatusText, value);
+    }
 
     public string SaveButtonText => _localizationService.T("Settings.Save");
     public string ResetButtonText => _localizationService.T("Settings.Reset");
@@ -238,6 +251,60 @@ public sealed class SettingsPageViewModel : ObservableObject
             GameStartHotkey = GameStartHotkey,
             GameStopHotkey = GameStopHotkey
         });
+    }
+
+    private async Task CheckForUpdatesAsync(bool includePrerelease)
+    {
+        try
+        {
+            UpdateStatusText = includePrerelease
+                ? "Checking for the latest preview build..."
+                : "Checking for updates...";
+
+            var result = await _applicationUpdateService.CheckForUpdatesAsync(includePrerelease);
+            UpdateStatusText = result.Message;
+
+            if (result.State is ApplicationUpdateState.UpdateDownloaded or ApplicationUpdateState.UpdateReadyToApply)
+            {
+                var dialogResult = _appDialogService.Show(new AppDialogRequest
+                {
+                    Title = CardUpdateTitle,
+                    Message = result.Message,
+                    PrimaryButtonText = "Restart now",
+                    SecondaryButtonText = "Later"
+                });
+
+                if (dialogResult == AppDialogResult.Primary)
+                {
+                    _applicationUpdateService.ApplyUpdatesAndRestart(result.Release);
+                }
+
+                return;
+            }
+
+            _ = _appDialogService.Show(new AppDialogRequest
+            {
+                Title = CardUpdateTitle,
+                Message = result.Message,
+                PrimaryButtonText = "Close"
+            });
+        }
+        catch (Exception ex)
+        {
+            UpdateStatusText = $"Update check failed: {ex.Message}";
+
+            _ = _appDialogService.Show(new AppDialogRequest
+            {
+                Title = CardUpdateTitle,
+                Message = UpdateStatusText,
+                PrimaryButtonText = "Close"
+            });
+        }
+    }
+
+    private void OpenAbout()
+    {
+        _applicationUpdateService.OpenProjectHomePage();
     }
 
     private void ResetDefaults()
@@ -328,6 +395,7 @@ public sealed class SettingsPageViewModel : ObservableObject
         OnPropertyChanged(nameof(CardAboutTitle));
         OnPropertyChanged(nameof(CardAboutDescription));
         OnPropertyChanged(nameof(OpenText));
+        OnPropertyChanged(nameof(CurrentVersionText));
         OnPropertyChanged(nameof(SaveButtonText));
         OnPropertyChanged(nameof(ResetButtonText));
         OnPropertyChanged(nameof(BetterBtdHotkeysTitle));

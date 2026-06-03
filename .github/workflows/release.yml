@@ -1,0 +1,117 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_VERSION: "8.0.x"
+  VPK_VERSION: "1.1.1"
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Compute Release Metadata
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart('v')
+
+          if ($version -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:[-+].*)?$') {
+            throw "Tag '$tag' must look like v1.2.3 or v1.2.3-beta.1."
+          }
+
+          $fileVersion = "$($Matches.major).$($Matches.minor).$($Matches.patch).0"
+          $isPrerelease = $version.Contains('-').ToString().ToLowerInvariant()
+
+          "APP_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "FILE_VERSION=$fileVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "IS_PRERELEASE=$isPrerelease" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "REPO_URL=https://github.com/${{ github.repository }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Restore
+        run: dotnet restore BetterBTD.slnx
+
+      - name: Build
+        run: >
+          dotnet build BetterBTD.slnx
+          -c Release
+          --no-restore
+          /p:Version=${{ env.APP_VERSION }}
+          /p:InformationalVersion=${{ env.APP_VERSION }}
+          /p:AssemblyVersion=${{ env.FILE_VERSION }}
+          /p:FileVersion=${{ env.FILE_VERSION }}
+
+      - name: Test
+        run: dotnet test BetterBTD.slnx -c Release --no-build --verbosity normal
+
+      - name: Publish App
+        shell: pwsh
+        run: |
+          dotnet publish BetterBTD\BetterBTD.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            --no-build `
+            -o artifacts\publish\win-x64 `
+            /p:Version=${env:APP_VERSION} `
+            /p:InformationalVersion=${env:APP_VERSION} `
+            /p:AssemblyVersion=${env:FILE_VERSION} `
+            /p:FileVersion=${env:FILE_VERSION}
+
+      - name: Download Previous Packages
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          dnx vpk --version $env:VPK_VERSION -- download github `
+            --repoUrl $env:REPO_URL `
+            --token ${{ secrets.GITHUB_TOKEN }} `
+            --outputDir artifacts\Releases `
+            --pre $env:IS_PRERELEASE
+
+      - name: Pack Release
+        shell: pwsh
+        run: |
+          dnx vpk --version $env:VPK_VERSION -- pack `
+            --packId BetterBTD `
+            --packVersion $env:APP_VERSION `
+            --packDir artifacts\publish\win-x64 `
+            --mainExe BetterBTD.exe `
+            --packAuthors ZiyaoZh `
+            --packTitle BetterBTD `
+            --outputDir artifacts\Releases
+
+      - name: Upload Release
+        shell: pwsh
+        run: |
+          dnx vpk --version $env:VPK_VERSION -- upload github `
+            --repoUrl $env:REPO_URL `
+            --token ${{ secrets.GITHUB_TOKEN }} `
+            --outputDir artifacts\Releases `
+            --publish true `
+            --pre $env:IS_PRERELEASE `
+            --releaseName "BetterBTD $env:APP_VERSION" `
+            --tag $env:APP_TAG
+
+      - name: Upload Workflow Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: BetterBTD-${{ env.APP_VERSION }}-release
+          path: artifacts/Releases
