@@ -17,7 +17,7 @@
     <Product>BetterBTD</Product>
     <RepositoryUrl>https://github.com/ZiyaoZh/BetterBTD</RepositoryUrl>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <SelfContained>true</SelfContained>
+    <SelfContained>false</SelfContained>
     <StartupObject>BetterBTD.Program</StartupObject>
   </PropertyGroup>
 

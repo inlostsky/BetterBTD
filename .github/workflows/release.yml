@@ -69,13 +69,15 @@ jobs:
           dotnet publish BetterBTD\BetterBTD.csproj `
             -c Release `
             -r win-x64 `
-            --self-contained true `
+            --self-contained false `
             -o artifacts\publish\win-x64 `
             /p:Platform=x64 `
             /p:Version=${env:APP_VERSION} `
             /p:InformationalVersion=${env:APP_VERSION} `
             /p:AssemblyVersion=${env:FILE_VERSION} `
             /p:FileVersion=${env:FILE_VERSION}
+
+          Get-ChildItem artifacts\publish\win-x64 -File -Filter *.pdb | Remove-Item -Force
 
       - name: Download Kachina Builder
         shell: pwsh

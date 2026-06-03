@@ -10,5 +10,8 @@
   "description": "BetterBTD desktop installer and updater",
   "mainFeature": "Install or update BetterBTD",
   "programFilesPath": "BetterBTD",
+  "runtimes": [
+    "Microsoft.DotNet.DesktopRuntime.8"
+  ],
   "source": "https://github.com/ZiyaoZh/BetterBTD/releases/latest/download/BetterBTD.Install.exe"
 }
