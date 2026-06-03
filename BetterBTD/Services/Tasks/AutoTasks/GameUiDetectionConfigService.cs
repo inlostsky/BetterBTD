@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using BetterBTD.Helpers;
 using BetterBTD.Models.AutoTasks;
 
 namespace BetterBTD.Services.Tasks.AutoTasks;
@@ -122,11 +123,7 @@ public sealed class GameUiDetectionConfigService
 
     private static string CreateDefaultConfigFilePath()
     {
-        var appDataDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "BetterBTD",
-            "AutoTasks");
-        return Path.Combine(appDataDirectory, "game_ui_detection_rules.json");
+        return UserDataPathHelper.ResolveUserDataFilePath("AutoTasks", "game_ui_detection_rules.json");
     }
 
     private static GameUiDetectionConfig Normalize(GameUiDetectionConfig config)

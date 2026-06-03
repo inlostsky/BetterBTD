@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using BetterBTD.Helpers;
 using BetterBTD.Helpers.Security;
 using BetterBTD.Models.AutoTasks;
 using BetterBTD.Models.GameElements;
@@ -31,10 +32,7 @@ public sealed class ManagedScriptLibraryService
 
     private ManagedScriptLibraryService()
         : this(
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "BetterBTD",
-                "MyScripts"),
+            UserDataPathHelper.ResolveUserDataDirectory("MyScripts"),
             ScriptDocumentService.Instance,
             ManagedScriptSlotCatalogService.Instance)
     {
