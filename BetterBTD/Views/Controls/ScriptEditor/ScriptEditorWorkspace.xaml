@@ -130,6 +130,19 @@
                          ScrollViewer.CanContentScroll="True"
                          VirtualizingPanel.IsVirtualizing="True"
                          VirtualizingPanel.VirtualizationMode="Recycling">
+                    <ListBox.InputBindings>
+                        <KeyBinding Key="C"
+                                    Modifiers="Control"
+                                    Command="{Binding DataContext.CopySelectedSequenceInstructionsCommand, ElementName=InstructionSequenceListBox}"
+                                    CommandParameter="{Binding SelectedItems, ElementName=InstructionSequenceListBox}" />
+                        <KeyBinding Key="V"
+                                    Modifiers="Control"
+                                    Command="{Binding DataContext.PasteSequenceInstructionsCommand, ElementName=InstructionSequenceListBox}"
+                                    CommandParameter="{Binding SelectedItems, ElementName=InstructionSequenceListBox}" />
+                        <KeyBinding Key="Delete"
+                                    Command="{Binding DataContext.DeleteSelectedSequenceInstructionsCommand, ElementName=InstructionSequenceListBox}"
+                                    CommandParameter="{Binding SelectedItems, ElementName=InstructionSequenceListBox}" />
+                    </ListBox.InputBindings>
                     <ListBox.ContextMenu>
                         <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                             <MenuItem Header="{Binding CopySelectedInstructionText}"
