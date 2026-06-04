@@ -76,7 +76,7 @@ public partial class PickerWindow : FluentWindow
     {
         var windows = new List<CapturableWindow>();
         var ownerHandle = new WindowInteropHelper(this).Handle;
-        var preferredTitle = ConfigurationService.Instance.Current.MaskWindowTargetTitle;
+        var preferredTitles = GameWindowInfoService.Instance.PreferredTargetWindowTitles;
 
         _ = EnumWindows((hWnd, _) =>
         {
@@ -104,7 +104,18 @@ public partial class PickerWindow : FluentWindow
         }, nint.Zero);
 
         var orderedWindows = windows
-            .OrderByDescending(window => string.Equals(window.Title, preferredTitle, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(window =>
+            {
+                for (var index = 0; index < preferredTitles.Count; index++)
+                {
+                    if (string.Equals(window.Title, preferredTitles[index], StringComparison.OrdinalIgnoreCase))
+                    {
+                        return index;
+                    }
+                }
+
+                return int.MaxValue;
+            })
             .ThenBy(window => window.Title, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 

@@ -364,3 +364,5 @@ FodyWeavers.xsd
 
 digits/
 scripts/
+artifacts/
+.artifacts/

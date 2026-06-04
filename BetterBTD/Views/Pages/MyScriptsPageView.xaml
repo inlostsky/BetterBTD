@@ -68,8 +68,8 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <ui:Button Grid.Column="0"
@@ -96,22 +96,16 @@
                 <ui:Button Grid.Column="4"
                            Margin="0,0,8,0"
                            Appearance="Secondary"
-                           Content="{Binding RunText}"
-                           IsEnabled="{Binding HasSelectedScript}"
-                           Click="RunSelectedScriptButton_OnClick" />
-                <ui:Button Grid.Column="5"
-                           Margin="0,0,8,0"
-                           Appearance="Secondary"
                            Content="{Binding RefreshText}"
                            Command="{Binding RefreshCommand}" />
-
-                <TextBlock Grid.Column="6"
+                <ui:Button Grid.Column="6"
+                           Margin="0"
                            HorizontalAlignment="Right"
-                           VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           Text="{Binding SelectedScriptSummary}"
-                           TextAlignment="Right"
-                           TextTrimming="CharacterEllipsis" />
+                           Appearance="Primary"
+                           Content="{Binding RunText}"
+                           IsEnabled="{Binding HasSelectedScript}"
+                           Icon="{ui:SymbolIcon Play24}"
+                           Click="RunSelectedScriptButton_OnClick" />
             </Grid>
         </ui:CardControl>
 

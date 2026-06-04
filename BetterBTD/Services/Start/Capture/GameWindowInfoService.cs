@@ -5,6 +5,12 @@ namespace BetterBTD.Services.Start.Capture;
 
 public sealed class GameWindowInfoService
 {
+    private static readonly string[] DefaultTargetWindowTitles =
+    [
+        "BloonsTD6",
+        "BloonsTD6-Epic"
+    ];
+
     private static readonly Lazy<GameWindowInfoService> InstanceHolder = new(() => new GameWindowInfoService());
 
     private GameWindowInfoService()
@@ -15,10 +21,21 @@ public sealed class GameWindowInfoService
 
     public string TargetWindowTitle => ConfigurationService.Instance.Current.MaskWindowTargetTitle;
 
+    public IReadOnlyList<string> PreferredTargetWindowTitles => ResolvePreferredTargetWindowTitles();
+
     public bool TryGetTargetWindowInfo(out GameWindowInfo windowInfo)
     {
-        var targetHandle = NativeWindowHelper.FindTopLevelWindow(TargetWindowTitle);
-        return TryGetWindowInfo(targetHandle, out windowInfo);
+        foreach (var title in ResolvePreferredTargetWindowTitles())
+        {
+            var targetHandle = NativeWindowHelper.FindTopLevelWindow(title);
+            if (TryGetWindowInfo(targetHandle, out windowInfo))
+            {
+                return true;
+            }
+        }
+
+        windowInfo = default;
+        return false;
     }
 
     public bool TryGetWindowInfo(nint handle, out GameWindowInfo windowInfo)
@@ -39,6 +56,31 @@ public sealed class GameWindowInfoService
             clientBounds,
             NativeWindowHelper.GetWindowScaleFactor(handle));
         return true;
+    }
+
+    private IReadOnlyList<string> ResolvePreferredTargetWindowTitles()
+    {
+        var configuredTitle = TargetWindowTitle?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(configuredTitle))
+        {
+            return DefaultTargetWindowTitles;
+        }
+
+        var titles = new List<string> { configuredTitle };
+        if (DefaultTargetWindowTitles.Contains(configuredTitle, StringComparer.OrdinalIgnoreCase))
+        {
+            foreach (var defaultTitle in DefaultTargetWindowTitles)
+            {
+                if (string.Equals(defaultTitle, configuredTitle, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                titles.Add(defaultTitle);
+            }
+        }
+
+        return titles;
     }
 }
 

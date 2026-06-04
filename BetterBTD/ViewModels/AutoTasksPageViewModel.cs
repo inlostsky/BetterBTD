@@ -50,6 +50,9 @@ public sealed class AutoTasksPageViewModel : ObservableObject
     private readonly LocalizationService _localizationService;
     private readonly AppDialogService _appDialogService;
     private readonly ImportProgressDialogService _importProgressDialogService;
+    private readonly ConfigurationService _configurationService;
+    private readonly GameCaptureService _gameCaptureService;
+    private readonly MaskWindowService _maskWindowService;
     private readonly AutoTaskCoordinator _autoTaskCoordinator;
     private readonly ManagedScriptLibraryService _managedScriptLibraryService;
     private readonly CollectionScriptSubscriptionService _collectionScriptSubscriptionService;
@@ -66,6 +69,9 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         : this(
             LocalizationService.Instance,
             AppDialogService.Instance,
+            ConfigurationService.Instance,
+            GameCaptureService.Instance,
+            MaskWindowService.Instance,
             AutoTaskCoordinator.Instance,
             ManagedScriptLibraryService.Instance,
             CollectionScriptSubscriptionService.Instance,
@@ -77,6 +83,9 @@ public sealed class AutoTasksPageViewModel : ObservableObject
     internal AutoTasksPageViewModel(
         LocalizationService localizationService,
         AppDialogService appDialogService,
+        ConfigurationService configurationService,
+        GameCaptureService gameCaptureService,
+        MaskWindowService maskWindowService,
         AutoTaskCoordinator autoTaskCoordinator,
         ManagedScriptLibraryService managedScriptLibraryService,
         CollectionScriptSubscriptionService collectionScriptSubscriptionService,
@@ -86,6 +95,9 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         _localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
         _appDialogService = appDialogService ?? throw new ArgumentNullException(nameof(appDialogService));
         _importProgressDialogService = ImportProgressDialogService.Instance;
+        _configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
+        _gameCaptureService = gameCaptureService ?? throw new ArgumentNullException(nameof(gameCaptureService));
+        _maskWindowService = maskWindowService ?? throw new ArgumentNullException(nameof(maskWindowService));
         _autoTaskCoordinator = autoTaskCoordinator ?? throw new ArgumentNullException(nameof(autoTaskCoordinator));
         _managedScriptLibraryService = managedScriptLibraryService ?? throw new ArgumentNullException(nameof(managedScriptLibraryService));
         _collectionScriptSubscriptionService = collectionScriptSubscriptionService ?? throw new ArgumentNullException(nameof(collectionScriptSubscriptionService));
@@ -1062,6 +1074,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
 
         try
         {
+            EnsureCaptureServiceRunning();
             task.OperationIntervalMs = runtimeViewModel.OperationIntervalMs;
             var request = BuildRequest(task);
 
@@ -1088,6 +1101,58 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             _autoTaskCoordinator.ProgressChanged -= progressHandler;
             RunOnUiThread(ClearRunningTask);
         }
+    }
+
+    private void EnsureCaptureServiceRunning()
+    {
+        if (_gameCaptureService.IsRunning)
+        {
+            if (!_maskWindowService.IsRunning)
+            {
+                _maskWindowService.Start();
+                _maskWindowService.RefreshNow();
+            }
+
+            return;
+        }
+
+        var captureOptions = BuildCaptureOptions();
+        _gameCaptureService.Configure(captureOptions);
+
+        if (!_gameCaptureService.TryStart(captureOptions, out _))
+        {
+            throw new InvalidOperationException(BuildCaptureStartupFailureMessage());
+        }
+
+        _maskWindowService.Start();
+        _maskWindowService.RefreshNow();
+    }
+
+    private GameCaptureOptions BuildCaptureOptions()
+    {
+        var configuration = _configurationService.Current;
+        var configuredCaptureMode = configuration.CaptureModeName;
+        if (string.IsNullOrWhiteSpace(configuredCaptureMode) ||
+            !_gameCaptureService.AvailableCaptureModes.Any(mode =>
+                string.Equals(mode, configuredCaptureMode, StringComparison.OrdinalIgnoreCase)))
+        {
+            configuredCaptureMode = _gameCaptureService.AvailableCaptureModes.FirstOrDefault()
+                ?? nameof(Fischless.GameCapture.CaptureModes.WindowsGraphicsCapture);
+        }
+
+        return new GameCaptureOptions
+        {
+            CaptureModeName = configuredCaptureMode,
+            AutoFixWin11BitBlt = configuration.AutoFixWin11BitBlt
+        };
+    }
+
+    private string BuildCaptureStartupFailureMessage()
+    {
+        var windowTitle = _gameCaptureService.TargetWindowTitle;
+        return string.IsNullOrWhiteSpace(windowTitle)
+            ? "未找到目标窗口。请先启动游戏，或在开始页面手动选择捕获窗口。"
+            : $"未找到目标窗口“{windowTitle}”。请先启动游戏，或在开始页面手动选择捕获窗口。";
     }
 
     private string BuildTaskRuntimeSummary(AutoTaskConfig task)
