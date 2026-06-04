@@ -163,6 +163,26 @@ public sealed class CollectionScriptSubscriptionService
         }
     }
 
+    public static bool IsCollectionSubscriptionPackage(string sourceFilePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceFilePath);
+
+        if (!File.Exists(sourceFilePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var archive = ZipFile.OpenRead(sourceFilePath);
+            return archive.GetEntry(ManifestEntryName) is not null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static void ValidateManifest(CollectionScriptSubscriptionDocument manifest)
     {
         ArgumentNullException.ThrowIfNull(manifest);

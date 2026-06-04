@@ -7,7 +7,7 @@
       mc:Ignorable="d">
     <StackPanel Margin="42,16,42,12">
         <StackPanel Margin="0,0,0,16">
-            <ui:TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding PageTitle}" />
+            <ui:TextBlock FontWeight="SemiBold" Text="{Binding PageTitle}" />
             <ui:TextBlock Margin="0,6,0,0"
                           Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
                           Text="{Binding PageDescription}"

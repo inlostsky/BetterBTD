@@ -7,6 +7,36 @@
       xmlns:controls="clr-namespace:BetterBTD.Views.Controls"
       mc:Ignorable="d">
     <StackPanel Margin="42,16,42,12">
+        <Grid Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <ui:TextBlock FontWeight="SemiBold" Text="{Binding PageTitle}" />
+                <ui:TextBlock Margin="0,6,0,0"
+                              Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                              Text="{Binding PageDescription}"
+                              TextWrapping="Wrap" />
+            </StackPanel>
+
+            <ui:DropDownButton Grid.Column="1"
+                               Margin="12,0,0,0"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Top"
+                               Appearance="Primary"
+                               Content="{Binding ImportButtonText}"
+                               Icon="{ui:SymbolIcon ArrowUpload24}">
+                <ui:DropDownButton.Flyout>
+                    <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                        <MenuItem Header="{Binding ImportSubscriptionPackageText}" Command="{Binding ImportSubscriptionPackageCommand}" />
+                        <MenuItem Header="{Binding ImportSingleScriptText}" Command="{Binding ImportSingleScriptCommand}" />
+                    </ContextMenu>
+                </ui:DropDownButton.Flyout>
+            </ui:DropDownButton>
+        </Grid>
+
         <ItemsControl ItemsSource="{Binding Tasks}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
@@ -308,7 +338,6 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
 
                                     <ui:TextBlock Grid.Row="0"
@@ -324,16 +353,6 @@
                                     <ui:Button Grid.Row="0"
                                                Grid.RowSpan="2"
                                                Grid.Column="1"
-                                               Margin="0,0,12,0"
-                                               Width="120"
-                                               Appearance="Secondary"
-                                               Command="{Binding DataContext.ImportSubscriptionCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                               CommandParameter="{Binding}"
-                                               Content="{Binding DataContext.SubscriptionImportButtonText, RelativeSource={RelativeSource AncestorType=Page}}"
-                                               Icon="{ui:SymbolIcon ArrowUpload24}" />
-                                    <ui:Button Grid.Row="0"
-                                               Grid.RowSpan="2"
-                                               Grid.Column="2"
                                                Margin="0,0,36,0"
                                                Width="120"
                                                Appearance="Secondary"
@@ -356,7 +375,6 @@
                                     </Grid.RowDefinitions>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
 
                                     <ui:TextBlock Grid.Row="0"
@@ -369,16 +387,6 @@
                                                   Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
                                                   Text="{Binding DataContext.BlackBorderSubscriptionDescription, RelativeSource={RelativeSource AncestorType=Page}}"
                                                   TextWrapping="Wrap" />
-                                    <ui:Button Grid.Row="0"
-                                               Grid.RowSpan="2"
-                                               Grid.Column="1"
-                                               Margin="0,0,36,0"
-                                               Width="120"
-                                               Appearance="Secondary"
-                                               Command="{Binding DataContext.ImportSubscriptionCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                               CommandParameter="{Binding}"
-                                               Content="{Binding DataContext.SubscriptionImportButtonText, RelativeSource={RelativeSource AncestorType=Page}}"
-                                               Icon="{ui:SymbolIcon ArrowUpload24}" />
                                 </Grid>
 
                                 <Grid>

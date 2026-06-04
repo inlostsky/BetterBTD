@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -56,6 +57,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
     private readonly Dictionary<string, TaskRuntimeWindow> _runtimeWindowsByTaskKey = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, TaskRuntimeWindowViewModel> _runtimeViewModelsByTaskKey = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, TextFileEditorWindow> _textEditorWindowsByKey = new(StringComparer.OrdinalIgnoreCase);
+    private bool _isImportingAssets;
 
     private string _runningTaskKey = string.Empty;
 
@@ -106,7 +108,8 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         OpenTutorialCommand = new RelayCommand<AutoTaskConfig?>(OpenTutorial);
         OpenTaskScriptConfigCommand = new RelayCommand<AutoTaskConfig?>(OpenTaskScriptConfig);
         ExportSubscriptionCommand = new RelayCommand<AutoTaskConfig?>(ExportSubscription);
-        ImportSubscriptionCommand = new RelayCommand<AutoTaskConfig?>(ImportSubscription);
+        ImportSubscriptionPackageCommand = new AsyncRelayCommand(ImportSubscriptionPackageAsync, CanImportAssets);
+        ImportSingleScriptCommand = new AsyncRelayCommand(ImportSingleScriptAsync, CanImportAssets);
 
         _localizationService.LanguageChanged += (_, _) => RefreshLocalizedContent();
         RefreshLocalizedContent();
@@ -122,7 +125,19 @@ public sealed class AutoTasksPageViewModel : ObservableObject
 
     public IRelayCommand<AutoTaskConfig?> ExportSubscriptionCommand { get; }
 
-    public IRelayCommand<AutoTaskConfig?> ImportSubscriptionCommand { get; }
+    public IAsyncRelayCommand ImportSubscriptionPackageCommand { get; }
+
+    public IAsyncRelayCommand ImportSingleScriptCommand { get; }
+
+    public string PageTitle => _localizationService.T("Tasks.PageTitle");
+
+    public string PageDescription => _localizationService.T("Tasks.PageDescription");
+
+    public string ImportButtonText => _localizationService.T("Tasks.Import");
+
+    public string ImportSubscriptionPackageText => _localizationService.T("Tasks.Import.SubscriptionPackage");
+
+    public string ImportSingleScriptText => _localizationService.T("Tasks.Import.SingleScript");
 
     public string TutorialLinkText => _localizationService.T("Tasks.Tutorial");
 
@@ -167,8 +182,6 @@ public sealed class AutoTasksPageViewModel : ObservableObject
     public string BlackBorderSubscriptionLabel => _localizationService.T("Tasks.BlackBorderSubscriptionLabel");
 
     public string BlackBorderSubscriptionDescription => _localizationService.T("Tasks.BlackBorderSubscriptionDescription");
-
-    public string SubscriptionImportButtonText => _localizationService.T("Tasks.Subscription.Import");
 
     public string SubscriptionExportButtonText => _localizationService.T("Tasks.Subscription.Export");
 
@@ -475,6 +488,11 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             }
         }
 
+        OnPropertyChanged(nameof(PageTitle));
+        OnPropertyChanged(nameof(PageDescription));
+        OnPropertyChanged(nameof(ImportButtonText));
+        OnPropertyChanged(nameof(ImportSubscriptionPackageText));
+        OnPropertyChanged(nameof(ImportSingleScriptText));
         OnPropertyChanged(nameof(TutorialLinkText));
         OnPropertyChanged(nameof(OperationIntervalLabel));
         OnPropertyChanged(nameof(OperationIntervalDescription));
@@ -497,7 +515,6 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         OnPropertyChanged(nameof(GoldBalloonSubscriptionDescription));
         OnPropertyChanged(nameof(BlackBorderSubscriptionLabel));
         OnPropertyChanged(nameof(BlackBorderSubscriptionDescription));
-        OnPropertyChanged(nameof(SubscriptionImportButtonText));
         OnPropertyChanged(nameof(SubscriptionExportButtonText));
         OnPropertyChanged(nameof(SubscriptionExportTypeLabel));
         OnPropertyChanged(nameof(SubscriptionExportMapLabel));
@@ -851,13 +868,8 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         }
     }
 
-    private void ImportSubscription(AutoTaskConfig? task)
+    private async Task ImportSubscriptionPackageAsync()
     {
-        if (task is null)
-        {
-            return;
-        }
-
         var dialog = new OpenFileDialog
         {
             Filter = _localizationService.T("Tasks.Subscription.ImportFilter"),
@@ -868,33 +880,99 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             return;
         }
 
+        await ExecuteAssetImportAsync(async () =>
+        {
+            await Task.Run(() =>
+            {
+                if (BlackBorderScriptSubscriptionService.IsBlackBorderSubscriptionPackage(dialog.FileName))
+                {
+                    _blackBorderScriptSubscriptionService.Import(dialog.FileName);
+                    return;
+                }
+
+                if (GoldBalloonScriptSubscriptionService.IsGoldBalloonSubscriptionPackage(dialog.FileName))
+                {
+                    _goldBalloonScriptSubscriptionService.Import(dialog.FileName);
+                    return;
+                }
+
+                if (CollectionScriptSubscriptionService.IsCollectionSubscriptionPackage(dialog.FileName))
+                {
+                    _collectionScriptSubscriptionService.Import(dialog.FileName);
+                    return;
+                }
+
+                throw new InvalidDataException(_localizationService.T("Tasks.Dialog.UnsupportedSubscription.Message"));
+            }).ConfigureAwait(false);
+        }, "Tasks.Dialog.SubscriptionImportFailed.Title");
+    }
+
+    private async Task ImportSingleScriptAsync()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Filter = _localizationService.T("Tasks.Script.ImportFilter"),
+            Multiselect = false
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        await ExecuteAssetImportAsync(async () =>
+        {
+            var extension = Path.GetExtension(dialog.FileName);
+            if (!string.Equals(extension, ".btd", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(extension, ".btd6", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(_localizationService.T("Tasks.Dialog.UnsupportedScript.Message"));
+            }
+
+            var imported = await Task.Run(() => _managedScriptLibraryService.ImportScript(dialog.FileName)).ConfigureAwait(false);
+            var loopStageTask = FindTask(AutoTaskKind.LoopStage);
+            if (loopStageTask is null)
+            {
+                throw new InvalidOperationException("Loop-stage task was not found.");
+            }
+
+            RunOnUiThread(() => loopStageTask.ScriptId = imported.ScriptId);
+        }, "Tasks.Dialog.ScriptImportFailed.Title");
+    }
+
+    private async Task ExecuteAssetImportAsync(Func<Task> importAction, string errorTitleKey)
+    {
+        ArgumentNullException.ThrowIfNull(importAction);
+
+        SetIsImportingAssets(true);
         try
         {
-            if (BlackBorderScriptSubscriptionService.IsBlackBorderSubscriptionPackage(dialog.FileName))
-            {
-                _blackBorderScriptSubscriptionService.Import(dialog.FileName);
-                return;
-            }
-
-            if (GoldBalloonScriptSubscriptionService.IsGoldBalloonSubscriptionPackage(dialog.FileName))
-            {
-                _goldBalloonScriptSubscriptionService.Import(dialog.FileName);
-                return;
-            }
-
-            _collectionScriptSubscriptionService.Import(dialog.FileName);
+            await importAction().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            var taskKind = ResolveTaskKind(task.Key);
-            var titleKey = taskKind switch
-            {
-                AutoTaskKind.BlackBorder => "Tasks.Dialog.BlackBorderSubscriptionImportFailed.Title",
-                AutoTaskKind.GoldBalloon => "Tasks.Dialog.GoldBalloonSubscriptionImportFailed.Title",
-                _ => "Tasks.Dialog.CollectionSubscriptionImportFailed.Title"
-            };
-            ShowDialog(titleKey, ex.Message);
+            ShowDialog(errorTitleKey, ex.Message);
         }
+        finally
+        {
+            RunOnUiThread(() => SetIsImportingAssets(false));
+        }
+    }
+
+    private bool CanImportAssets()
+    {
+        return !_isImportingAssets;
+    }
+
+    private void SetIsImportingAssets(bool value)
+    {
+        if (_isImportingAssets == value)
+        {
+            return;
+        }
+
+        _isImportingAssets = value;
+        ImportSubscriptionPackageCommand.NotifyCanExecuteChanged();
+        ImportSingleScriptCommand.NotifyCanExecuteChanged();
     }
 
     private string ResolveSubscriptionLabel(string taskKey)
@@ -909,6 +987,12 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         return string.Equals(taskKey, AutoTaskKind.GoldBalloon.ToKey(), StringComparison.OrdinalIgnoreCase)
             ? GoldBalloonSubscriptionDescription
             : CollectionSubscriptionDescription;
+    }
+
+    private AutoTaskConfig? FindTask(AutoTaskKind taskKind)
+    {
+        var key = taskKind.ToKey();
+        return Tasks.FirstOrDefault(task => string.Equals(task.Key, key, StringComparison.OrdinalIgnoreCase));
     }
 
     private TaskRuntimeWindow EnsureRuntimeWindow(AutoTaskConfig task)
