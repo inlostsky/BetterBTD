@@ -10,5 +10,16 @@
   "description": "BetterBTD desktop installer and updater",
   "mainFeature": "Install or update BetterBTD",
   "programFilesPath": "BetterBTD",
-  "source": "https://github.com/ZiyaoZh/BetterBTD/releases/latest/download/BetterBTD.Install.exe"
+  "source": [
+    {
+      "id": "github",
+      "name": "GitHub",
+      "uri": "https://github.com/ZiyaoZh/BetterBTD/releases/latest/download/BetterBTD.Install.exe"
+    },
+    {
+      "id": "china",
+      "name": "China Mirror",
+      "uri": "https://gitee.com/ldcz1037/BetterBTD/releases/download/latest/BetterBTD.Install.exe"
+    }
+  ]
 }
