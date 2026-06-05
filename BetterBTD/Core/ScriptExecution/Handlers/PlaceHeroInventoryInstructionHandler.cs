@@ -29,7 +29,7 @@ public sealed class PlaceHeroInventoryInstructionHandler : ScriptInstructionHand
             $"Opening hero panel with hotkey '{heroHotkey.DisplayName}'.",
             cancellationToken).ConfigureAwait(false);
 
-        context.RuntimeServices.Input.PressHotkey(heroHotkey);
+        ScriptExecutionOperations.PressHotkey(context, heroHotkey, cancellationToken);
 
         await ScriptExecutionOperations.DelayAsync(
             context,
@@ -43,7 +43,7 @@ public sealed class PlaceHeroInventoryInstructionHandler : ScriptInstructionHand
             $"Selecting hero inventory '{inventoryType}' with hotkey '{inventoryHotkey.DisplayName}'.",
             cancellationToken).ConfigureAwait(false);
 
-        context.RuntimeServices.Input.PressHotkey(inventoryHotkey);
+        ScriptExecutionOperations.PressHotkey(context, inventoryHotkey, cancellationToken);
 
         if (instruction.RequiresAbilityCoordinate)
         {
@@ -61,7 +61,7 @@ public sealed class PlaceHeroInventoryInstructionHandler : ScriptInstructionHand
                 $"Clicking inventory target coordinate {ScriptInstructionHandlerSupport.FormatPoint(targetCoordinate)}.",
                 cancellationToken).ConfigureAwait(false);
 
-            context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(targetCoordinate, clickCount: 1);
+            ScriptExecutionOperations.ClickMouseAtScriptCoordinate(context, targetCoordinate, cancellationToken, clickCount: 1);
         }
 
         await ScriptExecutionOperations.CheckpointAsync(

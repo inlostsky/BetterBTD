@@ -210,7 +210,7 @@ internal static class ScriptInstructionHandlerSupport
             "Placement mode is already active. Sending Escape to reset it.",
             cancellationToken).ConfigureAwait(false);
 
-        context.RuntimeServices.Input.PressKey(KeyId.Escape);
+        ScriptExecutionOperations.PressKey(context, KeyId.Escape, cancellationToken);
 
         try
         {
@@ -259,7 +259,7 @@ internal static class ScriptInstructionHandlerSupport
                         $"Selection attempt {attempt}: clicking {FormatPoint(selectionCoordinate)}.",
                         token).ConfigureAwait(false);
 
-                    context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(selectionCoordinate, clickCount: 1);
+                    ScriptExecutionOperations.ClickMouseAtScriptCoordinate(context, selectionCoordinate, token, clickCount: 1);
 
                     GameStageStateSnapshot? visibleSnapshot = null;
                     try
@@ -313,7 +313,7 @@ internal static class ScriptInstructionHandlerSupport
             "Sending Escape to close the upgrade panel.",
             cancellationToken).ConfigureAwait(false);
 
-        context.RuntimeServices.Input.PressKey(KeyId.Escape);
+        ScriptExecutionOperations.PressKey(context, KeyId.Escape, cancellationToken);
     }
 
     public static async Task<GameStageStateSnapshot?> PrepareMonkeyPanelInteractionAsync(
@@ -379,7 +379,7 @@ internal static class ScriptInstructionHandlerSupport
             $"Selecting monkey at {FormatPoint(targetCoordinate)} without panel detection.",
             cancellationToken).ConfigureAwait(false);
 
-        context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(targetCoordinate, clickCount: 1);
+        ScriptExecutionOperations.ClickMouseAtScriptCoordinate(context, targetCoordinate, cancellationToken, clickCount: 1);
 
         await ScriptExecutionOperations.DelayAsync(
             context,
@@ -426,7 +426,7 @@ internal static class ScriptInstructionHandlerSupport
                 $"Selection attempt {selectionAttempt}: clicking {FormatPoint(targetCoordinate)}.",
                 cancellationToken).ConfigureAwait(false);
 
-            context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(targetCoordinate, clickCount: 1);
+            ScriptExecutionOperations.ClickMouseAtScriptCoordinate(context, targetCoordinate, cancellationToken, clickCount: 1);
 
             var selectionAttemptStartedAt = DateTimeOffset.UtcNow;
             var detectionPoll = 0;
@@ -506,7 +506,7 @@ internal static class ScriptInstructionHandlerSupport
                 $"Selling '{monkeyObjectId}' with hotkey '{sellHotkey.DisplayName}' without sell detection.",
                 cancellationToken).ConfigureAwait(false);
 
-            context.RuntimeServices.Input.PressHotkey(sellHotkey);
+            ScriptExecutionOperations.PressHotkey(context, sellHotkey, cancellationToken);
 
             await ScriptExecutionOperations.CheckpointAsync(
                 context,
@@ -537,7 +537,7 @@ internal static class ScriptInstructionHandlerSupport
                     $"Sell attempt {pressCount}: sending hotkey '{sellHotkey.DisplayName}' for '{monkeyObjectId}'.",
                     innerToken).ConfigureAwait(false);
 
-                context.RuntimeServices.Input.PressHotkey(sellHotkey);
+                ScriptExecutionOperations.PressHotkey(context, sellHotkey, innerToken);
 
                 await ScriptExecutionOperations.DelayAsync(
                     context,
@@ -592,7 +592,7 @@ internal static class ScriptInstructionHandlerSupport
                     $"Placement attempt {attempt}: sending hotkey '{hotkey.DisplayName}' for '{selectionCode}' (press {pressCount}).",
                     innerToken).ConfigureAwait(false);
 
-                context.RuntimeServices.Input.PressHotkey(hotkey);
+                ScriptExecutionOperations.PressHotkey(context, hotkey, innerToken);
 
                 var snapshot = await context.RuntimeServices.GameStageState
                     .CaptureSnapshotAsync(innerToken)
@@ -656,7 +656,7 @@ internal static class ScriptInstructionHandlerSupport
 
                 foreach (var modifierKey in modifierKeys)
                 {
-                    context.RuntimeServices.Input.KeyDown(modifierKey);
+                    ScriptExecutionOperations.KeyDown(context, modifierKey, cancellationToken);
                 }
 
                 if (effectiveModifierTransitionIntervalMilliseconds > 0)
@@ -677,7 +677,7 @@ internal static class ScriptInstructionHandlerSupport
                     $"{effectiveDescription} Press {index + 1}/{effectiveRepeatCount}.",
                     cancellationToken).ConfigureAwait(false);
 
-                context.RuntimeServices.Input.PressKey(hotkey.Key);
+                ScriptExecutionOperations.PressKey(context, hotkey.Key, cancellationToken);
 
                 if (index < effectiveRepeatCount - 1)
                 {
@@ -702,7 +702,7 @@ internal static class ScriptInstructionHandlerSupport
 
             for (var index = modifierKeys.Count - 1; index >= 0; index--)
             {
-                context.RuntimeServices.Input.KeyUp(modifierKeys[index]);
+                ScriptExecutionOperations.KeyUp(context, modifierKeys[index]);
             }
         }
     }

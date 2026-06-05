@@ -175,6 +175,8 @@ public sealed class ScriptExecutionSession
 
     public async Task ReachCheckpointAsync(string checkpoint, string? message, int? attempt, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         PublishUpdate(
             null,
             null,
@@ -184,6 +186,7 @@ public sealed class ScriptExecutionSession
             attempt,
             resetPauseRequested: false);
 
+        cancellationToken.ThrowIfCancellationRequested();
         await WaitIfPausedAsync(cancellationToken).ConfigureAwait(false);
     }
 

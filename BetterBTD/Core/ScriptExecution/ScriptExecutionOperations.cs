@@ -1,4 +1,7 @@
+using BetterBTD.Core.Config;
 using BetterBTD.Models.ScriptExecution;
+using InputMouseButton = Fischless.WindowsInput.MouseButton;
+using WpfPoint = System.Windows.Point;
 
 namespace BetterBTD.Core.ScriptExecution;
 
@@ -72,6 +75,78 @@ public static class ScriptExecutionOperations
         ArgumentException.ThrowIfNullOrWhiteSpace(checkpoint);
 
         return DelayCoreAsync(context, milliseconds, checkpoint, cancellationToken);
+    }
+
+    public static void MoveMouseToScriptCoordinate(
+        ScriptInstructionExecutionContext context,
+        WpfPoint scriptCoordinate,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        cancellationToken.ThrowIfCancellationRequested();
+        context.RuntimeServices.Input.MoveMouseToScriptCoordinate(scriptCoordinate);
+    }
+
+    public static void ClickMouseAtScriptCoordinate(
+        ScriptInstructionExecutionContext context,
+        WpfPoint scriptCoordinate,
+        CancellationToken cancellationToken,
+        InputMouseButton button = InputMouseButton.LeftButton,
+        int clickCount = 1,
+        int holdMilliseconds = 50)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        cancellationToken.ThrowIfCancellationRequested();
+        context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(
+            scriptCoordinate,
+            button,
+            clickCount,
+            holdMilliseconds);
+    }
+
+    public static void PressHotkey(
+        ScriptInstructionExecutionContext context,
+        HotkeyBinding hotkey,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(hotkey);
+
+        cancellationToken.ThrowIfCancellationRequested();
+        context.RuntimeServices.Input.PressHotkey(hotkey);
+    }
+
+    public static void PressKey(
+        ScriptInstructionExecutionContext context,
+        KeyId key,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        cancellationToken.ThrowIfCancellationRequested();
+        context.RuntimeServices.Input.PressKey(key);
+    }
+
+    public static void KeyDown(
+        ScriptInstructionExecutionContext context,
+        KeyId key,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        cancellationToken.ThrowIfCancellationRequested();
+        context.RuntimeServices.Input.KeyDown(key);
+    }
+
+    public static void KeyUp(
+        ScriptInstructionExecutionContext context,
+        KeyId key)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        context.RuntimeServices.Input.KeyUp(key);
     }
 
     public static async Task<T> RetryAsync<T>(

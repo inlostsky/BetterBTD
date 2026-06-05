@@ -57,7 +57,7 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
                     $"Selecting hero '{monkeyState.ObjectId}' with hotkey '{heroHotkey.DisplayName}'.",
                     cancellationToken).ConfigureAwait(false);
 
-                context.RuntimeServices.Input.PressHotkey(heroHotkey);
+                ScriptExecutionOperations.PressHotkey(context, heroHotkey, cancellationToken);
             }
 
             await ScriptInstructionHandlerSupport.PressHotkeyRepeatedAsync(
@@ -155,7 +155,7 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
                     $"Selecting '{monkeyState.ObjectId}' at {ScriptInstructionHandlerSupport.FormatPoint(targetCoordinate)} without upgrade detection.",
                     cancellationToken).ConfigureAwait(false);
 
-                context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(targetCoordinate, clickCount: 1);
+                ScriptExecutionOperations.ClickMouseAtScriptCoordinate(context, targetCoordinate, cancellationToken, clickCount: 1);
 
                 await ScriptExecutionOperations.DelayAsync(
                     context,
@@ -211,7 +211,7 @@ public sealed class UpgradeMonkeyInstructionHandler : ScriptInstructionHandlerBa
                 $"Upgrading '{monkeyState.ObjectId}' {instruction.UpgradePath}: current level {currentLevel}, target level {targetLevel}. Sending '{upgradeHotkey.DisplayName}'.",
                 cancellationToken).ConfigureAwait(false);
 
-            context.RuntimeServices.Input.PressHotkey(upgradeHotkey);
+            ScriptExecutionOperations.PressHotkey(context, upgradeHotkey, cancellationToken);
 
             await ScriptExecutionOperations.DelayAsync(
                 context,

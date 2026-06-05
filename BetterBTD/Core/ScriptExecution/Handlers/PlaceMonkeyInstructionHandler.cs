@@ -42,7 +42,7 @@ public sealed class PlaceMonkeyInstructionHandler : ScriptInstructionHandlerBase
                     $"Placement attempt {attempt}: moving mouse to requested coordinate.",
                     token).ConfigureAwait(false);
 
-                context.RuntimeServices.Input.MoveMouseToScriptCoordinate(requestedCoordinate);
+                ScriptExecutionOperations.MoveMouseToScriptCoordinate(context, requestedCoordinate, token);
 
                 if (!placementDetectionEnabled)
                 {
@@ -52,7 +52,7 @@ public sealed class PlaceMonkeyInstructionHandler : ScriptInstructionHandlerBase
                         $"Placement attempt {attempt}: sending hotkey '{placementHotkey.DisplayName}' for '{selectionCode}' without placement detection.",
                         token).ConfigureAwait(false);
 
-                    context.RuntimeServices.Input.PressHotkey(placementHotkey);
+                    ScriptExecutionOperations.PressHotkey(context, placementHotkey, token);
 
                     await ScriptExecutionOperations.CheckpointAsync(
                         context,
@@ -60,7 +60,7 @@ public sealed class PlaceMonkeyInstructionHandler : ScriptInstructionHandlerBase
                         $"Trying placement click at {ScriptInstructionHandlerSupport.FormatPoint(requestedCoordinate)} without placement detection.",
                         token).ConfigureAwait(false);
 
-                    context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(requestedCoordinate, clickCount: 1);
+                    ScriptExecutionOperations.ClickMouseAtScriptCoordinate(context, requestedCoordinate, token, clickCount: 1);
                     MarkPlaced(context, instruction, selectionCode, requestedCoordinate);
 
                     await ScriptExecutionOperations.CheckpointAsync(
@@ -93,7 +93,7 @@ public sealed class PlaceMonkeyInstructionHandler : ScriptInstructionHandlerBase
                         $"Trying placement click at {ScriptInstructionHandlerSupport.FormatPoint(placementCoordinate)}.",
                         token).ConfigureAwait(false);
 
-                    context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(placementCoordinate, clickCount: 1);
+                    ScriptExecutionOperations.ClickMouseAtScriptCoordinate(context, placementCoordinate, token, clickCount: 1);
 
                     GameStageStateSnapshot? postClickSnapshot = null;
                     try

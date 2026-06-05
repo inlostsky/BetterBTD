@@ -25,7 +25,7 @@ public sealed class MouseClickInstructionHandler : ScriptInstructionHandlerBase
                 "MouseClick",
                 $"Executing click {index + 1}/{clickCount}.",
                 cancellationToken).ConfigureAwait(false);
-            context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(coordinate, clickCount: 1);
+            ScriptExecutionOperations.ClickMouseAtScriptCoordinate(context, coordinate, cancellationToken, clickCount: 1);
 
             if (index < clickCount - 1 && clickIntervalMilliseconds > 0)
             {

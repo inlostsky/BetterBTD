@@ -28,7 +28,7 @@ public sealed class ActivateAbilityInstructionHandler : ScriptInstructionHandler
             $"Activating global ability '{abilityType}' with hotkey '{abilityHotkey.DisplayName}'.",
             cancellationToken).ConfigureAwait(false);
 
-        context.RuntimeServices.Input.PressHotkey(abilityHotkey);
+        ScriptExecutionOperations.PressHotkey(context, abilityHotkey, cancellationToken);
 
         if (instruction.RequiresAbilityCoordinate)
         {
@@ -46,7 +46,7 @@ public sealed class ActivateAbilityInstructionHandler : ScriptInstructionHandler
                 $"Clicking activated ability target coordinate {ScriptInstructionHandlerSupport.FormatPoint(targetCoordinate)}.",
                 cancellationToken).ConfigureAwait(false);
 
-            context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(targetCoordinate, clickCount: 1);
+            ScriptExecutionOperations.ClickMouseAtScriptCoordinate(context, targetCoordinate, cancellationToken, clickCount: 1);
         }
 
         await ScriptExecutionOperations.CheckpointAsync(

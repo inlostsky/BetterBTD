@@ -74,7 +74,7 @@ public sealed class SetMonkeyAbilityInstructionHandler : ScriptInstructionHandle
             $"Sending monkey ability hotkey '{abilityHotkey.DisplayName}' for '{abilityType}' on '{monkeyState.ObjectId}'.",
             cancellationToken).ConfigureAwait(false);
 
-        context.RuntimeServices.Input.PressHotkey(abilityHotkey);
+        ScriptExecutionOperations.PressHotkey(context, abilityHotkey, cancellationToken);
 
         if (instruction.RequiresAbilityCoordinate)
         {
@@ -92,7 +92,7 @@ public sealed class SetMonkeyAbilityInstructionHandler : ScriptInstructionHandle
                 $"Clicking ability coordinate {ScriptInstructionHandlerSupport.FormatPoint(abilityCoordinate)}.",
                 cancellationToken).ConfigureAwait(false);
 
-            context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(abilityCoordinate, clickCount: 1);
+            ScriptExecutionOperations.ClickMouseAtScriptCoordinate(context, abilityCoordinate, cancellationToken, clickCount: 1);
 
             await ScriptExecutionOperations.DelayAsync(
                 context,
