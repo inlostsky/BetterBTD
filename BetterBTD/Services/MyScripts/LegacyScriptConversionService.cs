@@ -266,8 +266,8 @@ public sealed class LegacyScriptConversionService
                 MonkeyObjectId = _heroObjectId,
                 PositionX = instruction.CoordinateX,
                 PositionY = instruction.CoordinateY,
-                PlacementDetectionEnabled = true,
-                PlacementFailureAdjustmentEnabled = true,
+                PlacementDetectionEnabled = false,
+                PlacementFailureAdjustmentEnabled = false,
                 IntervalToNextInstructionMs = DefaultInstructionIntervalMilliseconds,
                 Notes = BuildLegacyNotes(instruction)
             });
