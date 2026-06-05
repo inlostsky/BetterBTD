@@ -27,7 +27,8 @@ public sealed class UpgradeMonkeyInstructionHandlerTests
             CommandType = ScriptCommandType.UpgradeMonkey.ToString(),
             TargetMonkeyBindingId = "hero-bind",
             TargetMonkeyObjectId = "Hero:Geraldo",
-            UpgradeCount = 3
+            UpgradeCount = 3,
+            UpgradeOperationIntervalMilliseconds = 0
         };
 
         var monkeyObjects = new[]
@@ -98,7 +99,8 @@ public sealed class UpgradeMonkeyInstructionHandlerTests
             TargetMonkeyBindingId = "dart-bind",
             TargetMonkeyObjectId = "Tower:DartMonkey",
             UpgradePath = UpgradePathType.Top.ToString(),
-            UpgradeCount = 1
+            UpgradeCount = 1,
+            UpgradeOperationIntervalMilliseconds = 0
         };
 
         var monkeyObjects = new[]
@@ -147,7 +149,7 @@ public sealed class UpgradeMonkeyInstructionHandlerTests
             UpgradePath = UpgradePathType.Top.ToString(),
             UpgradeCount = 2,
             UpgradeDetectionEnabled = false,
-            UpgradeOperationIntervalMilliseconds = 200
+            UpgradeOperationIntervalMilliseconds = 0
         };
 
         var monkeyObjects = new[]
@@ -229,7 +231,8 @@ public sealed class UpgradeMonkeyInstructionHandlerTests
                 TargetMonkeyBindingId = "dart-bind",
                 TargetMonkeyObjectId = "Tower:DartMonkey",
                 UpgradePath = UpgradePathType.Top.ToString(),
-                UpgradeCount = 1
+                UpgradeCount = 1,
+                UpgradeOperationIntervalMilliseconds = 0
             },
             new ScriptInstructionDocument
             {

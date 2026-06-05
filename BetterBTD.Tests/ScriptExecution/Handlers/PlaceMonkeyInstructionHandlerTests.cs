@@ -36,7 +36,9 @@ public sealed class PlaceMonkeyInstructionHandlerTests
             SelectedMonkeyTower = "DartMonkey",
             MonkeyBindingId = "dart-bind",
             PositionX = 120,
-            PositionY = 240
+            PositionY = 240,
+            PlacementAttemptIntervalMilliseconds = 10,
+            PlacementAdjustmentAttemptIntervalMilliseconds = 10
         };
 
         var monkeyObjects = new[]
@@ -83,7 +85,7 @@ public sealed class PlaceMonkeyInstructionHandlerTests
             GameStageState = new QueueGameStageStateService(
             [
                 new GameStageStateSnapshot { IsPlacingMonkey = false },
-                new GameStageStateSnapshot { CanPlaceHero = false, IsPlacingMonkey = false },
+                new GameStageStateSnapshot { CanPlaceHero = true, IsPlacingMonkey = false },
                 new GameStageStateSnapshot { IsPlacingMonkey = true },
                 new GameStageStateSnapshot { IsPlacingMonkey = false }
             ])
@@ -95,7 +97,9 @@ public sealed class PlaceMonkeyInstructionHandlerTests
             SelectedMonkeyTower = "Hero:Geraldo",
             MonkeyBindingId = "hero-bind",
             PositionX = 120,
-            PositionY = 240
+            PositionY = 240,
+            PlacementAttemptIntervalMilliseconds = 10,
+            PlacementAdjustmentAttemptIntervalMilliseconds = 10
         };
 
         var monkeyObjects = new[]
@@ -121,7 +125,11 @@ public sealed class PlaceMonkeyInstructionHandlerTests
             Assert.Equal(expectedHeroHotkey.Key, pressedHotkey.Key);
         });
 
-        Assert.Equal(new[] { new WpfPoint(120, 240) }, input.MovedCoordinates);
+        Assert.Equal(
+        [
+            new WpfPoint(120, 240),
+            new WpfPoint(120, 240)
+        ], input.MovedCoordinates);
 
         var click = Assert.Single(input.Clicks);
         Assert.Equal(new WpfPoint(120, 240), click.Coordinate);

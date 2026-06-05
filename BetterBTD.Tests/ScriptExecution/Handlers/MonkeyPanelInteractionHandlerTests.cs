@@ -36,7 +36,8 @@ public sealed class MonkeyPanelInteractionHandlerTests
             CommandType = ScriptCommandType.SwitchMonkeyTarget.ToString(),
             TargetMonkeyBindingId = "dart-bind",
             SwitchDirection = SwitchDirectionType.Right.ToString(),
-            SwitchCount = 1
+            SwitchCount = 1,
+            MonkeyPanelOperationIntervalMilliseconds = 0
         };
 
         var monkeyObjects = new[]
@@ -90,7 +91,8 @@ public sealed class MonkeyPanelInteractionHandlerTests
             CommandType = ScriptCommandType.SetMonkeyAbility.ToString(),
             TargetMonkeyBindingId = "dart-bind",
             SelectedAbility = MonkeyAbilityType.Ability1.ToString(),
-            RequiresAbilityCoordinate = false
+            RequiresAbilityCoordinate = false,
+            MonkeyPanelOperationIntervalMilliseconds = 0
         };
 
         var monkeyObjects = new[]
@@ -139,7 +141,7 @@ public sealed class MonkeyPanelInteractionHandlerTests
             SwitchDirection = SwitchDirectionType.Right.ToString(),
             SwitchCount = 2,
             MonkeyPanelDetectionEnabled = false,
-            MonkeyPanelOperationIntervalMilliseconds = 100
+            MonkeyPanelOperationIntervalMilliseconds = 0
         };
 
         var monkeyObjects = new[]
@@ -191,7 +193,7 @@ public sealed class MonkeyPanelInteractionHandlerTests
             SelectedAbility = MonkeyAbilityType.Ability1.ToString(),
             RequiresAbilityCoordinate = false,
             MonkeyPanelDetectionEnabled = false,
-            MonkeyPanelOperationIntervalMilliseconds = 100
+            MonkeyPanelOperationIntervalMilliseconds = 0
         };
 
         var monkeyObjects = new[]
@@ -250,7 +252,7 @@ public sealed class MonkeyPanelInteractionHandlerTests
             RequiresAbilityCoordinate = true,
             AbilityCoordinateX = 300,
             AbilityCoordinateY = 400,
-            MonkeyPanelOperationIntervalMilliseconds = 100
+            MonkeyPanelOperationIntervalMilliseconds = 0
         };
 
         var monkeyObjects = new[]
@@ -300,7 +302,8 @@ public sealed class MonkeyPanelInteractionHandlerTests
             CommandType = ScriptCommandType.SwitchMonkeyTarget.ToString(),
             TargetMonkeyBindingId = "hero-bind",
             SwitchDirection = SwitchDirectionType.Right.ToString(),
-            SwitchCount = 1
+            SwitchCount = 1,
+            MonkeyPanelOperationIntervalMilliseconds = 0
         };
 
         var monkeyObjects = new[]
@@ -345,7 +348,8 @@ public sealed class MonkeyPanelInteractionHandlerTests
             CommandType = ScriptCommandType.SetMonkeyAbility.ToString(),
             TargetMonkeyBindingId = "hero-bind",
             SelectedAbility = MonkeyAbilityType.Ability1.ToString(),
-            RequiresAbilityCoordinate = false
+            RequiresAbilityCoordinate = false,
+            MonkeyPanelOperationIntervalMilliseconds = 0
         };
 
         var monkeyObjects = new[]
@@ -411,7 +415,8 @@ public sealed class MonkeyPanelInteractionHandlerTests
                 CommandType = ScriptCommandType.SwitchMonkeyTarget.ToString(),
                 TargetMonkeyBindingId = "dart-bind",
                 SwitchDirection = SwitchDirectionType.Right.ToString(),
-                SwitchCount = 1
+                SwitchCount = 1,
+                MonkeyPanelOperationIntervalMilliseconds = 0
             }
         };
 
@@ -480,7 +485,8 @@ public sealed class MonkeyPanelInteractionHandlerTests
                 CommandType = ScriptCommandType.SwitchMonkeyTarget.ToString(),
                 TargetMonkeyBindingId = "dart-bind",
                 SwitchDirection = SwitchDirectionType.Right.ToString(),
-                SwitchCount = 1
+                SwitchCount = 1,
+                MonkeyPanelOperationIntervalMilliseconds = 0
             }
         };
 
@@ -541,7 +547,8 @@ public sealed class MonkeyPanelInteractionHandlerTests
                 CommandType = ScriptCommandType.SetMonkeyAbility.ToString(),
                 TargetMonkeyBindingId = "dart-bind",
                 SelectedAbility = MonkeyAbilityType.Ability1.ToString(),
-                RequiresAbilityCoordinate = false
+                RequiresAbilityCoordinate = false,
+                MonkeyPanelOperationIntervalMilliseconds = 0
             },
             new ScriptInstructionDocument
             {
@@ -615,7 +622,8 @@ public sealed class MonkeyPanelInteractionHandlerTests
         {
             CommandType = ScriptCommandType.SellMonkey.ToString(),
             TargetMonkeyBindingId = "dart-bind",
-            SellDetectionEnabled = true
+            SellDetectionEnabled = true,
+            MonkeyPanelOperationIntervalMilliseconds = 0
         };
 
         var monkeyObjects = new[]
@@ -661,7 +669,8 @@ public sealed class MonkeyPanelInteractionHandlerTests
         {
             CommandType = ScriptCommandType.SellMonkey.ToString(),
             TargetMonkeyBindingId = "hero-bind",
-            SellDetectionEnabled = true
+            SellDetectionEnabled = true,
+            MonkeyPanelOperationIntervalMilliseconds = 0
         };
 
         var monkeyObjects = new[]
@@ -708,7 +717,7 @@ public sealed class MonkeyPanelInteractionHandlerTests
             CommandType = ScriptCommandType.SellMonkey.ToString(),
             TargetMonkeyBindingId = "dart-bind",
             MonkeyPanelDetectionEnabled = false,
-            MonkeyPanelOperationIntervalMilliseconds = 200
+            MonkeyPanelOperationIntervalMilliseconds = 0
         };
 
         var monkeyObjects = new[]
@@ -766,7 +775,8 @@ public sealed class MonkeyPanelInteractionHandlerTests
                 CommandType = ScriptCommandType.SetMonkeyAbility.ToString(),
                 TargetMonkeyBindingId = "dart-bind",
                 SelectedAbility = MonkeyAbilityType.Ability1.ToString(),
-                RequiresAbilityCoordinate = false
+                RequiresAbilityCoordinate = false,
+                MonkeyPanelOperationIntervalMilliseconds = 0
             },
             new ScriptInstructionDocument
             {
@@ -831,7 +841,8 @@ public sealed class MonkeyPanelInteractionHandlerTests
         {
             CommandType = ScriptCommandType.SellMonkey.ToString(),
             TargetMonkeyBindingId = "dart-bind",
-            SellDetectionEnabled = false
+            SellDetectionEnabled = false,
+            MonkeyPanelOperationIntervalMilliseconds = 0
         };
 
         var monkeyObjects = new[]

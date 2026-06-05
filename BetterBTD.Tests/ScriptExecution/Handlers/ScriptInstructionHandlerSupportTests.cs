@@ -201,8 +201,9 @@ public sealed class ScriptInstructionHandlerSupportTests
         var snapshot = await ScriptInstructionHandlerSupport.WaitForUpgradePanelVisibleAsync(
             context,
             new WpfPoint(120, 240),
-            timeoutMilliseconds: 5500,
+            timeoutMilliseconds: 500,
             panelPollIntervalMilliseconds: 50,
+            selectionAttemptTimeoutMilliseconds: 50,
             CancellationToken.None);
 
         Assert.NotNull(ScriptInstructionHandlerSupport.ResolveVisibleUpgradePanelSide(snapshot));

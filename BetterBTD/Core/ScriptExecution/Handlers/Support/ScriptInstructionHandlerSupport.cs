@@ -397,11 +397,29 @@ internal static class ScriptInstructionHandlerSupport
         int panelPollIntervalMilliseconds,
         CancellationToken cancellationToken)
     {
+        return await WaitForUpgradePanelVisibleAsync(
+            context,
+            targetCoordinate,
+            timeoutMilliseconds,
+            panelPollIntervalMilliseconds,
+            MonkeyPanelSelectionAttemptTimeoutMilliseconds,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public static async Task<GameStageStateSnapshot> WaitForUpgradePanelVisibleAsync(
+        ScriptInstructionExecutionContext context,
+        WpfPoint targetCoordinate,
+        int timeoutMilliseconds,
+        int panelPollIntervalMilliseconds,
+        int selectionAttemptTimeoutMilliseconds,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(context);
 
         GameStageStateSnapshot? visibleSnapshot = null;
         var effectiveTimeoutMilliseconds = Math.Max(0, timeoutMilliseconds);
         var effectivePanelPollIntervalMilliseconds = Math.Max(0, panelPollIntervalMilliseconds);
+        var effectiveSelectionAttemptTimeoutMilliseconds = Math.Max(0, selectionAttemptTimeoutMilliseconds);
         var startedAt = DateTimeOffset.UtcNow;
         var selectionAttempt = 0;
 
@@ -436,7 +454,7 @@ internal static class ScriptInstructionHandlerSupport
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var selectionAttemptElapsedMilliseconds = (DateTimeOffset.UtcNow - selectionAttemptStartedAt).TotalMilliseconds;
-                var remainingSelectionAttemptMilliseconds = MonkeyPanelSelectionAttemptTimeoutMilliseconds - selectionAttemptElapsedMilliseconds;
+                var remainingSelectionAttemptMilliseconds = effectiveSelectionAttemptTimeoutMilliseconds - selectionAttemptElapsedMilliseconds;
                 var remainingOverallMilliseconds = effectiveTimeoutMilliseconds - (DateTimeOffset.UtcNow - startedAt).TotalMilliseconds;
                 if (remainingSelectionAttemptMilliseconds <= 0 || remainingOverallMilliseconds <= 0)
                 {
@@ -478,7 +496,7 @@ internal static class ScriptInstructionHandlerSupport
             await ScriptExecutionOperations.CheckpointAsync(
                 context,
                 "UpgradeMonkeySelectRetry",
-                $"Selection attempt {selectionAttempt} timed out after {MonkeyPanelSelectionAttemptTimeoutMilliseconds} ms without detecting the panel. Re-selecting monkey.",
+                $"Selection attempt {selectionAttempt} timed out after {effectiveSelectionAttemptTimeoutMilliseconds} ms without detecting the panel. Re-selecting monkey.",
                 cancellationToken).ConfigureAwait(false);
         }
     }
