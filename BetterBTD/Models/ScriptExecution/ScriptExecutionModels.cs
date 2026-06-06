@@ -253,6 +253,8 @@ public sealed class ScriptExecutionProgressSnapshot
 {
     public string SourceFilePath { get; set; } = string.Empty;
 
+    public string RuntimeLogFilePath { get; set; } = string.Empty;
+
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public DateTimeOffset LastUpdatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -280,6 +282,7 @@ public sealed class ScriptExecutionProgressSnapshot
         return new ScriptExecutionProgressSnapshot
         {
             SourceFilePath = SourceFilePath,
+            RuntimeLogFilePath = RuntimeLogFilePath,
             StartedAt = StartedAt,
             LastUpdatedAt = LastUpdatedAt,
             RunState = RunState,
@@ -293,6 +296,39 @@ public sealed class ScriptExecutionProgressSnapshot
             Message = Message
         };
     }
+}
+
+public enum ScriptExecutionRuntimeLogLevel
+{
+    Trace,
+    Info,
+    Warning,
+    Error
+}
+
+public enum ScriptExecutionRuntimeLogCategory
+{
+    Session,
+    Capture,
+    Action,
+    Ocr,
+    Polling,
+    State
+}
+
+public sealed class ScriptExecutionRuntimeLogEntry
+{
+    public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;
+
+    public ScriptExecutionRuntimeLogLevel Level { get; init; } = ScriptExecutionRuntimeLogLevel.Info;
+
+    public ScriptExecutionRuntimeLogCategory Category { get; init; } = ScriptExecutionRuntimeLogCategory.State;
+
+    public string Message { get; init; } = string.Empty;
+
+    public string AggregationKey { get; init; } = string.Empty;
+
+    public bool ReplaceExisting { get; init; }
 }
 
 public sealed class ScriptExecutionFailureDetails

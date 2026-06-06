@@ -890,8 +890,11 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
 
         EventHandler<ScriptExecutionProgressSnapshot> progressHandler = (_, snapshot) =>
             runtimeWindowViewModel.PostProgressSnapshot(snapshot);
+        EventHandler<ScriptExecutionRuntimeLogEntry> runtimeLogHandler = (_, entry) =>
+            runtimeWindowViewModel.PostRuntimeLogEntry(entry);
 
         _scriptTaskFlowExecutor.ProgressChanged += progressHandler;
+        _scriptTaskFlowExecutor.RuntimeLogEmitted += runtimeLogHandler;
 
         try
         {
@@ -908,6 +911,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         finally
         {
             _scriptTaskFlowExecutor.ProgressChanged -= progressHandler;
+            _scriptTaskFlowExecutor.RuntimeLogEmitted -= runtimeLogHandler;
             _scriptExecutionCancellationTokenSource?.Dispose();
             _scriptExecutionCancellationTokenSource = null;
             IsScriptExecutionRunning = false;
@@ -1185,8 +1189,11 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
 
         EventHandler<ScriptExecutionProgressSnapshot> progressHandler = (_, snapshot) =>
             runtimeWindowViewModel.PostProgressSnapshot(snapshot);
+        EventHandler<ScriptExecutionRuntimeLogEntry> runtimeLogHandler = (_, entry) =>
+            runtimeWindowViewModel.PostRuntimeLogEntry(entry);
 
         _scriptTaskFlowExecutor.ProgressChanged += progressHandler;
+        _scriptTaskFlowExecutor.RuntimeLogEmitted += runtimeLogHandler;
 
         try
         {
@@ -1211,6 +1218,7 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         finally
         {
             _scriptTaskFlowExecutor.ProgressChanged -= progressHandler;
+            _scriptTaskFlowExecutor.RuntimeLogEmitted -= runtimeLogHandler;
             _scriptExecutionCancellationTokenSource?.Dispose();
             _scriptExecutionCancellationTokenSource = null;
             IsScriptExecutionRunning = false;

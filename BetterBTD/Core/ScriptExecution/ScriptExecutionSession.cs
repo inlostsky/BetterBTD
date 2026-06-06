@@ -7,21 +7,30 @@ public sealed class ScriptExecutionSession
     private readonly object _syncRoot = new();
     private readonly AsyncManualResetEvent _resumeGate = new(initialState: true);
     private readonly ScriptExecutionProgressSnapshot _progressSnapshot;
+    private readonly ScriptExecutionRuntimeLogger _runtimeLogger;
 
     private ScriptExecutionRunState _runState = ScriptExecutionRunState.Idle;
 
     public ScriptExecutionSession(string sourceFilePath)
     {
+        _runtimeLogger = new ScriptExecutionRuntimeLogger(sourceFilePath);
         _progressSnapshot = new ScriptExecutionProgressSnapshot
         {
             SourceFilePath = sourceFilePath ?? string.Empty,
+            RuntimeLogFilePath = _runtimeLogger.FilePath,
             StartedAt = DateTimeOffset.UtcNow,
             LastUpdatedAt = DateTimeOffset.UtcNow,
             RunState = ScriptExecutionRunState.Idle
         };
+
+        _runtimeLogger.EntryAdded += OnRuntimeLoggerEntryAdded;
     }
 
     public event EventHandler<ScriptExecutionProgressSnapshot>? ProgressChanged;
+
+    public event EventHandler<ScriptExecutionRuntimeLogEntry>? RuntimeLogAdded;
+
+    public ScriptExecutionRuntimeLogger RuntimeLogger => _runtimeLogger;
 
     public ScriptExecutionRunState RunState
     {
@@ -44,6 +53,9 @@ public sealed class ScriptExecutionSession
 
     public void MarkStarted()
     {
+        _runtimeLogger.Info(
+            ScriptExecutionRuntimeLogCategory.Session,
+            $"Execution started. Source='{_progressSnapshot.SourceFilePath}'.");
         PublishUpdate(
             ScriptExecutionRunState.Running,
             null,
@@ -56,6 +68,9 @@ public sealed class ScriptExecutionSession
 
     public void MarkContextBuilding(int startStepIndex, string commandType, string message)
     {
+        _runtimeLogger.Info(
+            ScriptExecutionRuntimeLogCategory.State,
+            $"Building runtime context before step #{startStepIndex + 1:000} ({commandType}). {message}");
         PublishUpdate(
             null,
             startStepIndex,
@@ -68,6 +83,9 @@ public sealed class ScriptExecutionSession
 
     public void EnterStep(int stepIndex, string commandType)
     {
+        _runtimeLogger.Info(
+            ScriptExecutionRuntimeLogCategory.State,
+            $"Entering step #{stepIndex + 1:000} ({commandType}).");
         PublishUpdate(
             null,
             stepIndex,
@@ -80,6 +98,9 @@ public sealed class ScriptExecutionSession
 
     public void MarkStepCompleted(int completedStepCount, int lastCompletedStepIndex)
     {
+        _runtimeLogger.Info(
+            ScriptExecutionRuntimeLogCategory.State,
+            $"Completed step #{lastCompletedStepIndex + 1:000}. CompletedSteps={completedStepCount}.");
         ScriptExecutionProgressSnapshot snapshot;
         lock (_syncRoot)
         {
@@ -97,6 +118,9 @@ public sealed class ScriptExecutionSession
 
     public void MarkCompleted(int executedStepCount, int lastCompletedStepIndex)
     {
+        _runtimeLogger.Info(
+            ScriptExecutionRuntimeLogCategory.Session,
+            $"Execution completed. ExecutedSteps={executedStepCount}, LastCompletedStep={lastCompletedStepIndex + 1:000}.");
         PublishTerminalState(
             ScriptExecutionRunState.Completed,
             executedStepCount,
@@ -106,6 +130,9 @@ public sealed class ScriptExecutionSession
 
     public void MarkCancelled(int executedStepCount, int lastCompletedStepIndex)
     {
+        _runtimeLogger.Warning(
+            ScriptExecutionRuntimeLogCategory.Session,
+            $"Execution cancelled. ExecutedSteps={executedStepCount}, LastCompletedStep={lastCompletedStepIndex + 1:000}.");
         PublishTerminalState(
             ScriptExecutionRunState.Cancelled,
             executedStepCount,
@@ -115,6 +142,9 @@ public sealed class ScriptExecutionSession
 
     public void MarkFailed(int executedStepCount, int lastCompletedStepIndex, string message)
     {
+        _runtimeLogger.Error(
+            ScriptExecutionRuntimeLogCategory.Session,
+            $"Execution failed. ExecutedSteps={executedStepCount}, LastCompletedStep={lastCompletedStepIndex + 1:000}. {message}");
         PublishTerminalState(
             ScriptExecutionRunState.Failed,
             executedStepCount,
@@ -143,6 +173,9 @@ public sealed class ScriptExecutionSession
             _resumeGate.Reset();
         }
 
+        _runtimeLogger.Warning(
+            ScriptExecutionRuntimeLogCategory.Session,
+            "Pause requested.");
         RaiseProgressChanged(snapshot);
         return true;
     }
@@ -169,8 +202,17 @@ public sealed class ScriptExecutionSession
             _resumeGate.Set();
         }
 
+        _runtimeLogger.Info(
+            ScriptExecutionRuntimeLogCategory.Session,
+            "Execution resumed.");
         RaiseProgressChanged(snapshot);
         return true;
+    }
+
+    public void DisposeRuntimeLogging()
+    {
+        _runtimeLogger.EntryAdded -= OnRuntimeLoggerEntryAdded;
+        _runtimeLogger.Dispose();
     }
 
     public async Task ReachCheckpointAsync(string checkpoint, string? message, int? attempt, CancellationToken cancellationToken)
@@ -326,6 +368,11 @@ public sealed class ScriptExecutionSession
     private void RaiseProgressChanged(ScriptExecutionProgressSnapshot snapshot)
     {
         ProgressChanged?.Invoke(this, snapshot);
+    }
+
+    private void OnRuntimeLoggerEntryAdded(object? sender, ScriptExecutionRuntimeLogEntry entry)
+    {
+        RuntimeLogAdded?.Invoke(this, entry);
     }
 }
 

@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using BetterBTD.Core.ScriptExecution;
 using BetterBTD.Core.ScriptExecution.Runtime;
 using BetterBTD.Models;
 using BetterBTD.Models.ScriptExecution;
@@ -257,15 +258,26 @@ public sealed class GameStageStateService : IGameStageStateService
     public Task<GameStageStateSnapshot?> CaptureSnapshotAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var startedAt = DateTimeOffset.UtcNow;
 
         if (!_gameCaptureService.TryCaptureFrame(out var frame))
         {
+            ScriptExecutionRuntimeDiagnostics.Warning(
+                ScriptExecutionRuntimeLogCategory.Capture,
+                "CaptureSnapshotAsync failed because no shared frame is available.",
+                aggregationKey: "capture:stage-snapshot",
+                replaceExisting: true);
             return Task.FromResult<GameStageStateSnapshot?>(null);
         }
 
         using (frame)
         {
             _ = TryCaptureSnapshot(frame, out var snapshot, out _);
+            ScriptExecutionRuntimeDiagnostics.Info(
+                ScriptExecutionRuntimeLogCategory.Capture,
+                $"CaptureSnapshotAsync succeeded | size={frame.Width}x{frame.Height} | elapsed={(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds:F0} ms | inLevel={snapshot?.IsInLevel?.ToString() ?? "null"} | gold={snapshot?.Gold?.ToString() ?? "null"} | round={snapshot?.Round?.ToString() ?? "null"}.",
+                aggregationKey: "capture:stage-snapshot",
+                replaceExisting: true);
             return Task.FromResult<GameStageStateSnapshot?>(snapshot);
         }
     }
@@ -357,17 +369,44 @@ public sealed class GameStageStateService : IGameStageStateService
     private Task<T> CaptureFrameValueAsync<T>(Func<Mat, T> selector, T fallbackValue, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var startedAt = DateTimeOffset.UtcNow;
 
         if (!_gameCaptureService.TryCaptureFrame(out var frame))
         {
+            ScriptExecutionRuntimeDiagnostics.Warning(
+                ScriptExecutionRuntimeLogCategory.Capture,
+                $"Stage-state selector '{typeof(T).Name}' failed because no shared frame is available.",
+                aggregationKey: $"capture:value:{typeof(T).Name}",
+                replaceExisting: true);
             return Task.FromResult(fallbackValue);
         }
 
         using (frame)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(selector(frame));
+            var value = selector(frame);
+            ScriptExecutionRuntimeDiagnostics.Trace(
+                ScriptExecutionRuntimeLogCategory.Capture,
+                $"Stage-state selector '{typeof(T).Name}' | size={frame.Width}x{frame.Height} | elapsed={(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds:F0} ms | result={FormatDiagnosticValue(value)}.",
+                aggregationKey: $"capture:value:{typeof(T).Name}",
+                replaceExisting: true);
+            return Task.FromResult(value);
         }
+    }
+
+    private static string FormatDiagnosticValue<T>(T value)
+    {
+        if (value is null)
+        {
+            return "null";
+        }
+
+        return value switch
+        {
+            bool typedBool => typedBool ? "true" : "false",
+            int typedInt => typedInt.ToString(),
+            _ => value.ToString() ?? "null"
+        };
     }
 
     private static bool? DetectIsInLevel(Mat frame)

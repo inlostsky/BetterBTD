@@ -12,6 +12,8 @@ namespace BetterBTD.ViewModels;
 
 public sealed class ScriptExecutionWindowViewModel : ObservableObject
 {
+    private const int MaxDisplayedLogLines = 400;
+
     private static readonly Brush PendingStateBrush = CreateBrush("#FF8A93A6");
     private static readonly Brush RunningStateBrush = CreateBrush("#FF57A6FF");
     private static readonly Brush CompletedStateBrush = CreateBrush("#FF49B675");
@@ -32,7 +34,10 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
     private readonly Dispatcher _dispatcher;
     private readonly Func<ScriptExecutionWindowViewModel, int, Task> _startExecutionAsync;
     private readonly object _progressDispatchSync = new();
+    private readonly object _runtimeLogDispatchSync = new();
     private readonly Action _requestStop;
+    private readonly Queue<ScriptExecutionRuntimeLogEntry> _pendingRuntimeLogEntries = new();
+    private readonly List<ScriptExecutionDisplayLogLine> _displayLogLines = [];
 
     private string _windowTitle = string.Empty;
     private string _scriptDisplayName = string.Empty;
@@ -48,6 +53,7 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
     private int _activeStartStepIndex;
 
     private string _lastLoggedSignature = string.Empty;
+    private string _runtimeLogFilePath = string.Empty;
     private ScriptExecutionProgressSnapshot? _pendingProgressSnapshot;
     private bool _isProgressFlushScheduled;
     private bool _acceptProgressSnapshots;
@@ -222,7 +228,7 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
     {
         BeginAcceptingProgressSnapshots();
         _activeStartStepIndex = NormalizeStepIndex(startStepIndex);
-        _lastLoggedSignature = string.Empty;
+        ResetDisplayedLogs();
         SetAllStepsToPending();
         FocusedStep = ResolveFocusedStep(_activeStartStepIndex);
         IsRunning = true;
@@ -273,10 +279,39 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
         _ = _dispatcher.InvokeAsync(FlushPendingProgressSnapshots, DispatcherPriority.Render);
     }
 
+    public void PostRuntimeLogEntry(ScriptExecutionRuntimeLogEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        var shouldScheduleFlush = false;
+        lock (_runtimeLogDispatchSync)
+        {
+            _pendingRuntimeLogEntries.Enqueue(entry);
+            if (_pendingRuntimeLogEntries.Count == 1)
+            {
+                shouldScheduleFlush = true;
+            }
+        }
+
+        if (!shouldScheduleFlush)
+        {
+            return;
+        }
+
+        if (_dispatcher.CheckAccess())
+        {
+            FlushPendingRuntimeLogEntries();
+            return;
+        }
+
+        _ = _dispatcher.InvokeAsync(FlushPendingRuntimeLogEntries, DispatcherPriority.Background);
+    }
+
     public void ApplyProgressSnapshot(ScriptExecutionProgressSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
+        EnsureRuntimeLogPathLogged(snapshot);
         IsRunning = snapshot.RunState is ScriptExecutionRunState.Running
             or ScriptExecutionRunState.PauseRequested
             or ScriptExecutionRunState.Paused;
@@ -395,6 +430,11 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
             _pendingProgressSnapshot = null;
             _isProgressFlushScheduled = false;
         }
+
+        lock (_runtimeLogDispatchSync)
+        {
+            _pendingRuntimeLogEntries.Clear();
+        }
     }
 
     private void FlushPendingProgressSnapshots()
@@ -421,6 +461,25 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
             }
 
             ApplyProgressSnapshot(snapshot);
+        }
+    }
+
+    private void FlushPendingRuntimeLogEntries()
+    {
+        while (true)
+        {
+            ScriptExecutionRuntimeLogEntry? entry = null;
+            lock (_runtimeLogDispatchSync)
+            {
+                if (_pendingRuntimeLogEntries.Count == 0)
+                {
+                    return;
+                }
+
+                entry = _pendingRuntimeLogEntries.Dequeue();
+            }
+
+            ApplyRuntimeLogEntry(entry);
         }
     }
 
@@ -587,6 +646,11 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
 
     private void AppendProgressLog(ScriptExecutionProgressSnapshot snapshot)
     {
+        if (IsCheckpointHandledByRuntimeLogger(snapshot.CurrentCheckpoint))
+        {
+            return;
+        }
+
         var signature = $"{snapshot.RunState}|{snapshot.CurrentStepIndex}|{snapshot.CurrentCommandType}|{snapshot.CurrentCheckpoint}|{snapshot.CurrentAttempt}|{snapshot.Message}";
         if (string.Equals(signature, _lastLoggedSignature, StringComparison.Ordinal))
         {
@@ -614,18 +678,113 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
         AppendLog($"{snapshot.RunState} | {stepText} | {commandText} | {checkpointText}{attemptText}{messageText}");
     }
 
-    private void AppendLog(string message)
+    private void ApplyRuntimeLogEntry(ScriptExecutionRuntimeLogEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        var prefix = $"[{entry.Timestamp:HH:mm:ss.fff}] [{entry.Category}]";
+        if (entry.Level is ScriptExecutionRuntimeLogLevel.Warning or ScriptExecutionRuntimeLogLevel.Error)
+        {
+            prefix = $"{prefix} [{entry.Level}]";
+        }
+
+        AppendLog(
+            $"{prefix} {entry.Message}",
+            entry.Timestamp,
+            entry.AggregationKey,
+            entry.ReplaceExisting);
+    }
+
+    private void EnsureRuntimeLogPathLogged(ScriptExecutionProgressSnapshot snapshot)
+    {
+        if (string.IsNullOrWhiteSpace(snapshot.RuntimeLogFilePath) ||
+            string.Equals(_runtimeLogFilePath, snapshot.RuntimeLogFilePath, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _runtimeLogFilePath = snapshot.RuntimeLogFilePath;
+        AppendLog($"Runtime log file: {_runtimeLogFilePath}");
+    }
+
+    private void ResetDisplayedLogs()
+    {
+        _lastLoggedSignature = string.Empty;
+        _runtimeLogFilePath = string.Empty;
+        _displayLogLines.Clear();
+        LogLines.Clear();
+        LogText = string.Empty;
+    }
+
+    private void AppendLog(
+        string message,
+        DateTimeOffset? timestamp = null,
+        string? aggregationKey = null,
+        bool replaceExisting = false)
     {
         if (string.IsNullOrWhiteSpace(message))
         {
             return;
         }
 
-        var line = $"[{DateTime.Now:HH:mm:ss}] {message}";
-        LogLines.Add(line);
-        LogText = string.IsNullOrEmpty(LogText)
-            ? line
-            : $"{LogText}{Environment.NewLine}{line}";
+        var normalizedTimestamp = timestamp ?? DateTimeOffset.Now;
+        var lineText = timestamp.HasValue
+            ? message.Trim()
+            : $"[{normalizedTimestamp:HH:mm:ss.fff}] {message.Trim()}";
+
+        if (replaceExisting && !string.IsNullOrWhiteSpace(aggregationKey))
+        {
+            for (var index = _displayLogLines.Count - 1; index >= 0; index--)
+            {
+                if (!string.Equals(_displayLogLines[index].AggregationKey, aggregationKey, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                _displayLogLines[index] = new ScriptExecutionDisplayLogLine(aggregationKey, lineText);
+                RebuildDisplayedLogs();
+                return;
+            }
+        }
+
+        _displayLogLines.Add(new ScriptExecutionDisplayLogLine(aggregationKey ?? string.Empty, lineText));
+        while (_displayLogLines.Count > MaxDisplayedLogLines)
+        {
+            _displayLogLines.RemoveAt(0);
+        }
+
+        RebuildDisplayedLogs();
+    }
+
+    private void RebuildDisplayedLogs()
+    {
+        LogLines.Clear();
+        foreach (var line in _displayLogLines)
+        {
+            LogLines.Add(line.Text);
+        }
+
+        LogText = string.Join(Environment.NewLine, _displayLogLines.Select(static line => line.Text));
+    }
+
+    private static bool IsCheckpointHandledByRuntimeLogger(string? checkpoint)
+    {
+        if (string.IsNullOrWhiteSpace(checkpoint))
+        {
+            return false;
+        }
+
+        return checkpoint switch
+        {
+            "WaitPolling" => true,
+            "WaitSatisfied" => true,
+            "WaitTimedOut" => true,
+            "RetryAttempt" => true,
+            "RetryAttemptFailed" => true,
+            "RetryAttemptSucceeded" => true,
+            _ when checkpoint.Contains("Delay", StringComparison.OrdinalIgnoreCase) => true,
+            _ => false
+        };
     }
 
     private ScriptExecutionStepItem? ResolveFocusedStep(int stepIndex)
@@ -679,6 +838,8 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
         return brush;
     }
 }
+
+internal readonly record struct ScriptExecutionDisplayLogLine(string AggregationKey, string Text);
 
 public sealed class ScriptExecutionStepItem : ObservableObject
 {

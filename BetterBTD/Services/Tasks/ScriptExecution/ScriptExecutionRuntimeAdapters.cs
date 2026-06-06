@@ -1,4 +1,5 @@
 ﻿using BetterBTD.Core.Config;
+using BetterBTD.Core.ScriptExecution;
 using BetterBTD.Core.ScriptExecution.Runtime;
 using BetterBTD.Models;
 using BetterBTD.Models.ScriptExecution;
@@ -39,7 +40,15 @@ public sealed class ScriptCaptureServiceAdapter : IScriptCaptureService
 
     public bool TryCaptureFrame(out GameWindowInfo windowInfo, out Mat frame)
     {
-        return _gameCaptureService.TryCaptureFrame(out windowInfo, out frame);
+        var succeeded = _gameCaptureService.TryCaptureFrame(out windowInfo, out frame);
+        ScriptExecutionRuntimeDiagnostics.Trace(
+            ScriptExecutionRuntimeLogCategory.Capture,
+            succeeded
+                ? $"Shared frame acquired | size={frame.Width}x{frame.Height}."
+                : "Shared frame acquisition failed.",
+            aggregationKey: "capture:shared-frame",
+            replaceExisting: true);
+        return succeeded;
     }
 }
 
@@ -64,6 +73,11 @@ public sealed class ScriptInputServiceAdapter : IScriptInputService
 
     public void MoveMouseToScriptCoordinate(WpfPoint scriptCoordinate)
     {
+        ScriptExecutionRuntimeDiagnostics.Trace(
+            ScriptExecutionRuntimeLogCategory.Action,
+            $"Input adapter move mouse to {scriptCoordinate.X:0.##},{scriptCoordinate.Y:0.##}.",
+            aggregationKey: "action:move",
+            replaceExisting: true);
         _scriptInputSimulationService.MoveMouseToScriptCoordinate(scriptCoordinate);
     }
 
@@ -73,26 +87,45 @@ public sealed class ScriptInputServiceAdapter : IScriptInputService
         int clickCount = 1,
         int holdMilliseconds = 50)
     {
+        ScriptExecutionRuntimeDiagnostics.Info(
+            ScriptExecutionRuntimeLogCategory.Action,
+            $"Input adapter click at {scriptCoordinate.X:0.##},{scriptCoordinate.Y:0.##} | button={button} | clickCount={clickCount} | hold={holdMilliseconds} ms.");
         _scriptInputSimulationService.ClickMouseAtScriptCoordinate(scriptCoordinate, button, clickCount, holdMilliseconds);
     }
 
     public void PressHotkey(HotkeyBinding hotkey)
     {
+        ScriptExecutionRuntimeDiagnostics.Info(
+            ScriptExecutionRuntimeLogCategory.Action,
+            $"Input adapter press hotkey '{hotkey.DisplayName}'.");
         _scriptInputSimulationService.PressHotkey(hotkey);
     }
 
     public void PressKey(KeyId key)
     {
+        ScriptExecutionRuntimeDiagnostics.Info(
+            ScriptExecutionRuntimeLogCategory.Action,
+            $"Input adapter press key '{key}'.");
         _scriptInputSimulationService.PressKey(key);
     }
 
     public void KeyDown(KeyId key)
     {
+        ScriptExecutionRuntimeDiagnostics.Trace(
+            ScriptExecutionRuntimeLogCategory.Action,
+            $"Input adapter key down '{key}'.",
+            aggregationKey: $"action:key-down:{key}",
+            replaceExisting: true);
         _scriptInputSimulationService.KeyDown(key);
     }
 
     public void KeyUp(KeyId key)
     {
+        ScriptExecutionRuntimeDiagnostics.Trace(
+            ScriptExecutionRuntimeLogCategory.Action,
+            $"Input adapter key up '{key}'.",
+            aggregationKey: $"action:key-up:{key}",
+            replaceExisting: true);
         _scriptInputSimulationService.KeyUp(key);
     }
 }

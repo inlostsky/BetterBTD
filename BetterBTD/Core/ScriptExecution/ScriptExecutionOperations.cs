@@ -85,6 +85,9 @@ public static class ScriptExecutionOperations
         ArgumentNullException.ThrowIfNull(context);
 
         cancellationToken.ThrowIfCancellationRequested();
+        ScriptExecutionRuntimeDiagnostics.Trace(
+            ScriptExecutionRuntimeLogCategory.Action,
+            $"Move mouse to script coordinate {FormatPoint(scriptCoordinate)}.");
         context.RuntimeServices.Input.MoveMouseToScriptCoordinate(scriptCoordinate);
     }
 
@@ -99,6 +102,9 @@ public static class ScriptExecutionOperations
         ArgumentNullException.ThrowIfNull(context);
 
         cancellationToken.ThrowIfCancellationRequested();
+        ScriptExecutionRuntimeDiagnostics.Info(
+            ScriptExecutionRuntimeLogCategory.Action,
+            $"Click mouse at script coordinate {FormatPoint(scriptCoordinate)} | button={button} | clickCount={clickCount} | hold={holdMilliseconds} ms.");
         context.RuntimeServices.Input.ClickMouseAtScriptCoordinate(
             scriptCoordinate,
             button,
@@ -115,6 +121,9 @@ public static class ScriptExecutionOperations
         ArgumentNullException.ThrowIfNull(hotkey);
 
         cancellationToken.ThrowIfCancellationRequested();
+        ScriptExecutionRuntimeDiagnostics.Info(
+            ScriptExecutionRuntimeLogCategory.Action,
+            $"Press hotkey '{hotkey.DisplayName}'.");
         context.RuntimeServices.Input.PressHotkey(hotkey);
     }
 
@@ -126,6 +135,9 @@ public static class ScriptExecutionOperations
         ArgumentNullException.ThrowIfNull(context);
 
         cancellationToken.ThrowIfCancellationRequested();
+        ScriptExecutionRuntimeDiagnostics.Info(
+            ScriptExecutionRuntimeLogCategory.Action,
+            $"Press key '{key}'.");
         context.RuntimeServices.Input.PressKey(key);
     }
 
@@ -137,6 +149,9 @@ public static class ScriptExecutionOperations
         ArgumentNullException.ThrowIfNull(context);
 
         cancellationToken.ThrowIfCancellationRequested();
+        ScriptExecutionRuntimeDiagnostics.Trace(
+            ScriptExecutionRuntimeLogCategory.Action,
+            $"Key down '{key}'.");
         context.RuntimeServices.Input.KeyDown(key);
     }
 
@@ -146,6 +161,9 @@ public static class ScriptExecutionOperations
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        ScriptExecutionRuntimeDiagnostics.Trace(
+            ScriptExecutionRuntimeLogCategory.Action,
+            $"Key up '{key}'.");
         context.RuntimeServices.Input.KeyUp(key);
     }
 
@@ -164,6 +182,10 @@ public static class ScriptExecutionOperations
         var delayBetweenAttemptsMilliseconds = Math.Max(0, options.DelayBetweenAttemptsMilliseconds);
         var description = string.IsNullOrWhiteSpace(options.Description) ? "operation" : options.Description;
 
+        ScriptExecutionRuntimeDiagnostics.Info(
+            ScriptExecutionRuntimeLogCategory.Polling,
+            $"Retry operation '{description}' started | maxAttempts={maxAttempts} | delayBetweenAttempts={delayBetweenAttemptsMilliseconds} ms.");
+
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             await context.ExecutionSession
@@ -181,6 +203,9 @@ public static class ScriptExecutionOperations
             }
             catch (Exception ex) when (attempt < maxAttempts)
             {
+                ScriptExecutionRuntimeDiagnostics.Warning(
+                    ScriptExecutionRuntimeLogCategory.Polling,
+                    $"Retry operation '{description}' attempt {attempt}/{maxAttempts} failed with '{ex.Message}'.");
                 await context.ExecutionSession
                     .ReachCheckpointAsync(
                         "RetryAttemptFailed",
@@ -199,6 +224,9 @@ public static class ScriptExecutionOperations
 
             if (isSuccess is null || isSuccess(result))
             {
+                ScriptExecutionRuntimeDiagnostics.Info(
+                    ScriptExecutionRuntimeLogCategory.Polling,
+                    $"Retry operation '{description}' succeeded on attempt {attempt}/{maxAttempts}.");
                 await context.ExecutionSession
                     .ReachCheckpointAsync(
                         "RetryAttemptSucceeded",
@@ -240,6 +268,13 @@ public static class ScriptExecutionOperations
         var startedAt = DateTimeOffset.UtcNow;
         var successCount = 0;
         var attempt = 0;
+        var operationKey = $"{context.Step.Index}:{context.Step.CommandType}:{description}";
+        var pollingScope = ScriptExecutionRuntimeDiagnostics.Current?.CreatePollingScope(
+            operationKey,
+            description,
+            timeoutMilliseconds,
+            pollIntervalMilliseconds,
+            stableSuccessCount);
 
         while (true)
         {
@@ -254,11 +289,20 @@ public static class ScriptExecutionOperations
                     cancellationToken)
                 .ConfigureAwait(false);
 
+            pollingScope?.ReportAttempt(
+                attempt,
+                successCount,
+                $"step=#{context.Step.Index + 1:000} command={context.Step.CommandType}");
+
             if (await condition(cancellationToken).ConfigureAwait(false))
             {
                 successCount++;
                 if (successCount >= stableSuccessCount)
                 {
+                    pollingScope?.Complete(
+                        attempt,
+                        successCount,
+                        $"duration={(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds:F0} ms");
                     await context.ExecutionSession
                         .ReachCheckpointAsync(
                             "WaitSatisfied",
@@ -277,6 +321,10 @@ public static class ScriptExecutionOperations
 
             if ((DateTimeOffset.UtcNow - startedAt).TotalMilliseconds >= timeoutMilliseconds)
             {
+                pollingScope?.Timeout(
+                    attempt,
+                    successCount,
+                    $"timeout={timeoutMilliseconds} ms");
                 throw CreateExecutionException(
                     context,
                     "WaitTimedOut",
@@ -300,12 +348,19 @@ public static class ScriptExecutionOperations
             .ReachCheckpointAsync(checkpoint, "Capturing stage snapshot.", null, cancellationToken)
             .ConfigureAwait(false);
 
+        var captureStartedAt = DateTimeOffset.UtcNow;
         var snapshot = await context.RuntimeServices.GameStageState.CaptureSnapshotAsync(cancellationToken).ConfigureAwait(false);
         if (snapshot is null)
         {
+            ScriptExecutionRuntimeDiagnostics.Warning(
+                ScriptExecutionRuntimeLogCategory.Capture,
+                $"Stage snapshot capture failed at checkpoint '{checkpoint}'.");
             throw CreateExecutionException(context, checkpoint, "Game stage snapshot is unavailable.");
         }
 
+        ScriptExecutionRuntimeDiagnostics.Info(
+            ScriptExecutionRuntimeLogCategory.Capture,
+            $"Stage snapshot captured at checkpoint '{checkpoint}' | elapsed={(DateTimeOffset.UtcNow - captureStartedAt).TotalMilliseconds:F0} ms | inLevel={snapshot.IsInLevel?.ToString() ?? "null"} | gold={snapshot.Gold?.ToString() ?? "null"} | round={snapshot.Round?.ToString() ?? "null"}.");
         return snapshot;
     }
 
@@ -337,6 +392,14 @@ public static class ScriptExecutionOperations
             .ReachCheckpointAsync(checkpoint, $"Delaying {Math.Max(0, milliseconds)} ms.", null, cancellationToken)
             .ConfigureAwait(false);
 
+        ScriptExecutionRuntimeDiagnostics.Trace(
+            ScriptExecutionRuntimeLogCategory.State,
+            $"Delay requested at checkpoint '{checkpoint}' | duration={Math.Max(0, milliseconds)} ms.");
         await context.ExecutionSession.DelayAsync(milliseconds, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string FormatPoint(WpfPoint point)
+    {
+        return $"({point.X:0.##}, {point.Y:0.##})";
     }
 }

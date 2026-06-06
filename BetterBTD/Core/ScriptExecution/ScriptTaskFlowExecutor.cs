@@ -49,6 +49,8 @@ public sealed class ScriptTaskFlowExecutor
 
     public event EventHandler<ScriptExecutionProgressSnapshot>? ProgressChanged;
 
+    public event EventHandler<ScriptExecutionRuntimeLogEntry>? RuntimeLogEmitted;
+
     public bool RequestPause()
     {
         ScriptExecutionSession? session;
@@ -100,6 +102,7 @@ public sealed class ScriptTaskFlowExecutor
         EnterRunningState(executionSession);
         try
         {
+            using var runtimeLogScope = ScriptExecutionRuntimeDiagnostics.PushLogger(executionSession.RuntimeLogger);
             ValidateRuntimePrerequisites(options, runtimeServices);
             executionSession.MarkStarted();
 
@@ -227,6 +230,7 @@ public sealed class ScriptTaskFlowExecutor
         }
         finally
         {
+            executionSession.DisposeRuntimeLogging();
             ExitRunningState();
         }
     }
@@ -268,6 +272,7 @@ public sealed class ScriptTaskFlowExecutor
             _isRunning = true;
             _currentSession = executionSession;
             _currentSession.ProgressChanged += OnCurrentSessionProgressChanged;
+            _currentSession.RuntimeLogAdded += OnCurrentSessionRuntimeLogAdded;
         }
     }
 
@@ -280,6 +285,7 @@ public sealed class ScriptTaskFlowExecutor
             if (session is not null)
             {
                 session.ProgressChanged -= OnCurrentSessionProgressChanged;
+                session.RuntimeLogAdded -= OnCurrentSessionRuntimeLogAdded;
             }
 
             _currentSession = null;
@@ -290,5 +296,10 @@ public sealed class ScriptTaskFlowExecutor
     private void OnCurrentSessionProgressChanged(object? sender, ScriptExecutionProgressSnapshot snapshot)
     {
         ProgressChanged?.Invoke(this, snapshot);
+    }
+
+    private void OnCurrentSessionRuntimeLogAdded(object? sender, ScriptExecutionRuntimeLogEntry entry)
+    {
+        RuntimeLogEmitted?.Invoke(this, entry);
     }
 }

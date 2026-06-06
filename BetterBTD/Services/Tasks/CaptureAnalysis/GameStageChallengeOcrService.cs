@@ -2,7 +2,9 @@ using System.Globalization;
 using System.IO;
 using System.Diagnostics;
 using System.Text;
+using BetterBTD.Core.ScriptExecution;
 using BetterBTD.Models;
+using BetterBTD.Models.ScriptExecution;
 using OpenCvSharp;
 using OpenCvRect = OpenCvSharp.Rect;
 
@@ -37,9 +39,15 @@ public sealed class GameStageChallengeOcrService
     {
         ArgumentNullException.ThrowIfNull(captureRegion);
         gold = 0;
+        var startedAt = DateTimeOffset.UtcNow;
 
         if (captureRegion.Empty())
         {
+            ScriptExecutionRuntimeDiagnostics.Warning(
+                ScriptExecutionRuntimeLogCategory.Ocr,
+                "Gold OCR skipped because capture region is empty.",
+                aggregationKey: "ocr:gold",
+                replaceExisting: true);
             return false;
         }
 
@@ -47,6 +55,11 @@ public sealed class GameStageChallengeOcrService
 
         if (!TryEnsureDigitRepository(out var repository))
         {
+            ScriptExecutionRuntimeDiagnostics.Warning(
+                ScriptExecutionRuntimeLogCategory.Ocr,
+                "Gold OCR skipped because digit templates are unavailable.",
+                aggregationKey: "ocr:gold",
+                replaceExisting: true);
             return false;
         }
 
@@ -54,19 +67,38 @@ public sealed class GameStageChallengeOcrService
 
         if (!TryRecognizeDigits(captureRegion, templates, GoldThresholds, out var text))
         {
+            ScriptExecutionRuntimeDiagnostics.Warning(
+                ScriptExecutionRuntimeLogCategory.Ocr,
+                $"Gold OCR failed | size={captureRegion.Width}x{captureRegion.Height} | elapsed={(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds:F0} ms.",
+                aggregationKey: "ocr:gold",
+                replaceExisting: true);
             return false;
         }
 
-        return int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out gold);
+        var parsed = int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out gold);
+        ScriptExecutionRuntimeDiagnostics.Info(
+            ScriptExecutionRuntimeLogCategory.Ocr,
+            parsed
+                ? $"Gold OCR succeeded | value={gold} | text='{text}' | elapsed={(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds:F0} ms."
+                : $"Gold OCR parsed invalid text '{text}' | elapsed={(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds:F0} ms.",
+            aggregationKey: "ocr:gold",
+            replaceExisting: true);
+        return parsed;
     }
 
     public bool TryReadRound(Mat captureRegion, int frameWidth, int frameHeight, out int round)
     {
         ArgumentNullException.ThrowIfNull(captureRegion);
         round = 0;
+        var startedAt = DateTimeOffset.UtcNow;
 
         if (captureRegion.Empty())
         {
+            ScriptExecutionRuntimeDiagnostics.Warning(
+                ScriptExecutionRuntimeLogCategory.Ocr,
+                "Round OCR skipped because capture region is empty.",
+                aggregationKey: "ocr:round",
+                replaceExisting: true);
             return false;
         }
 
@@ -74,6 +106,11 @@ public sealed class GameStageChallengeOcrService
 
         if (!TryEnsureDigitRepository(out var repository))
         {
+            ScriptExecutionRuntimeDiagnostics.Warning(
+                ScriptExecutionRuntimeLogCategory.Ocr,
+                "Round OCR skipped because digit templates are unavailable.",
+                aggregationKey: "ocr:round",
+                replaceExisting: true);
             return false;
         }
 
@@ -82,10 +119,23 @@ public sealed class GameStageChallengeOcrService
 
         if (!TryRecognizeRoundDigits(captureRegion, digitTemplates, slashTemplate, out var text))
         {
+            ScriptExecutionRuntimeDiagnostics.Warning(
+                ScriptExecutionRuntimeLogCategory.Ocr,
+                $"Round OCR failed | size={captureRegion.Width}x{captureRegion.Height} | elapsed={(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds:F0} ms.",
+                aggregationKey: "ocr:round",
+                replaceExisting: true);
             return false;
         }
 
-        return int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out round);
+        var parsed = int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out round);
+        ScriptExecutionRuntimeDiagnostics.Info(
+            ScriptExecutionRuntimeLogCategory.Ocr,
+            parsed
+                ? $"Round OCR succeeded | value={round} | text='{text}' | elapsed={(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds:F0} ms."
+                : $"Round OCR parsed invalid text '{text}' | elapsed={(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds:F0} ms.",
+            aggregationKey: "ocr:round",
+            replaceExisting: true);
+        return parsed;
     }
 
     private bool TryRecognizeDigits(
