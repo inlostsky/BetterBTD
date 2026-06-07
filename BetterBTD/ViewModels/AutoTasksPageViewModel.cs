@@ -4,12 +4,14 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using BetterBTD.Core.AutoTasks;
+using BetterBTD.Core.RobotControl;
 using BetterBTD.Models;
 using BetterBTD.Models.AutoTasks;
 using BetterBTD.Models.GameElements;
 using BetterBTD.Models.MyScripts;
 using BetterBTD.Services;
 using BetterBTD.Services.Shared;
+using BetterBTD.Services.Tasks.RobotControl;
 using BetterBTD.Views.Windows;
 using Microsoft.Win32;
 
@@ -54,6 +56,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
     private readonly GameCaptureService _gameCaptureService;
     private readonly MaskWindowService _maskWindowService;
     private readonly AutoTaskCoordinator _autoTaskCoordinator;
+    private readonly RobotTaskRuntime _robotTaskRuntime;
     private readonly ManagedScriptLibraryService _managedScriptLibraryService;
     private readonly CollectionScriptSubscriptionService _collectionScriptSubscriptionService;
     private readonly GoldBalloonScriptSubscriptionService _goldBalloonScriptSubscriptionService;
@@ -73,6 +76,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             GameCaptureService.Instance,
             MaskWindowService.Instance,
             AutoTaskCoordinator.Instance,
+            RobotTaskRuntime.Instance,
             ManagedScriptLibraryService.Instance,
             CollectionScriptSubscriptionService.Instance,
             GoldBalloonScriptSubscriptionService.Instance,
@@ -87,6 +91,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         GameCaptureService gameCaptureService,
         MaskWindowService maskWindowService,
         AutoTaskCoordinator autoTaskCoordinator,
+        RobotTaskRuntime robotTaskRuntime,
         ManagedScriptLibraryService managedScriptLibraryService,
         CollectionScriptSubscriptionService collectionScriptSubscriptionService,
         GoldBalloonScriptSubscriptionService goldBalloonScriptSubscriptionService,
@@ -99,6 +104,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         _gameCaptureService = gameCaptureService ?? throw new ArgumentNullException(nameof(gameCaptureService));
         _maskWindowService = maskWindowService ?? throw new ArgumentNullException(nameof(maskWindowService));
         _autoTaskCoordinator = autoTaskCoordinator ?? throw new ArgumentNullException(nameof(autoTaskCoordinator));
+        _robotTaskRuntime = robotTaskRuntime ?? throw new ArgumentNullException(nameof(robotTaskRuntime));
         _managedScriptLibraryService = managedScriptLibraryService ?? throw new ArgumentNullException(nameof(managedScriptLibraryService));
         _collectionScriptSubscriptionService = collectionScriptSubscriptionService ?? throw new ArgumentNullException(nameof(collectionScriptSubscriptionService));
         _goldBalloonScriptSubscriptionService = goldBalloonScriptSubscriptionService ?? throw new ArgumentNullException(nameof(goldBalloonScriptSubscriptionService));
@@ -110,7 +116,8 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             CreateGoldBalloonTask(),
             CreateBlackBorderTask(),
             CreateLoopStageTask(),
-            CreateOdysseyTask()
+            CreateOdysseyTask(),
+            CreateRobotControlTask()
         ];
 
         foreach (var task in Tasks)
@@ -189,6 +196,10 @@ public sealed class AutoTasksPageViewModel : ObservableObject
 
     public string OdysseyScriptIdsDescription => _localizationService.T("Tasks.OdysseyScriptIdsDescription");
 
+    public string RobotControlListenUrlLabel => _localizationService.T("Tasks.RobotControl.ListenUrlLabel");
+
+    public string RobotControlListenUrlDescription => _localizationService.T("Tasks.RobotControl.ListenUrlDescription");
+
     public string CollectionSubscriptionLabel => _localizationService.T("Tasks.CollectionSubscriptionLabel");
 
     public string CollectionSubscriptionDescription => _localizationService.T("Tasks.CollectionSubscriptionDescription");
@@ -262,10 +273,27 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         };
     }
 
+    private AutoTaskConfig CreateRobotControlTask()
+    {
+        return new AutoTaskConfig
+        {
+            Key = RobotTaskConstants.TaskKey,
+            ShowStageTargetConfiguration = false,
+            ShowRobotControlConfiguration = true,
+            RobotControlListenUrl = RobotTaskConstants.DefaultListenUrl
+        };
+    }
+
     private void ToggleTask(AutoTaskConfig? task)
     {
         if (task is null)
         {
+            return;
+        }
+
+        if (IsRobotControlTask(task))
+        {
+            ToggleRobotTask(task);
             return;
         }
 
@@ -275,13 +303,68 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             return;
         }
 
-        if (_autoTaskCoordinator.IsRunning)
+        if (IsAnyTaskRunning())
         {
             ShowDialogByKey("Tasks.Dialog.TaskRunning.Title", "Tasks.Dialog.TaskRunning.Message");
             return;
         }
 
         OpenTaskRuntimeWindow(task);
+    }
+
+    private void ToggleRobotTask(AutoTaskConfig task)
+    {
+        if (task.IsRunning)
+        {
+            _ = StopRobotTaskAsync();
+            return;
+        }
+
+        if (IsAnyTaskRunning())
+        {
+            ShowDialogByKey("Tasks.Dialog.TaskRunning.Title", "Tasks.Dialog.TaskRunning.Message");
+            return;
+        }
+
+        _ = StartRobotTaskAsync(task);
+    }
+
+    private async Task StartRobotTaskAsync(AutoTaskConfig task)
+    {
+        try
+        {
+            var options = new RobotTaskRuntimeOptions
+            {
+                ListenUrl = string.IsNullOrWhiteSpace(task.RobotControlListenUrl)
+                    ? RobotTaskConstants.DefaultListenUrl
+                    : task.RobotControlListenUrl.Trim(),
+                UiAutomationPollIntervalMs = Math.Max(100, task.OperationIntervalMs)
+            };
+
+            await _robotTaskRuntime.StartAsync(options).ConfigureAwait(false);
+            RunOnUiThread(() => SetRunningTask(task.Key));
+        }
+        catch (Exception ex)
+        {
+            ShowDialog("Tasks.Dialog.StartFailed.Title", ex.Message);
+            RunOnUiThread(ClearRunningTask);
+        }
+    }
+
+    private async Task StopRobotTaskAsync()
+    {
+        try
+        {
+            await _robotTaskRuntime.StopAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            ShowDialog("Tasks.Dialog.ExecutionFailed.Title", ex.Message);
+        }
+        finally
+        {
+            RunOnUiThread(ClearRunningTask);
+        }
     }
 
     private void OpenTaskRuntimeWindow(AutoTaskConfig task)
@@ -702,6 +785,18 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             task.IsRunning = false;
             task.RunningButtonText = _localizationService.T("Tasks.Start");
         }
+    }
+
+    private bool IsAnyTaskRunning()
+    {
+        return _autoTaskCoordinator.IsRunning ||
+               _robotTaskRuntime.IsRunning ||
+               !string.IsNullOrWhiteSpace(_runningTaskKey);
+    }
+
+    private static bool IsRobotControlTask(AutoTaskConfig task)
+    {
+        return string.Equals(task.Key, RobotTaskConstants.TaskKey, StringComparison.OrdinalIgnoreCase);
     }
 
     private void ShowDialog(string titleKey, string message)

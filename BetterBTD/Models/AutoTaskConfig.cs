@@ -45,6 +45,12 @@ public partial class AutoTaskConfig : ObservableObject
     private bool _showOdysseyScriptIdConfiguration;
 
     [ObservableProperty]
+    private bool _showRobotControlConfiguration;
+
+    [ObservableProperty]
+    private string _robotControlListenUrl = "http://127.0.0.1:18766/";
+
+    [ObservableProperty]
     private bool _showCollectionSubscriptionActions;
 
     [ObservableProperty]
