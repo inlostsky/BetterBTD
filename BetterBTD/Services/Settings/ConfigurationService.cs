@@ -2,6 +2,7 @@
 using System.IO;
 using System.Text.Json;
 using BetterBTD.Models;
+using BetterBTD.Models.ScriptExecution;
 
 namespace BetterBTD.Services.Settings;
 
@@ -45,11 +46,36 @@ public sealed class ConfigurationService
         Current.StopHotkey = configuration.StopHotkey;
         Current.GameStartHotkey = configuration.GameStartHotkey;
         Current.GameStopHotkey = configuration.GameStopHotkey;
+        Current.ScriptExecutionIntervalStrategyName = NormalizeScriptExecutionIntervalStrategyName(
+            configuration.ScriptExecutionIntervalStrategyName);
+        Current.ScriptExecutionCommonOperationIntervalMs = NormalizeScriptExecutionCommonOperationInterval(
+            configuration.ScriptExecutionCommonOperationIntervalMs);
         Current.KeyBindings = configuration.KeyBindings ?? Current.KeyBindings;
         Current.KeyBindings ??= new BetterBTD.Core.Config.KeyBindingsConfig();
 
         var json = JsonSerializer.Serialize(Current, JsonOptions);
         File.WriteAllText(_configFilePath, json);
+    }
+
+    public ScriptExecutionWindowSettings GetScriptExecutionWindowSettings()
+    {
+        return new ScriptExecutionWindowSettings
+        {
+            IntervalStrategy = ResolveScriptExecutionIntervalStrategy(Current.ScriptExecutionIntervalStrategyName),
+            CommonOperationIntervalMs = NormalizeScriptExecutionCommonOperationInterval(
+                Current.ScriptExecutionCommonOperationIntervalMs)
+        };
+    }
+
+    public void SaveScriptExecutionWindowSettings(ScriptExecutionWindowSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        Current.ScriptExecutionIntervalStrategyName = settings.IntervalStrategy.ToString();
+        Current.ScriptExecutionCommonOperationIntervalMs = NormalizeScriptExecutionCommonOperationInterval(
+            settings.CommonOperationIntervalMs);
+
+        Save(Current);
     }
 
     private AppConfiguration Load()
@@ -70,6 +96,10 @@ public sealed class ConfigurationService
             config.CaptureIntervalMs = Math.Clamp(config.CaptureIntervalMs <= 0 ? 50 : config.CaptureIntervalMs, 10, 2000);
             config.KeyboardMouseSimulationModeName =
                 KeyboardMouseSimulationModeExtensions.Parse(config.KeyboardMouseSimulationModeName).ToConfigurationValue();
+            config.ScriptExecutionIntervalStrategyName = NormalizeScriptExecutionIntervalStrategyName(
+                config.ScriptExecutionIntervalStrategyName);
+            config.ScriptExecutionCommonOperationIntervalMs = NormalizeScriptExecutionCommonOperationInterval(
+                config.ScriptExecutionCommonOperationIntervalMs);
             return config;
         }
         catch (Exception ex) when (ex is IOException or JsonException)
@@ -77,6 +107,27 @@ public sealed class ConfigurationService
             Debug.WriteLine($"Load configuration failed: {ex.Message}");
             return new AppConfiguration();
         }
+    }
+
+    private static string NormalizeScriptExecutionIntervalStrategyName(string? strategyName)
+    {
+        return ResolveScriptExecutionIntervalStrategy(strategyName).ToString();
+    }
+
+    private static ScriptExecutionOperationIntervalStrategy ResolveScriptExecutionIntervalStrategy(string? strategyName)
+    {
+        return Enum.TryParse<ScriptExecutionOperationIntervalStrategy>(
+                strategyName,
+                ignoreCase: true,
+                out var strategy) &&
+            Enum.IsDefined(strategy)
+                ? strategy
+                : ScriptExecutionOperationIntervalStrategy.InstructionCustom;
+    }
+
+    private static int NormalizeScriptExecutionCommonOperationInterval(int intervalMs)
+    {
+        return Math.Clamp(intervalMs <= 0 ? 200 : intervalMs, 50, 1000);
     }
 }
 

@@ -29,6 +29,14 @@ public enum ScriptExecutionOperationIntervalStrategy
     CommonOperationInterval
 }
 
+public sealed class ScriptExecutionWindowSettings
+{
+    public ScriptExecutionOperationIntervalStrategy IntervalStrategy { get; init; } =
+        ScriptExecutionOperationIntervalStrategy.InstructionCustom;
+
+    public int CommonOperationIntervalMs { get; init; } = 200;
+}
+
 public sealed class ScriptExecutionOptions
 {
     public int StartStepIndex { get; init; }

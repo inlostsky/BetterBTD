@@ -106,4 +106,39 @@ public sealed class ScriptExecutionIntervalStrategyTests
         Assert.True(viewModel.ShowCommonOperationInterval);
         Assert.Equal(1000, viewModel.CommonOperationIntervalMs);
     }
+
+    [Fact]
+    public void ScriptExecutionWindowViewModel_LoadsInitialSettingsAndPersistsChanges()
+    {
+        var persistedSettings = new List<ScriptExecutionWindowSettings>();
+        var viewModel = new ScriptExecutionWindowViewModel(
+            LocalizationService.Instance,
+            "Test Script",
+            "test.btd",
+            [],
+            static (_, _) => Task.CompletedTask,
+            static () => { },
+            new ScriptExecutionWindowSettings
+            {
+                IntervalStrategy = ScriptExecutionOperationIntervalStrategy.CommonOperationInterval,
+                CommonOperationIntervalMs = 360
+            },
+            persistedSettings.Add);
+
+        Assert.Equal(
+            ScriptExecutionOperationIntervalStrategy.CommonOperationInterval,
+            viewModel.SelectedIntervalStrategyValue);
+        Assert.True(viewModel.ShowCommonOperationInterval);
+        Assert.Equal(360, viewModel.CommonOperationIntervalMs);
+        Assert.Empty(persistedSettings);
+
+        viewModel.SelectedIntervalStrategy = viewModel.IntervalStrategies[0];
+        viewModel.CommonOperationIntervalMs = 420;
+
+        Assert.Equal(2, persistedSettings.Count);
+        Assert.Equal(
+            ScriptExecutionOperationIntervalStrategy.InstructionCustom,
+            persistedSettings[^1].IntervalStrategy);
+        Assert.Equal(420, persistedSettings[^1].CommonOperationIntervalMs);
+    }
 }

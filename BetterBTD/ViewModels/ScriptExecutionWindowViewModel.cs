@@ -36,6 +36,7 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
     private readonly object _progressDispatchSync = new();
     private readonly object _runtimeLogDispatchSync = new();
     private readonly Action _requestStop;
+    private readonly Action<ScriptExecutionWindowSettings>? _persistSettings;
     private readonly Queue<ScriptExecutionRuntimeLogEntry> _pendingRuntimeLogEntries = new();
     private readonly List<ScriptExecutionDisplayLogLine> _displayLogLines = [];
 
@@ -64,12 +65,15 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
         string scriptSourcePath,
         IReadOnlyList<ScriptInstructionInstance> instructions,
         Func<ScriptExecutionWindowViewModel, int, Task> startExecutionAsync,
-        Action requestStop)
+        Action requestStop,
+        ScriptExecutionWindowSettings? initialSettings = null,
+        Action<ScriptExecutionWindowSettings>? persistSettings = null)
     {
         _localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
         _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _startExecutionAsync = startExecutionAsync ?? throw new ArgumentNullException(nameof(startExecutionAsync));
         _requestStop = requestStop ?? throw new ArgumentNullException(nameof(requestStop));
+        _persistSettings = persistSettings;
 
         _scriptDisplayName = string.IsNullOrWhiteSpace(scriptDisplayName)
             ? _localizationService.T("Editor.Runtime.UntitledScript")
@@ -90,7 +94,10 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
             Strategy = ScriptExecutionOperationIntervalStrategy.CommonOperationInterval,
             DisplayName = _localizationService.T("Editor.Runtime.IntervalStrategy.CommonOperationInterval")
         });
-        _selectedIntervalStrategy = IntervalStrategies[0];
+
+        var settings = initialSettings ?? new ScriptExecutionWindowSettings();
+        _commonOperationIntervalMs = ClampCommonOperationInterval(settings.CommonOperationIntervalMs);
+        _selectedIntervalStrategy = ResolveIntervalStrategyItem(settings.IntervalStrategy);
 
         StartCommand = new AsyncRelayCommand(StartExecutionAsync, CanStartExecution);
         StopCommand = new RelayCommand(StopExecution, CanStopExecution);
@@ -193,6 +200,7 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
 
             OnPropertyChanged(nameof(SelectedIntervalStrategyValue));
             OnPropertyChanged(nameof(ShowCommonOperationInterval));
+            PersistIntervalSettings();
         }
     }
 
@@ -202,7 +210,13 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
     public int CommonOperationIntervalMs
     {
         get => _commonOperationIntervalMs;
-        set => SetProperty(ref _commonOperationIntervalMs, Math.Clamp(value, 50, 1000));
+        set
+        {
+            if (SetProperty(ref _commonOperationIntervalMs, ClampCommonOperationInterval(value)))
+            {
+                PersistIntervalSettings();
+            }
+        }
     }
 
     public bool ShowCommonOperationInterval =>
@@ -387,6 +401,15 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
             failure.Checkpoint,
             failure.Attempt,
             failure.Message);
+    }
+
+    private void PersistIntervalSettings()
+    {
+        _persistSettings?.Invoke(new ScriptExecutionWindowSettings
+        {
+            IntervalStrategy = SelectedIntervalStrategyValue,
+            CommonOperationIntervalMs = CommonOperationIntervalMs
+        });
     }
 
     private void StopExecution()
@@ -794,6 +817,12 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
             : null;
     }
 
+    private ScriptExecutionOperationIntervalStrategyItem ResolveIntervalStrategyItem(
+        ScriptExecutionOperationIntervalStrategy strategy)
+    {
+        return IntervalStrategies.FirstOrDefault(item => item.Strategy == strategy) ?? IntervalStrategies[0];
+    }
+
     private int ResolveStartStepIndex()
     {
         return NormalizeStepIndex(SelectedStep?.Index ?? 0);
@@ -836,6 +865,11 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
         var brush = (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
         brush.Freeze();
         return brush;
+    }
+
+    private static int ClampCommonOperationInterval(int value)
+    {
+        return Math.Clamp(value, 50, 1000);
     }
 }
 

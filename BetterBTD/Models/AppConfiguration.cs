@@ -1,4 +1,5 @@
 using BetterBTD.Core.Config;
+using BetterBTD.Models.ScriptExecution;
 
 namespace BetterBTD.Models;
 
@@ -27,6 +28,11 @@ public sealed class AppConfiguration
     public string GameStartHotkey { get; set; } = "F5";
 
     public string GameStopHotkey { get; set; } = "F6";
+
+    public string ScriptExecutionIntervalStrategyName { get; set; } =
+        nameof(ScriptExecutionOperationIntervalStrategy.InstructionCustom);
+
+    public int ScriptExecutionCommonOperationIntervalMs { get; set; } = 200;
 
     public KeyBindingsConfig KeyBindings { get; set; } = new();
 }

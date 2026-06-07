@@ -232,8 +232,13 @@ public sealed class SettingsPageViewModel : ObservableObject
 
     private void Save()
     {
+        var current = _configurationService.Current;
         _configurationService.Save(new AppConfiguration
         {
+            MaskWindowTargetTitle = current.MaskWindowTargetTitle,
+            CaptureModeName = current.CaptureModeName,
+            CaptureIntervalMs = current.CaptureIntervalMs,
+            AutoFixWin11BitBlt = current.AutoFixWin11BitBlt,
             LanguageCode = SelectedUiLanguage?.Code ?? "zh-CN",
             ThemeMode = SelectedTheme?.Code ?? "Dark",
             GameLanguageCode = SelectedGameLanguage?.Code ?? "zh-CN",
@@ -241,7 +246,10 @@ public sealed class SettingsPageViewModel : ObservableObject
             StartHotkey = StartHotkey,
             StopHotkey = StopHotkey,
             GameStartHotkey = GameStartHotkey,
-            GameStopHotkey = GameStopHotkey
+            GameStopHotkey = GameStopHotkey,
+            ScriptExecutionIntervalStrategyName = current.ScriptExecutionIntervalStrategyName,
+            ScriptExecutionCommonOperationIntervalMs = current.ScriptExecutionCommonOperationIntervalMs,
+            KeyBindings = current.KeyBindings
         });
     }
 

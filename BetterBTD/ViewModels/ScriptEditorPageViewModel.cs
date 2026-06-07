@@ -1127,7 +1127,9 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
             sourceFilePath,
             executionSequenceSnapshot,
             (viewModel, startStepIndex) => StartScriptExecutionAsync(viewModel, scriptDocumentSnapshot, sourceFilePath, startStepIndex),
-            StopScriptExecution);
+            StopScriptExecution,
+            _configurationService.GetScriptExecutionWindowSettings(),
+            _configurationService.SaveScriptExecutionWindowSettings);
         var runtimeWindow = new ScriptExecutionWindow(runtimeWindowViewModel);
         runtimeWindow.Closed += OnScriptExecutionWindowClosed;
 
