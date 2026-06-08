@@ -313,7 +313,6 @@ public sealed class SettingsPageViewModel : ObservableObject
         try
         {
             BuildOptions();
-            ApplySelections();
         }
         finally
         {
@@ -342,13 +341,6 @@ public sealed class SettingsPageViewModel : ObservableObject
         SelectedUiLanguage = UiLanguageOptions.FirstOrDefault(x => x.Code == uiCode) ?? UiLanguageOptions.First();
         SelectedGameLanguage = GameLanguageOptions.FirstOrDefault(x => x.Code == gameCode) ?? GameLanguageOptions.First();
         SelectedTheme = ThemeOptions.FirstOrDefault(x => x.Code == themeCode) ?? ThemeOptions.First();
-    }
-
-    private void ApplySelections()
-    {
-        SelectedUiLanguage = UiLanguageOptions.FirstOrDefault(x => x.Code == _configurationService.Current.LanguageCode) ?? UiLanguageOptions.First();
-        SelectedGameLanguage = GameLanguageOptions.FirstOrDefault(x => x.Code == _configurationService.Current.GameLanguageCode) ?? GameLanguageOptions.First();
-        SelectedTheme = ThemeOptions.FirstOrDefault(x => x.Code == _configurationService.Current.ThemeMode) ?? ThemeOptions.First();
     }
 
     private void RaiseLocalizedProperties()
