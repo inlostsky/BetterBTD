@@ -15,7 +15,7 @@ public sealed class GameStageStateService : IGameStageStateService
 {
     private static readonly Lazy<GameStageStateService> InstanceHolder = new(() => new GameStageStateService());
     private const int DefaultColorTolerance = 50;
-    private static readonly OpenCvRect GoldReferenceRect = new(360, 20, 180, 50);
+    private static readonly OpenCvRect GoldReferenceRect = new(360, 15, 240, 50);
     private static readonly OpenCvRect RoundReferenceRect = new(1370, 25, 195, 70);
     private static readonly OpenCvSize Reference1080p = new(1920, 1080);
     private static readonly ReferenceColor BtdBrown = new(0xB1, 0x81, 0x4A);

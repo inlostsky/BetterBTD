@@ -50,6 +50,22 @@ internal static class GameOcrSupport
         return Path.Combine(AppContext.BaseDirectory, "Assets", "OcrDigits");
     }
 
+    internal static string BuildDigitAssetRootPath(string? languageCode)
+    {
+        var rootPath = BuildDigitAssetRootPath();
+        var normalizedLanguageCode = NormalizeDigitLanguageCode(languageCode);
+        var languageRootPath = Path.Combine(rootPath, normalizedLanguageCode);
+        return Directory.Exists(languageRootPath) ? languageRootPath : rootPath;
+    }
+
+    internal static string NormalizeDigitLanguageCode(string? languageCode)
+    {
+        return string.Equals(languageCode, "en", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(languageCode, "en-US", StringComparison.OrdinalIgnoreCase)
+            ? "en-US"
+            : "zh-CN";
+    }
+
     internal static string BuildIconAssetRootPath()
     {
         return Path.Combine(AppContext.BaseDirectory, "Assets", "OcrIcons");
@@ -485,11 +501,14 @@ internal sealed class DigitTemplateRepository
     private readonly Dictionary<string, IReadOnlyList<PreparedTemplate>> _digitCache = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PreparedTemplate> _slashCache = new(StringComparer.Ordinal);
 
-    public DigitTemplateRepository(string assetRootPath)
+    public DigitTemplateRepository(string languageCode, string assetRootPath)
     {
+        LanguageCode = GameOcrSupport.NormalizeDigitLanguageCode(languageCode);
         _catalog1080 = LoadCatalog(assetRootPath, TemplateResolution.Resolution1080p, GameOcrSupport.Reference1080p, "1080p");
         _catalog720 = LoadCatalog(assetRootPath, TemplateResolution.Resolution720p, GameOcrSupport.Reference720p, "720p");
     }
+
+    public string LanguageCode { get; }
 
     public IReadOnlyList<PreparedTemplate> GetDigitTemplates(OcrValueType valueType, int frameWidth, int frameHeight)
     {
@@ -560,16 +579,25 @@ internal sealed class DigitTemplateRepository
     {
         var goldDigits = Enumerable
             .Range(0, 10)
-            .Select(index => GameOcrSupport.LoadTemplate(Path.Combine(assetRootPath, relativeFolder, "gold", $"{index}.png"), index.ToString(CultureInfo.InvariantCulture)))
+            .Select(index => LoadOptionalTemplate(Path.Combine(assetRootPath, relativeFolder, "gold", $"{index}.png"), index.ToString(CultureInfo.InvariantCulture)))
+            .OfType<RawTemplate>()
             .ToArray();
 
         var roundDigits = Enumerable
             .Range(0, 10)
-            .Select(index => GameOcrSupport.LoadTemplate(Path.Combine(assetRootPath, relativeFolder, "round", $"{index}.png"), index.ToString(CultureInfo.InvariantCulture)))
+            .Select(index => LoadOptionalTemplate(Path.Combine(assetRootPath, relativeFolder, "round", $"{index}.png"), index.ToString(CultureInfo.InvariantCulture)))
+            .OfType<RawTemplate>()
             .ToArray();
 
         var slash = GameOcrSupport.LoadTemplate(Path.Combine(assetRootPath, relativeFolder, "round", "slash.png"), "/");
         return new TemplateCatalog(resolution, baseResolution, goldDigits, roundDigits, slash);
+    }
+
+    private static RawTemplate? LoadOptionalTemplate(string fullPath, string symbol)
+    {
+        return File.Exists(fullPath)
+            ? GameOcrSupport.LoadTemplate(fullPath, symbol)
+            : null;
     }
 }
 

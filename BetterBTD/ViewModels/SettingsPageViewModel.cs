@@ -6,7 +6,6 @@ using CommunityToolkit.Mvvm.Input;
 using BetterBTD.Models;
 using BetterBTD.Services;
 using BetterBTD.Services.Updates;
-using BetterBTD.Views.Pages;
 using BetterBTD.Views.Windows;
 
 namespace BetterBTD.ViewModels;
@@ -17,6 +16,7 @@ public sealed class SettingsPageViewModel : ObservableObject
     private readonly LocalizationService _localizationService;
     private readonly ThemeService _themeService;
     private readonly ApplicationUpdateService _applicationUpdateService;
+    private bool _isRefreshingSelections;
 
     private LanguageOption? _selectedUiLanguage;
     private LanguageOption? _selectedGameLanguage;
@@ -39,20 +39,16 @@ public sealed class SettingsPageViewModel : ObservableObject
         GameLanguageOptions = [];
         ThemeOptions = [];
 
-        UpdateUiLanguageCommand = new RelayCommand(UpdateUiLanguage);
         OpenKeyBindingsWindowCommand = new RelayCommand(OpenKeyBindingsWindow);
         CheckUpdateCommand = new AsyncRelayCommand(CheckForUpdatesAsync);
         OpenAboutCommand = new RelayCommand(OpenAbout);
-        SaveCommand = new RelayCommand(Save);
-        ResetCommand = new RelayCommand(ResetDefaults);
 
         LoadFromConfiguration();
-        BuildOptions();
-        ApplySelections();
+        RefreshOptionsAndSelections();
 
         _localizationService.LanguageChanged += (_, _) =>
         {
-            BuildOptions();
+            RefreshOptionsAndSelections();
             RaiseLocalizedProperties();
         };
     }
@@ -74,13 +70,22 @@ public sealed class SettingsPageViewModel : ObservableObject
             }
 
             UpdateUiLanguage();
+            SaveCurrentConfiguration();
         }
     }
 
     public LanguageOption? SelectedGameLanguage
     {
         get => _selectedGameLanguage;
-        set => SetProperty(ref _selectedGameLanguage, value);
+        set
+        {
+            if (!SetProperty(ref _selectedGameLanguage, value) || value is null)
+            {
+                return;
+            }
+
+            SaveCurrentConfiguration();
+        }
     }
 
     public ThemeOption? SelectedTheme
@@ -94,34 +99,57 @@ public sealed class SettingsPageViewModel : ObservableObject
             }
 
             _themeService.ApplyTheme(value.Code);
+            SaveCurrentConfiguration();
         }
     }
 
     public string StartHotkey
     {
         get => _startHotkey;
-        set => SetProperty(ref _startHotkey, value);
+        set
+        {
+            if (SetProperty(ref _startHotkey, value))
+            {
+                SaveCurrentConfiguration();
+            }
+        }
     }
 
     public string StopHotkey
     {
         get => _stopHotkey;
-        set => SetProperty(ref _stopHotkey, value);
+        set
+        {
+            if (SetProperty(ref _stopHotkey, value))
+            {
+                SaveCurrentConfiguration();
+            }
+        }
     }
 
     public string GameStartHotkey
     {
         get => _gameStartHotkey;
-        set => SetProperty(ref _gameStartHotkey, value);
+        set
+        {
+            if (SetProperty(ref _gameStartHotkey, value))
+            {
+                SaveCurrentConfiguration();
+            }
+        }
     }
 
     public string GameStopHotkey
     {
         get => _gameStopHotkey;
-        set => SetProperty(ref _gameStopHotkey, value);
+        set
+        {
+            if (SetProperty(ref _gameStopHotkey, value))
+            {
+                SaveCurrentConfiguration();
+            }
+        }
     }
-
-    public IRelayCommand UpdateUiLanguageCommand { get; }
 
     public IRelayCommand OpenKeyBindingsWindowCommand { get; }
 
@@ -129,17 +157,12 @@ public sealed class SettingsPageViewModel : ObservableObject
 
     public IRelayCommand OpenAboutCommand { get; }
 
-    public IRelayCommand SaveCommand { get; }
-
-    public IRelayCommand ResetCommand { get; }
-
     public string SoftwareSettingsTitle => _localizationService.T("Settings.Section.Software");
     public string GameSettingsTitle => _localizationService.T("Settings.Section.Game");
     public string HelpTitle => _localizationService.T("Settings.Section.Help");
 
     public string UiLanguageTitle => _localizationService.T("Settings.UiLanguage.Title");
     public string UiLanguageSubtitle => _localizationService.T("Settings.UiLanguage.Subtitle");
-    public string UpdateText => _localizationService.T("Settings.Update");
 
     public string ThemeTitle => _localizationService.T("Settings.Theme.Title");
     public string ThemeSubtitle => _localizationService.T("Settings.Theme.Subtitle");
@@ -177,9 +200,6 @@ public sealed class SettingsPageViewModel : ObservableObject
         get => _updateStatusText;
         private set => SetProperty(ref _updateStatusText, value);
     }
-
-    public string SaveButtonText => _localizationService.T("Settings.Save");
-    public string ResetButtonText => _localizationService.T("Settings.Reset");
 
     public string BetterBtdHotkeysTitle => _localizationService.T("Settings.HotkeyGroup.BetterBTD");
     public string GameHotkeysTitle => _localizationService.T("Settings.HotkeyGroup.Game");
@@ -230,8 +250,13 @@ public sealed class SettingsPageViewModel : ObservableObject
         window.ShowDialog();
     }
 
-    private void Save()
+    private void SaveCurrentConfiguration()
     {
+        if (_isRefreshingSelections)
+        {
+            return;
+        }
+
         var current = _configurationService.Current;
         _configurationService.Save(new AppConfiguration
         {
@@ -272,28 +297,28 @@ public sealed class SettingsPageViewModel : ObservableObject
         _applicationUpdateService.OpenProjectHomePage();
     }
 
-    private void ResetDefaults()
-    {
-        SelectedUiLanguage = UiLanguageOptions.FirstOrDefault(x => x.Code == "zh-CN");
-        SelectedGameLanguage = GameLanguageOptions.FirstOrDefault(x => x.Code == "zh-CN");
-        SelectedTheme = ThemeOptions.FirstOrDefault(x => x.Code == "Dark");
-        SetKeyboardMouseSimulationMode(KeyboardMouseSimulationMode.Standard);
-        StartHotkey = "F1";
-        StopHotkey = "F2";
-        GameStartHotkey = "F5";
-        GameStopHotkey = "F6";
-
-        UpdateUiLanguage();
-    }
-
     private void LoadFromConfiguration()
     {
         var config = _configurationService.Current;
-        SetKeyboardMouseSimulationMode(KeyboardMouseSimulationModeExtensions.Parse(config.KeyboardMouseSimulationModeName));
-        StartHotkey = config.StartHotkey;
-        StopHotkey = config.StopHotkey;
-        GameStartHotkey = config.GameStartHotkey;
-        GameStopHotkey = config.GameStopHotkey;
+        _selectedKeyboardMouseSimulationMode = KeyboardMouseSimulationModeExtensions.Parse(config.KeyboardMouseSimulationModeName);
+        _startHotkey = config.StartHotkey;
+        _stopHotkey = config.StopHotkey;
+        _gameStartHotkey = config.GameStartHotkey;
+        _gameStopHotkey = config.GameStopHotkey;
+    }
+
+    private void RefreshOptionsAndSelections()
+    {
+        _isRefreshingSelections = true;
+        try
+        {
+            BuildOptions();
+            ApplySelections();
+        }
+        finally
+        {
+            _isRefreshingSelections = false;
+        }
     }
 
     private void BuildOptions()
@@ -333,7 +358,6 @@ public sealed class SettingsPageViewModel : ObservableObject
         OnPropertyChanged(nameof(HelpTitle));
         OnPropertyChanged(nameof(UiLanguageTitle));
         OnPropertyChanged(nameof(UiLanguageSubtitle));
-        OnPropertyChanged(nameof(UpdateText));
         OnPropertyChanged(nameof(ThemeTitle));
         OnPropertyChanged(nameof(ThemeSubtitle));
         OnPropertyChanged(nameof(GameLanguageTitle));
@@ -359,8 +383,6 @@ public sealed class SettingsPageViewModel : ObservableObject
         OnPropertyChanged(nameof(CardAboutDescription));
         OnPropertyChanged(nameof(OpenText));
         OnPropertyChanged(nameof(CurrentVersionText));
-        OnPropertyChanged(nameof(SaveButtonText));
-        OnPropertyChanged(nameof(ResetButtonText));
         OnPropertyChanged(nameof(BetterBtdHotkeysTitle));
         OnPropertyChanged(nameof(GameHotkeysTitle));
         OnPropertyChanged(nameof(GameStartLabel));
@@ -379,6 +401,7 @@ public sealed class SettingsPageViewModel : ObservableObject
         OnPropertyChanged(nameof(IsStandardKeyboardMouseSimulationModeSelected));
         OnPropertyChanged(nameof(IsHardwareKeyboardMouseSimulationModeSelected));
         OnPropertyChanged(nameof(KeyboardMouseSimulationStatusText));
+        SaveCurrentConfiguration();
     }
 
     private string BuildKeyboardMouseSimulationStatusText()

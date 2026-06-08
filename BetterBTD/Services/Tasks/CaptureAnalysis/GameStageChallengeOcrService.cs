@@ -24,7 +24,7 @@ public sealed class GameStageChallengeOcrService
     private readonly object _syncRoot = new();
     private readonly TemplateMatchService _templateMatchService;
 
-    private DigitTemplateRepository? _digitRepository;
+    private readonly Dictionary<string, DigitTemplateRepository> _digitRepositories = new(StringComparer.OrdinalIgnoreCase);
 
     private GameStageChallengeOcrService()
     {
@@ -527,13 +527,14 @@ public sealed class GameStageChallengeOcrService
     {
         lock (_syncRoot)
         {
-            if (_digitRepository is not null)
+            var languageCode = GameOcrSupport.NormalizeDigitLanguageCode(ConfigurationService.Instance.Current.GameLanguageCode);
+            if (_digitRepositories.TryGetValue(languageCode, out var cachedRepository))
             {
-                repository = _digitRepository;
+                repository = cachedRepository;
                 return true;
             }
 
-            var assetRootPath = GameOcrSupport.BuildDigitAssetRootPath();
+            var assetRootPath = GameOcrSupport.BuildDigitAssetRootPath(languageCode);
             if (!Directory.Exists(assetRootPath))
             {
                 repository = null!;
@@ -542,8 +543,8 @@ public sealed class GameStageChallengeOcrService
 
             try
             {
-                _digitRepository = new DigitTemplateRepository(assetRootPath);
-                repository = _digitRepository;
+                repository = new DigitTemplateRepository(languageCode, assetRootPath);
+                _digitRepositories[languageCode] = repository;
                 return true;
             }
             catch
