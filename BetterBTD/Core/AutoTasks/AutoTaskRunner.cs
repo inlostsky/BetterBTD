@@ -353,7 +353,7 @@ public sealed class AutoTaskRunner
                 .CaptureSnapshotAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            if (!ShouldInterruptStageScript(snapshot.State))
+            if (!ShouldInterruptStageScript(request.Kind, snapshot.State))
             {
                 continue;
             }
@@ -372,11 +372,27 @@ public sealed class AutoTaskRunner
 
     private static bool ShouldMonitorStageScriptUi(AutoTaskKind kind)
     {
-        return kind is AutoTaskKind.Collection or AutoTaskKind.GoldBalloon or AutoTaskKind.BlackBorder or AutoTaskKind.LoopStage or AutoTaskKind.Odyssey;
+        return kind is AutoTaskKind.Collection
+            or AutoTaskKind.GoldBalloon
+            or AutoTaskKind.BlackBorder
+            or AutoTaskKind.LoopStage
+            or AutoTaskKind.Odyssey
+            or AutoTaskKind.Race;
     }
 
-    private static bool ShouldInterruptStageScript(GameUiStateId state)
+    private static bool ShouldInterruptStageScript(AutoTaskKind kind, GameUiStateId state)
     {
+        if (kind == AutoTaskKind.Race)
+        {
+            return state is
+                GameUiStateId.StageSettlement or
+                GameUiStateId.StageHint or
+                GameUiStateId.Defeat or
+                GameUiStateId.StageSettings or
+                GameUiStateId.LevelUp or
+                GameUiStateId.InstaMonkeyReward;
+        }
+
         return state is
             GameUiStateId.Defeat or
             GameUiStateId.Victory or

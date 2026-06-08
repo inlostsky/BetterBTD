@@ -291,6 +291,53 @@ public sealed class AutoTaskSkeletonTests
         Assert.Equal(new[] { GameUiStateId.StageSettlement }, strategy.InterruptedSnapshots);
     }
 
+    [Theory]
+    [InlineData(GameUiStateId.StageHint)]
+    [InlineData(GameUiStateId.StageSettings)]
+    public async Task Runner_InterruptsRaceScript_WhenHandledRaceUiDetected(
+        GameUiStateId uiState)
+    {
+        var uiStateService = new QueueGameUiStateService(
+        [
+            new GameUiSnapshot { State = GameUiStateId.InLevel },
+            new GameUiSnapshot { State = uiState },
+            new GameUiSnapshot { State = uiState }
+        ]);
+        var strategy = new InterruptAwareRaceStrategy();
+        var scriptExecutor = new BlockingAutoTaskScriptExecutor();
+
+        var runtimeServices = new AutoTaskRuntimeServices
+        {
+            GameUiState = uiStateService,
+            Navigator = GameUiNavigator.Instance,
+            UiActionExecutor = new RecordingGameUiActionExecutor(),
+            ScriptResolver = new RecordingAutoTaskScriptResolver("race-stage.json"),
+            ScriptExecutor = scriptExecutor
+        };
+
+        var runner = new AutoTaskRunner(
+            new SingleStrategyRegistry(strategy),
+            runtimeServices,
+            AutoTaskRuntimeScriptPreviewService.Instance);
+
+        var result = await runner.ExecuteAsync(
+            new AutoTaskRequest
+            {
+                Kind = AutoTaskKind.Race,
+                StageTarget = CreateTarget(),
+                PreferredScriptPath = "race-stage.json"
+            },
+            new AutoTaskExecutionOptions
+            {
+                RuntimeServices = runtimeServices,
+                MaxLoopIterations = 10
+            });
+
+        Assert.Equal(AutoTaskExecutionStatus.Completed, result.Status);
+        Assert.True(scriptExecutor.CancellationObserved);
+        Assert.Equal(new[] { uiState }, strategy.InterruptedSnapshots);
+    }
+
     private static StageEntryTarget CreateTarget()
     {
         return new StageEntryTarget
@@ -539,6 +586,42 @@ public sealed class AutoTaskSkeletonTests
             }
 
             return Task.FromResult(AutoTaskDecision.Navigate("Advance collection test flow."));
+        }
+    }
+
+    private sealed class InterruptAwareRaceStrategy : IAutoTaskStrategy
+    {
+        public AutoTaskKind Kind => AutoTaskKind.Race;
+
+        public List<GameUiStateId> InterruptedSnapshots { get; } = [];
+
+        public Task<AutoTaskDecision> DecideNextAsync(
+            AutoTaskRuntimeState state,
+            GameUiSnapshot snapshot,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (state.HasPendingScriptOutcome)
+            {
+                InterruptedSnapshots.Add(snapshot.State);
+                return Task.FromResult(AutoTaskDecision.Complete($"Handled race UI '{snapshot.State}'."));
+            }
+
+            if (snapshot.State == GameUiStateId.InLevel)
+            {
+                return Task.FromResult(AutoTaskDecision.StartScript(
+                    new AutoTaskScriptQuery
+                    {
+                        Kind = AutoTaskKind.Race,
+                        StageTarget = state.Request.StageTarget,
+                        PreferredFilePath = "race-stage.json",
+                        Description = "Start race test script."
+                    },
+                    "Start race test script."));
+            }
+
+            return Task.FromResult(AutoTaskDecision.Navigate("Advance race test flow."));
         }
     }
 

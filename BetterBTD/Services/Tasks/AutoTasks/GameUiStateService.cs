@@ -13,7 +13,7 @@ namespace BetterBTD.Services.Tasks.AutoTasks;
 public sealed class GameUiStateService : IGameUiStateService
 {
     private static readonly Lazy<GameUiStateService> InstanceHolder = new(() => new GameUiStateService());
-    private static readonly TimeSpan UiStateConfirmationWindow = TimeSpan.FromMilliseconds(800);
+    private static readonly TimeSpan UiStateConfirmationWindow = TimeSpan.FromMilliseconds(1000);
     private static readonly GameMapType[] CollectionExpertMaps = GameElementCatalog.Maps
         .Where(static definition => definition.Tier == MapDifficultyTier.Expert)
         .Select(static definition => definition.Type)

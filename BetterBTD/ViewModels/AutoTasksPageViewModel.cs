@@ -42,6 +42,13 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         Mode = StageMode.Standard
     };
 
+    private static readonly StageEntryTarget RacePlaceholderStageTarget = new()
+    {
+        Map = GameMapType.MonkeyMeadow,
+        Difficulty = StageDifficulty.Easy,
+        Mode = StageMode.Standard
+    };
+
     private static readonly StageEntryTarget OdysseyPlaceholderStageTarget = new()
     {
         Map = GameMapType.MonkeyMeadow,
@@ -116,6 +123,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             CreateGoldBalloonTask(),
             CreateBlackBorderTask(),
             CreateLoopStageTask(),
+            CreateRaceTask(),
             CreateOdysseyTask(),
             CreateRobotControlTask()
         ];
@@ -263,6 +271,16 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         };
     }
 
+    private AutoTaskConfig CreateRaceTask()
+    {
+        return new AutoTaskConfig
+        {
+            Key = AutoTaskKind.Race.ToKey(),
+            ShowStageTargetConfiguration = false,
+            ShowScriptIdConfiguration = true
+        };
+    }
+
     private AutoTaskConfig CreateOdysseyTask()
     {
         return new AutoTaskConfig
@@ -391,6 +409,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             AutoTaskKind.GoldBalloon => BuildGoldBalloonRequest(task),
             AutoTaskKind.BlackBorder => BuildBlackBorderRequest(task),
             AutoTaskKind.LoopStage => BuildLoopStageRequest(task),
+            AutoTaskKind.Race => BuildRaceRequest(task),
             AutoTaskKind.Odyssey => BuildOdysseyRequest(task),
             _ => throw new InvalidOperationException($"Auto task '{taskKind}' is not supported on this page.")
         };
@@ -462,6 +481,30 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         {
             Kind = AutoTaskKind.LoopStage,
             StageTarget = LoopStagePlaceholderStageTarget,
+            OperationIntervalMs = Math.Max(20, task.OperationIntervalMs),
+            PreferredScriptPath = filePath,
+            VariantKey = scriptId,
+            Key = task.Key
+        };
+    }
+
+    private AutoTaskRequest BuildRaceRequest(AutoTaskConfig task)
+    {
+        var scriptId = task.ScriptId?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(scriptId))
+        {
+            throw new InvalidOperationException("Race-farming script ID is required.");
+        }
+
+        if (!_managedScriptLibraryService.TryGetManagedScriptFilePath(scriptId, out var filePath))
+        {
+            throw new InvalidOperationException($"Managed script ID '{scriptId}' was not found.");
+        }
+
+        return new AutoTaskRequest
+        {
+            Kind = AutoTaskKind.Race,
+            StageTarget = RacePlaceholderStageTarget,
             OperationIntervalMs = Math.Max(20, task.OperationIntervalMs),
             PreferredScriptPath = filePath,
             VariantKey = scriptId,

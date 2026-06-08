@@ -296,6 +296,10 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
     public void PostRuntimeLogEntry(ScriptExecutionRuntimeLogEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
+        if (!ShouldDisplayRuntimeLogEntry(entry))
+        {
+            return;
+        }
 
         var shouldScheduleFlush = false;
         lock (_runtimeLogDispatchSync)
@@ -759,7 +763,7 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
 
     private void AppendProgressLog(ScriptExecutionProgressSnapshot snapshot)
     {
-        if (IsCheckpointHandledByRuntimeLogger(snapshot.CurrentCheckpoint))
+        if (ShouldSuppressProgressLog(snapshot.CurrentCheckpoint))
         {
             return;
         }
@@ -794,6 +798,10 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
     private bool ApplyRuntimeLogEntry(ScriptExecutionRuntimeLogEntry entry, bool rebuildDisplayedLogs = true)
     {
         ArgumentNullException.ThrowIfNull(entry);
+        if (!ShouldDisplayRuntimeLogEntry(entry))
+        {
+            return false;
+        }
 
         var prefix = $"[{entry.Timestamp:HH:mm:ss.fff}] [{entry.Category}]";
         if (entry.Level is ScriptExecutionRuntimeLogLevel.Warning or ScriptExecutionRuntimeLogLevel.Error)
@@ -914,7 +922,7 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
         _hasProgressVisualState = false;
     }
 
-    private static bool IsCheckpointHandledByRuntimeLogger(string? checkpoint)
+    private static bool ShouldSuppressProgressLog(string? checkpoint)
     {
         if (string.IsNullOrWhiteSpace(checkpoint))
         {
@@ -923,6 +931,8 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
 
         return checkpoint switch
         {
+            "BeforeInstruction" => true,
+            "InstructionInterval" => true,
             "WaitPolling" => true,
             "WaitSatisfied" => true,
             "WaitTimedOut" => true,
@@ -931,6 +941,22 @@ public sealed class ScriptExecutionWindowViewModel : ObservableObject
             "RetryAttemptSucceeded" => true,
             _ when checkpoint.Contains("Delay", StringComparison.OrdinalIgnoreCase) => true,
             _ => false
+        };
+    }
+
+    private static bool ShouldDisplayRuntimeLogEntry(ScriptExecutionRuntimeLogEntry entry)
+    {
+        if (entry.Level is ScriptExecutionRuntimeLogLevel.Warning or ScriptExecutionRuntimeLogLevel.Error)
+        {
+            return true;
+        }
+
+        return entry.Category switch
+        {
+            ScriptExecutionRuntimeLogCategory.Action => false,
+            ScriptExecutionRuntimeLogCategory.State => false,
+            ScriptExecutionRuntimeLogCategory.Polling when entry.Level == ScriptExecutionRuntimeLogLevel.Trace => false,
+            _ => true
         };
     }
 
