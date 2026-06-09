@@ -133,7 +133,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             task.PropertyChanged += OnTaskPropertyChanged;
         }
 
-        ToggleTaskCommand = new RelayCommand<AutoTaskConfig?>(ToggleTask);
+        ToggleTaskCommand = new RelayCommand<AutoTaskConfig?>(ToggleTask, CanToggleTask);
         OpenTutorialCommand = new RelayCommand<AutoTaskConfig?>(OpenTutorial);
         OpenTaskScriptConfigCommand = new RelayCommand<AutoTaskConfig?>(OpenTaskScriptConfig);
         ExportSubscriptionCommand = new RelayCommand<AutoTaskConfig?>(ExportSubscription);
@@ -327,6 +327,12 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             return;
         }
 
+        if (IsRuntimeWindowOpenForDifferentTask(task))
+        {
+            ShowDialogByKey("Tasks.Dialog.TaskRunning.Title", "Tasks.Dialog.TaskRunning.Message");
+            return;
+        }
+
         OpenTaskRuntimeWindow(task);
     }
 
@@ -344,7 +350,38 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             return;
         }
 
+        if (IsAnyTaskRuntimeWindowOpen())
+        {
+            ShowDialogByKey("Tasks.Dialog.TaskRunning.Title", "Tasks.Dialog.TaskRunning.Message");
+            return;
+        }
+
         _ = StartRobotTaskAsync(task);
+    }
+
+    private bool CanToggleTask(AutoTaskConfig? task)
+    {
+        if (task is null)
+        {
+            return false;
+        }
+
+        if (task.IsRunning)
+        {
+            return true;
+        }
+
+        if (IsAnyTaskRunning())
+        {
+            return false;
+        }
+
+        if (IsRobotControlTask(task))
+        {
+            return !IsAnyTaskRuntimeWindowOpen();
+        }
+
+        return !IsRuntimeWindowOpenForDifferentTask(task);
     }
 
     private async Task StartRobotTaskAsync(AutoTaskConfig task)
@@ -818,6 +855,8 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             task.IsRunning = string.Equals(task.Key, _runningTaskKey, StringComparison.OrdinalIgnoreCase);
             task.RunningButtonText = task.IsRunning ? _localizationService.T("Tasks.Stop") : _localizationService.T("Tasks.Start");
         }
+
+        NotifyTaskCommandsCanExecuteChanged();
     }
 
     private void ClearRunningTask()
@@ -828,6 +867,8 @@ public sealed class AutoTasksPageViewModel : ObservableObject
             task.IsRunning = false;
             task.RunningButtonText = _localizationService.T("Tasks.Start");
         }
+
+        NotifyTaskCommandsCanExecuteChanged();
     }
 
     private bool IsAnyTaskRunning()
@@ -835,6 +876,22 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         return _autoTaskCoordinator.IsRunning ||
                _robotTaskRuntime.IsRunning ||
                !string.IsNullOrWhiteSpace(_runningTaskKey);
+    }
+
+    private bool IsAnyTaskRuntimeWindowOpen()
+    {
+        return _runtimeWindowsByTaskKey.Count > 0;
+    }
+
+    private bool IsRuntimeWindowOpenForDifferentTask(AutoTaskConfig task)
+    {
+        return _runtimeWindowsByTaskKey.Keys.Any(key =>
+            !string.Equals(key, task.Key, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void NotifyTaskCommandsCanExecuteChanged()
+    {
+        ToggleTaskCommand.NotifyCanExecuteChanged();
     }
 
     private static bool IsRobotControlTask(AutoTaskConfig task)
@@ -1200,6 +1257,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
         runtimeWindow.Closed += OnTaskRuntimeWindowClosed;
         _runtimeWindowsByTaskKey[task.Key] = runtimeWindow;
         _runtimeViewModelsByTaskKey[task.Key] = runtimeViewModel;
+        NotifyTaskCommandsCanExecuteChanged();
         return runtimeWindow;
     }
 
@@ -1365,6 +1423,7 @@ public sealed class AutoTasksPageViewModel : ObservableObject
 
         _runtimeWindowsByTaskKey.Remove(entry.Key);
         _runtimeViewModelsByTaskKey.Remove(entry.Key);
+        NotifyTaskCommandsCanExecuteChanged();
     }
 
     private void OnTextEditorWindowClosed(object? sender, EventArgs e)
