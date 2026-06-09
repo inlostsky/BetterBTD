@@ -9,5 +9,23 @@ public partial class ToolsPageView : Page
     {
         InitializeComponent();
         DataContext = new ToolsPageViewModel();
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
+    }
+
+    private void OnLoaded(object sender, System.Windows.RoutedEventArgs e)
+    {
+        if (DataContext is ToolsPageViewModel viewModel)
+        {
+            viewModel.Resume();
+        }
+    }
+
+    private void OnUnloaded(object sender, System.Windows.RoutedEventArgs e)
+    {
+        if (DataContext is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
     }
 }

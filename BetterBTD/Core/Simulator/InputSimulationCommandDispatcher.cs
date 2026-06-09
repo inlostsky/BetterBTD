@@ -55,6 +55,17 @@ internal sealed class InputSimulationCommandDispatcher : IInputSimulationCommand
                 }
 
                 break;
+            case InputSimulationCommandType.MoveMouseBy:
+                if (hardwareMode)
+                {
+                    _hardwareInputSimulationService.MoveMouseBy(command.DeltaX, command.DeltaY);
+                }
+                else
+                {
+                    Simulation.SendInput.Mouse.MoveMouseBy(command.DeltaX, command.DeltaY);
+                }
+
+                break;
             case InputSimulationCommandType.MouseButtonDown:
                 MouseButtonDown(command.MouseButton, hardwareMode);
                 break;

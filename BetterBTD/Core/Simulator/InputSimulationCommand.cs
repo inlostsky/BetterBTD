@@ -7,6 +7,7 @@ namespace BetterBTD.Core.Simulator;
 internal enum InputSimulationCommandType
 {
     MoveMouseToVirtualDesktop,
+    MoveMouseBy,
     MouseButtonDown,
     MouseButtonUp,
     KeyPress,
@@ -22,6 +23,10 @@ internal sealed record InputSimulationCommand
     public double X { get; init; }
 
     public double Y { get; init; }
+
+    public int DeltaX { get; init; }
+
+    public int DeltaY { get; init; }
 
     public InputMouseButton MouseButton { get; init; } = InputMouseButton.LeftButton;
 

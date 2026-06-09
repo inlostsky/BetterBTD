@@ -10,7 +10,7 @@ using System.Windows;
 
 namespace BetterBTD.ViewModels;
 
-public sealed class ToolsPageViewModel : ObservableObject
+public sealed class ToolsPageViewModel : ObservableObject, IDisposable
 {
     private readonly LocalizationService _localizationService;
     private readonly ToolsOptionService _toolsOptionService;
@@ -18,6 +18,8 @@ public sealed class ToolsPageViewModel : ObservableObject
     private readonly HeroToolService _heroToolService;
     private readonly ParagonToolService _paragonToolService;
     private readonly ParagonStatsToolService _paragonStatsToolService;
+    private readonly PlacementAssistService _placementAssistService;
+    private bool _isPlacementAssistStateSubscribed;
 
     private int _startRound = 1;
     private int _endRound = 100;
@@ -57,7 +59,8 @@ public sealed class ToolsPageViewModel : ObservableObject
             RoundToolService.Instance,
             HeroToolService.Instance,
             ParagonToolService.Instance,
-            ParagonStatsToolService.Instance)
+            ParagonStatsToolService.Instance,
+            PlacementAssistService.Instance)
     {
     }
 
@@ -67,7 +70,8 @@ public sealed class ToolsPageViewModel : ObservableObject
         RoundToolService roundToolService,
         HeroToolService heroToolService,
         ParagonToolService paragonToolService,
-        ParagonStatsToolService paragonStatsToolService)
+        ParagonStatsToolService paragonStatsToolService,
+        PlacementAssistService placementAssistService)
     {
         _localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
         _toolsOptionService = toolsOptionService ?? throw new ArgumentNullException(nameof(toolsOptionService));
@@ -75,6 +79,7 @@ public sealed class ToolsPageViewModel : ObservableObject
         _heroToolService = heroToolService ?? throw new ArgumentNullException(nameof(heroToolService));
         _paragonToolService = paragonToolService ?? throw new ArgumentNullException(nameof(paragonToolService));
         _paragonStatsToolService = paragonStatsToolService ?? throw new ArgumentNullException(nameof(paragonStatsToolService));
+        _placementAssistService = placementAssistService ?? throw new ArgumentNullException(nameof(placementAssistService));
 
         HeroOptions = [];
         ParagonMonkeyOptions = [];
@@ -85,8 +90,10 @@ public sealed class ToolsPageViewModel : ObservableObject
         CalculateParagonCommand = new RelayCommand(UpdateParagonResult);
         CalculateParagonStatsCommand = new RelayCommand(UpdateParagonStatsResult);
         OpenSaveViewerCommand = new RelayCommand(OpenSaveViewer);
+        TogglePlacementAssistCommand = new RelayCommand(TogglePlacementAssist);
 
         _localizationService.LanguageChanged += (_, _) => RefreshLocalizedContent();
+        SubscribePlacementAssistStateChanged();
         _maxRound = _roundToolService.TryGetMaxRound();
         _startRound = _roundToolService.NormalizeRound(_startRound, _maxRound);
         _endRound = _roundToolService.NormalizeRound(_endRound, _maxRound);
@@ -108,6 +115,8 @@ public sealed class ToolsPageViewModel : ObservableObject
     public IRelayCommand CalculateParagonStatsCommand { get; }
 
     public IRelayCommand OpenSaveViewerCommand { get; }
+
+    public IRelayCommand TogglePlacementAssistCommand { get; }
 
     public string PageTitle => _localizationService.T("Tools.PageTitle");
 
@@ -132,6 +141,37 @@ public sealed class ToolsPageViewModel : ObservableObject
     public string SaveViewerCardDetailTitle => _localizationService.T("Tools.SaveViewer.CardDetailTitle");
 
     public string SaveViewerCardDetailDescription => _localizationService.T("Tools.SaveViewer.CardDetailDescription");
+
+    public string PlacementAssistCardTitle => _localizationService.T("Tools.PlacementAssist.Title");
+
+    public string PlacementAssistCardDescription => _localizationService.T("Tools.PlacementAssist.Description");
+
+    public string PlacementAssistDetailTitle => _localizationService.T("Tools.PlacementAssist.DetailTitle");
+
+    public string PlacementAssistDetailDescription => _localizationService.T("Tools.PlacementAssist.DetailDescription");
+
+    public string PlacementAssistButtonText => _placementAssistService.IsRunning
+        ? _localizationService.T("Tools.PlacementAssist.Action.Stop")
+        : _localizationService.T("Tools.PlacementAssist.Action.Start");
+
+    public string PlacementAssistStatusLabel => _localizationService.T("Tools.PlacementAssist.StatusLabel");
+
+    public string PlacementAssistStatusText
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(_placementAssistService.LastError))
+            {
+                return string.Format(
+                    _localizationService.T("Tools.PlacementAssist.Status.Error"),
+                    _placementAssistService.LastError);
+            }
+
+            return _placementAssistService.IsRunning
+                ? _localizationService.T("Tools.PlacementAssist.Status.Enabled")
+                : _localizationService.T("Tools.PlacementAssist.Status.Disabled");
+        }
+    }
 
     public string RoundCardTitle => _localizationService.T("Tools.Round.Title");
 
@@ -599,6 +639,7 @@ public sealed class ToolsPageViewModel : ObservableObject
         OnPropertyChanged(nameof(SaveViewerCardDescription));
         OnPropertyChanged(nameof(SaveViewerCardDetailTitle));
         OnPropertyChanged(nameof(SaveViewerCardDetailDescription));
+        RefreshPlacementAssistProperties();
         OnPropertyChanged(nameof(RoundCardTitle));
         OnPropertyChanged(nameof(RoundCardDescription));
         OnPropertyChanged(nameof(StartRoundLabel));
@@ -673,6 +714,60 @@ public sealed class ToolsPageViewModel : ObservableObject
 
         window.Owner = owner ?? Application.Current?.MainWindow;
         window.Show();
+    }
+
+    private void TogglePlacementAssist()
+    {
+        if (_placementAssistService.IsRunning)
+        {
+            _placementAssistService.Stop();
+        }
+        else
+        {
+            _placementAssistService.Start();
+        }
+
+        RefreshPlacementAssistProperties();
+    }
+
+    private void OnPlacementAssistStateChanged(object? sender, EventArgs e)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.CheckAccess())
+        {
+            dispatcher.BeginInvoke(RefreshPlacementAssistProperties);
+            return;
+        }
+
+        RefreshPlacementAssistProperties();
+    }
+
+    private void RefreshPlacementAssistProperties()
+    {
+        OnPropertyChanged(nameof(PlacementAssistCardTitle));
+        OnPropertyChanged(nameof(PlacementAssistCardDescription));
+        OnPropertyChanged(nameof(PlacementAssistDetailTitle));
+        OnPropertyChanged(nameof(PlacementAssistDetailDescription));
+        OnPropertyChanged(nameof(PlacementAssistButtonText));
+        OnPropertyChanged(nameof(PlacementAssistStatusLabel));
+        OnPropertyChanged(nameof(PlacementAssistStatusText));
+    }
+
+    public void Resume()
+    {
+        SubscribePlacementAssistStateChanged();
+        RefreshPlacementAssistProperties();
+    }
+
+    private void SubscribePlacementAssistStateChanged()
+    {
+        if (_isPlacementAssistStateSubscribed)
+        {
+            return;
+        }
+
+        _placementAssistService.StateChanged += OnPlacementAssistStateChanged;
+        _isPlacementAssistStateSubscribed = true;
     }
 
     private void RefreshHeroOptions(string? selectedCode)
@@ -786,5 +881,16 @@ public sealed class ToolsPageViewModel : ObservableObject
     private static string FormatWholeNumber(double value)
     {
         return value.ToString("N0", CultureInfo.CurrentCulture);
+    }
+
+    public void Dispose()
+    {
+        if (!_isPlacementAssistStateSubscribed)
+        {
+            return;
+        }
+
+        _placementAssistService.StateChanged -= OnPlacementAssistStateChanged;
+        _isPlacementAssistStateSubscribed = false;
     }
 }

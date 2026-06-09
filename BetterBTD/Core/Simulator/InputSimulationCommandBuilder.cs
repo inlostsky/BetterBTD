@@ -24,6 +24,19 @@ internal static class InputSimulationCommandBuilder
         ];
     }
 
+    public static IReadOnlyList<InputSimulationCommand> BuildMoveMouseBy(int deltaX, int deltaY)
+    {
+        return
+        [
+            new InputSimulationCommand
+            {
+                Type = InputSimulationCommandType.MoveMouseBy,
+                DeltaX = deltaX,
+                DeltaY = deltaY
+            }
+        ];
+    }
+
     public static IReadOnlyList<InputSimulationCommand> BuildDelay(int milliseconds)
     {
         return

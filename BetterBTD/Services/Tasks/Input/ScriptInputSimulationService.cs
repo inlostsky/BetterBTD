@@ -93,6 +93,11 @@ public sealed class ScriptInputSimulationService
         MoveMouseToScreenCoordinateCore(screenCoordinate);
     }
 
+    public void MoveMouseBy(int deltaX, int deltaY)
+    {
+        _dispatcher.Dispatch(InputSimulationCommandBuilder.BuildMoveMouseBy(deltaX, deltaY));
+    }
+
     public void ClickMouseAtScriptCoordinate(
         double x,
         double y,

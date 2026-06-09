@@ -65,6 +65,70 @@
 
         <ui:CardExpander Margin="0,0,0,12"
                          ContentPadding="0"
+                         Icon="{ui:SymbolIcon Info24}"
+                         IsExpanded="False">
+            <ui:CardExpander.Header>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding PlacementAssistCardTitle}" TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="1"
+                                  Grid.Column="0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="{Binding PlacementAssistCardDescription}"
+                                  TextWrapping="Wrap" />
+                    <ui:Button Grid.Row="0"
+                               Grid.RowSpan="2"
+                               Grid.Column="1"
+                               Width="120"
+                               Margin="0,0,36,0"
+                               Command="{Binding TogglePlacementAssistCommand}"
+                               Content="{Binding PlacementAssistButtonText}" />
+                </Grid>
+            </ui:CardExpander.Header>
+
+            <StackPanel>
+                <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ui:TextBlock Grid.Row="0" Grid.Column="0" FontWeight="SemiBold" Text="{Binding PlacementAssistDetailTitle}" />
+                    <ui:TextBlock Grid.Row="1"
+                                  Grid.Column="0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="{Binding PlacementAssistDetailDescription}"
+                                  TextWrapping="Wrap" />
+                    <ui:TextBlock Grid.Row="0"
+                                  Grid.RowSpan="2"
+                                  Grid.Column="1"
+                                  Width="180"
+                                  Margin="0,0,36,0"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Center"
+                                  FontWeight="SemiBold"
+                                  Text="{Binding PlacementAssistStatusText}"
+                                  TextAlignment="Right"
+                                  TextWrapping="Wrap" />
+                </Grid>
+            </StackPanel>
+        </ui:CardExpander>
+
+        <ui:CardExpander Margin="0,0,0,12"
+                         ContentPadding="0"
                          Icon="{ui:SymbolIcon Table24}"
                          IsExpanded="False">
             <ui:CardExpander.Header>

@@ -109,6 +109,22 @@ public sealed class HardwareInputSimulationService
         SendMouseStroke(stroke);
     }
 
+    public void MoveMouseBy(int deltaX, int deltaY)
+    {
+        if (!TryEnsureInitialized())
+        {
+            throw new InvalidOperationException("Interception driver is not available.");
+        }
+
+        var stroke = new InterceptionMouseStroke
+        {
+            X = deltaX,
+            Y = deltaY
+        };
+
+        SendMouseStroke(stroke);
+    }
+
     public void MouseButtonDown(InputMouseButton button)
     {
         SendMouseStroke(new InterceptionMouseStroke

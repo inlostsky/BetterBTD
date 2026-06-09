@@ -2,6 +2,7 @@ using System.Windows;
 using BetterBTD.Helpers;
 using BetterBTD.Services;
 using BetterBTD.Services.Tasks.RobotControl;
+using BetterBTD.Services.Tools;
 using Fischless.GameCapture.BitBlt;
 
 namespace BetterBTD
@@ -32,6 +33,7 @@ namespace BetterBTD
             RobotTaskRuntime.Instance.StopAsync().GetAwaiter().GetResult();
             GameCaptureService.Instance.Shutdown();
             MaskWindowService.Instance.Shutdown();
+            PlacementAssistService.Instance.Shutdown();
             HardwareInputSimulationService.Instance.Shutdown();
             base.OnExit(e);
         }
