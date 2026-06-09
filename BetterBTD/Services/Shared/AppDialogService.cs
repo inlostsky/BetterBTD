@@ -16,6 +16,10 @@ public sealed class AppDialogRequest
 
     public string Message { get; init; } = string.Empty;
 
+    public string? SelectableTextLabel { get; init; }
+
+    public string? SelectableText { get; init; }
+
     public string PrimaryButtonText { get; init; } = string.Empty;
 
     public string? SecondaryButtonText { get; init; }

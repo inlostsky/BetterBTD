@@ -17,11 +17,20 @@ public partial class AppDialogWindow : FluentWindow
         Title = request.Title;
         DialogTitleBar.Title = request.Title;
         MessageTextBlock.Text = request.Message;
+        SelectableTextLabelBlock.Text = request.SelectableTextLabel;
+        SelectableTextBox.Text = request.SelectableText;
 
         PrimaryButtonControl.Content = request.PrimaryButtonText;
         SecondaryButtonControl.Content = request.SecondaryButtonText;
         CloseButtonControl.Content = request.CloseButtonText;
 
+        var showSelectableText = !string.IsNullOrWhiteSpace(request.SelectableText);
+        SelectableTextLabelBlock.Visibility = showSelectableText && !string.IsNullOrWhiteSpace(request.SelectableTextLabel)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        SelectableTextBox.Visibility = showSelectableText
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         SecondaryButtonControl.Visibility = string.IsNullOrWhiteSpace(request.SecondaryButtonText)
             ? Visibility.Collapsed
             : Visibility.Visible;

@@ -33,9 +33,18 @@
                         Style="{StaticResource AppCardControlStyle}">
             <ScrollViewer VerticalScrollBarVisibility="Auto"
                           MaxHeight="420">
-                <TextBlock x:Name="MessageTextBlock"
-                           Style="{StaticResource CardTitleTextStyle}"
-                           TextWrapping="Wrap" />
+                <StackPanel>
+                    <TextBlock x:Name="MessageTextBlock"
+                               Style="{StaticResource CardTitleTextStyle}"
+                               TextWrapping="Wrap" />
+                    <TextBlock x:Name="SelectableTextLabelBlock"
+                               Margin="0,16,0,6"
+                               Style="{StaticResource CardDescriptionTextStyle}" />
+                    <TextBox x:Name="SelectableTextBox"
+                             IsReadOnly="True"
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto" />
+                </StackPanel>
             </ScrollViewer>
         </ui:CardControl>
 

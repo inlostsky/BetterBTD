@@ -550,13 +550,18 @@ public sealed class MyScriptsPageViewModel : ObservableObject
             return;
         }
 
+        var scriptId = SelectedScript.ScriptId;
         try
         {
-            Clipboard.SetText(SelectedScript.ScriptId);
+            Clipboard.SetText(scriptId);
         }
         catch (Exception ex)
         {
-            ShowError("Library.Dialog.CopyScriptIdError.Title", ex.Message);
+            ShowError(
+                "Library.Dialog.CopyScriptIdError.Title",
+                ex.Message,
+                _localizationService.T("Library.Property.ScriptId"),
+                scriptId);
         }
     }
 
@@ -787,12 +792,18 @@ public sealed class MyScriptsPageViewModel : ObservableObject
                 progress.TotalScriptCount);
     }
 
-    private void ShowError(string titleKey, string message)
+    private void ShowError(
+        string titleKey,
+        string message,
+        string? selectableTextLabel = null,
+        string? selectableText = null)
     {
         _appDialogService.Show(new AppDialogRequest
         {
             Title = _localizationService.T(titleKey),
             Message = message,
+            SelectableTextLabel = selectableTextLabel,
+            SelectableText = selectableText,
             PrimaryButtonText = _localizationService.T("Library.Dialog.Primary")
         });
     }

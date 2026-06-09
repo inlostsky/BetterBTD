@@ -12,6 +12,8 @@ namespace BetterBTD.Services.Tasks.AutoTasks;
 
 internal abstract class AutoTaskGameUiActionHandlerBase : IGameUiTaskActionHandler
 {
+    private static readonly WpfPoint HeroSelectionScrollPoint = new(250, 560);
+
     protected AutoTaskGameUiActionHandlerBase(
         ScriptInputSimulationService inputSimulationService,
         GameCaptureService gameCaptureService,
@@ -102,7 +104,7 @@ internal abstract class AutoTaskGameUiActionHandlerBase : IGameUiTaskActionHandl
         }
 
         InputSimulationService.PrepareTargetWindowForInput();
-        InputSimulationService.MoveMouseToScriptCoordinate(new WpfPoint(960, 540));
+        InputSimulationService.MoveMouseToScriptCoordinate(HeroSelectionScrollPoint);
         InputSimulationService.ScrollMouseWheelVertical(-50);
         return Success(step, searchContinuationMessage, 600);
     }
