@@ -37,6 +37,29 @@ public sealed class AutoTaskSkeletonTests
     }
 
     [Fact]
+    public async Task CollectionActionHandler_TreatsUnknownUiAsWait()
+    {
+        var target = CreateTarget();
+        var snapshot = new GameUiSnapshot { State = GameUiStateId.Unknown };
+        var step = GameUiNavigator.Instance.GetNextStep(target, snapshot);
+        var state = new AutoTaskRuntimeState(new AutoTaskRequest
+        {
+            Kind = AutoTaskKind.Collection,
+            StageTarget = target
+        });
+        var handler = new CollectionGameUiActionHandler(
+            ScriptInputSimulationService.Instance,
+            GameCaptureService.Instance,
+            GameUiNavigationOcrService.Instance);
+
+        var result = await handler.ExecuteAsync(step, state, snapshot);
+
+        Assert.Equal(GameUiActionKind.Wait, step.ActionKind);
+        Assert.True(result.Succeeded);
+        Assert.Equal(step.PostActionDelayMs, result.RecommendedDelayMs);
+    }
+
+    [Fact]
     public async Task Runner_StartsScriptImmediately_WhenAlreadyInLevel()
     {
         var uiStateService = new QueueGameUiStateService(

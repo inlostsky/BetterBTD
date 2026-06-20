@@ -30,6 +30,8 @@ internal sealed class CollectionGameUiActionHandler : AutoTaskGameUiActionHandle
 
         switch (snapshot.State)
         {
+            case GameUiStateId.Unknown:
+                return Success(step, "Collection UI state is unknown. No action taken.", step.PostActionDelayMs);
             case GameUiStateId.MainMenu:
                 return Click(step, new WpfPoint(960, 940), "Opened collection flow from the main menu.");
             case GameUiStateId.RaceResult:
