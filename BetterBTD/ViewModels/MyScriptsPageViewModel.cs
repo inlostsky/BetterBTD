@@ -559,7 +559,9 @@ public sealed class MyScriptsPageViewModel : ObservableObject
         {
             ShowError(
                 "Library.Dialog.CopyScriptIdError.Title",
-                ex.Message,
+                string.Format(
+                    _localizationService.T("Library.Dialog.CopyScriptIdError.Message"),
+                    ex.Message),
                 _localizationService.T("Library.Property.ScriptId"),
                 scriptId);
         }
