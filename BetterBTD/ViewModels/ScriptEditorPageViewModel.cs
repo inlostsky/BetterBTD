@@ -39,6 +39,8 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     private const string ScriptFileExtension = ".btd";
     private const string ScriptOpenFileDialogFilter = "BetterBTD Script (*.btd;*.btd6;*.json)|*.btd;*.btd6;*.json|BetterBTD Script (*.btd)|*.btd|Legacy BTD6 Script (*.btd6)|*.btd6|JSON File (*.json)|*.json|All Files (*.*)|*.*";
     private const string ScriptSaveFileDialogFilter = "BetterBTD Script (*.btd)|*.btd|JSON File (*.json)|*.json|All Files (*.*)|*.*";
+    private const double CoordinateSelectionLabelFontSize = 14d;
+    private static readonly Thickness CoordinateSelectionLabelPadding = new(8, 5, 8, 5);
     private static readonly Color CoordinateSelectionActiveColor = Color.FromRgb(87, 242, 135);
     private static readonly Color CoordinateSelectionInactiveColor = Color.FromRgb(255, 176, 64);
     private static readonly Color CoordinateSelectionLabelBackgroundColor = Color.FromArgb(220, 16, 24, 39);
@@ -2156,10 +2158,6 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
     {
         var strokeColor = isInsideTargetWindow ? CoordinateSelectionActiveColor : CoordinateSelectionInactiveColor;
         var hasAspectRatioWarning = !_coordinateTransformService.HasReferenceAspectRatio(windowInfo);
-        var labelOffsetX = clientRelativePoint.X > windowInfo.ClientWidth - (hasAspectRatioWarning ? 240d : 180d)
-            ? (hasAspectRatioWarning ? -218d : -158d)
-            : 14d;
-        var labelOffsetY = clientRelativePoint.Y < 52 ? 14d : -46d;
         var label = string.Format(
             _localizationService.T("Editor.Property.CoordinateSelectionLabel"),
             scriptRelativePoint.X.ToString("0.##"),
@@ -2172,6 +2170,13 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
         {
             label = $"{label}\n{_localizationService.T("Editor.Property.CoordinateSelectionAspectWarning")}";
         }
+
+        var (labelOffsetX, labelOffsetY) = ResolveCoordinateSelectionLabelOffset(
+            windowInfo,
+            clientRelativePoint,
+            label,
+            CoordinateSelectionLabelFontSize,
+            CoordinateSelectionLabelPadding);
 
         if (_coordinateSelectionAnchorId is null)
         {
@@ -2192,16 +2197,64 @@ public sealed class ScriptEditorPageViewModel : ObservableObject, IDropTarget
             anchor.Center = clientRelativePoint;
             anchor.StrokeColor = strokeColor;
             anchor.Label = label;
-            anchor.LabelFontSize = 14;
+            anchor.LabelFontSize = CoordinateSelectionLabelFontSize;
             anchor.LabelForegroundColor = Colors.White;
             anchor.LabelBackgroundColor = CoordinateSelectionLabelBackgroundColor;
             anchor.LabelOffsetX = labelOffsetX;
             anchor.LabelOffsetY = labelOffsetY;
-            anchor.LabelPadding = new Thickness(8, 5, 8, 5);
+            anchor.LabelPadding = CoordinateSelectionLabelPadding;
             anchor.RingRadius = 16;
             anchor.CrosshairLength = 12;
             anchor.GapRadius = 5;
         });
+    }
+
+    private static (double OffsetX, double OffsetY) ResolveCoordinateSelectionLabelOffset(
+        GameWindowInfo windowInfo,
+        Point anchorPoint,
+        string label,
+        double fontSize,
+        Thickness padding)
+    {
+        const double gap = 14d;
+        const double edgeMargin = 8d;
+        var labelSize = EstimateOverlayLabelSize(label, fontSize, padding);
+
+        var offsetX = gap;
+        var offsetY = gap;
+
+        if (anchorPoint.X + offsetX + labelSize.Width > windowInfo.ClientWidth - edgeMargin)
+        {
+            offsetX = -labelSize.Width - gap;
+        }
+
+        if (anchorPoint.Y + offsetY + labelSize.Height > windowInfo.ClientHeight - edgeMargin)
+        {
+            offsetY = -labelSize.Height - gap;
+        }
+
+        if (anchorPoint.X + offsetX < edgeMargin)
+        {
+            offsetX = Math.Max(edgeMargin - anchorPoint.X, -labelSize.Width - gap);
+        }
+
+        if (anchorPoint.Y + offsetY < edgeMargin)
+        {
+            offsetY = Math.Max(edgeMargin - anchorPoint.Y, gap);
+        }
+
+        return (offsetX, offsetY);
+    }
+
+    private static Size EstimateOverlayLabelSize(string label, double fontSize, Thickness padding)
+    {
+        var lines = (label ?? string.Empty).Split('\n');
+        var longestLineLength = lines.Length == 0
+            ? 0
+            : lines.Max(line => line.Length);
+        var width = longestLineLength * fontSize * 0.62d + padding.Left + padding.Right;
+        var height = lines.Length * fontSize * 1.25d + padding.Top + padding.Bottom;
+        return new Size(width, height);
     }
 
     private void CompleteCoordinateSelection(double x, double y, string? sampledColorHex = null)
