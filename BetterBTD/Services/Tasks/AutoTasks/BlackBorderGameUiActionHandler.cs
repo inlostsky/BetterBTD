@@ -13,6 +13,7 @@ namespace BetterBTD.Services.Tasks.AutoTasks;
 internal sealed class BlackBorderGameUiActionHandler : AutoTaskGameUiActionHandlerBase
 {
     private static readonly OpenCvRect BlackBorderMapGridReferenceRegion = new(150, 220, 1620, 620);
+    private const int MapCategoryClickCaptureDelayMs = 500;
 
     public BlackBorderGameUiActionHandler(
         ScriptInputSimulationService inputSimulationService,
@@ -116,11 +117,6 @@ internal sealed class BlackBorderGameUiActionHandler : AutoTaskGameUiActionHandl
             return PressEscape(step, "Black border script metadata is unavailable. Returning from map selection.");
         }
 
-        var categoryPoint = GetCategorySelectionPoint(context.Category);
-        InputSimulationService.PrepareTargetWindowForInput();
-        InputSimulationService.ClickMouseAtScriptCoordinate(categoryPoint);
-        await Task.Delay(400, cancellationToken).ConfigureAwait(false);
-
         if (!GameCaptureService.TryCaptureFrame(out _, out var frame))
         {
             return new GameUiActionExecutionResult
@@ -133,25 +129,32 @@ internal sealed class BlackBorderGameUiActionHandler : AutoTaskGameUiActionHandl
 
         using (frame)
         {
-            if (TryLocateMap(frame, context.Target.Map, out var mapPoint))
+            if (TryBuildMapSelectionResult(step, state, context, frame, out var locatedResult))
             {
-                if (BlackBorderBadgeDetection.TryIsStageBadgeAcquired(frame, context.Target, mapPoint, out var isAcquired) &&
-                    isAcquired)
-                {
-                    state.SetProperty(BlackBorderAutoTaskStateKeys.MapLocateAttempts, 0);
-                    state.SetProperty(BlackBorderAutoTaskStateKeys.HeroSelected, false);
-                    state.SetProperty(BlackBorderAutoTaskStateKeys.SkipCurrentTaskRequested, true);
-                    return Success(
-                        step,
-                        $"Black border badge for '{context.Target.Map}/{context.Target.Difficulty}/{context.Target.Mode}' is already acquired. Skipping the current queued stage.",
-                        600);
-                }
+                return locatedResult;
+            }
+        }
 
-                InputSimulationService.PrepareTargetWindowForInput();
-                InputSimulationService.ClickMouseAtScriptCoordinate(mapPoint);
-                state.SetProperty(BlackBorderAutoTaskStateKeys.MapLocateAttempts, 0);
-                state.SetProperty(BlackBorderAutoTaskStateKeys.HeroSelected, false);
-                return Success(step, $"Selected black border map '{context.Target.Map}'.", 800);
+        var categoryPoint = GetCategorySelectionPoint(context.Category);
+        InputSimulationService.PrepareTargetWindowForInput();
+        InputSimulationService.ClickMouseAtScriptCoordinate(categoryPoint);
+        await Task.Delay(MapCategoryClickCaptureDelayMs, cancellationToken).ConfigureAwait(false);
+
+        if (!GameCaptureService.TryCaptureFrame(out _, out frame))
+        {
+            return new GameUiActionExecutionResult
+            {
+                Succeeded = false,
+                Message = "Failed to capture the black border map selection screen after selecting the map category.",
+                RecommendedDelayMs = step.PostActionDelayMs
+            };
+        }
+
+        using (frame)
+        {
+            if (TryBuildMapSelectionResult(step, state, context, frame, out var locatedResult))
+            {
+                return locatedResult;
             }
         }
 
@@ -176,6 +179,41 @@ internal sealed class BlackBorderGameUiActionHandler : AutoTaskGameUiActionHandl
             step,
             $"Black border map '{context.Target.Map}' was not found yet. Retrying map selection ({attempts}/10).",
             600);
+    }
+
+    private bool TryBuildMapSelectionResult(
+        GameUiNavigationStep step,
+        AutoTaskRuntimeState state,
+        BlackBorderAutoTaskScriptContext context,
+        OpenCvSharp.Mat frame,
+        out GameUiActionExecutionResult result)
+    {
+        result = null!;
+
+        if (!TryLocateMap(frame, context.Target.Map, out var mapPoint))
+        {
+            return false;
+        }
+
+        if (BlackBorderBadgeDetection.TryIsStageBadgeAcquired(frame, context.Target, mapPoint, out var isAcquired) &&
+            isAcquired)
+        {
+            state.SetProperty(BlackBorderAutoTaskStateKeys.MapLocateAttempts, 0);
+            state.SetProperty(BlackBorderAutoTaskStateKeys.HeroSelected, false);
+            state.SetProperty(BlackBorderAutoTaskStateKeys.SkipCurrentTaskRequested, true);
+            result = Success(
+                step,
+                $"Black border badge for '{context.Target.Map}/{context.Target.Difficulty}/{context.Target.Mode}' is already acquired. Skipping the current queued stage.",
+                600);
+            return true;
+        }
+
+        InputSimulationService.PrepareTargetWindowForInput();
+        InputSimulationService.ClickMouseAtScriptCoordinate(mapPoint);
+        state.SetProperty(BlackBorderAutoTaskStateKeys.MapLocateAttempts, 0);
+        state.SetProperty(BlackBorderAutoTaskStateKeys.HeroSelected, false);
+        result = Success(step, $"Selected black border map '{context.Target.Map}'.", 800);
+        return true;
     }
 
     private GameUiActionExecutionResult ExecuteDifficultySelect(
