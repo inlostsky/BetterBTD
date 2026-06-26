@@ -130,6 +130,115 @@ public sealed class GameUiDetectionConfigTests
     }
 
     [Fact]
+    public void ConfigService_SyncsBuiltInRules_WhenExistingConfigHasOldRuleDefinition()
+    {
+        var tempDirectory = CreateTempDirectory();
+
+        try
+        {
+            var configFilePath = Path.Combine(tempDirectory, "game_ui_detection_rules.json");
+            var oldConfig = new GameUiDetectionConfig
+            {
+                Version = 1,
+                ReferenceWidth = 1920,
+                ReferenceHeight = 1080,
+                DefaultTolerance = 50,
+                Rules =
+                [
+                    new GameUiDetectionRule
+                    {
+                        Key = "main_menu",
+                        DisplayName = "Old Main Menu",
+                        State = GameUiStateId.Returnable,
+                        Priority = 1,
+                        IsEnabled = false,
+                        AllOf =
+                        [
+                            new GameUiColorCondition
+                            {
+                                X = 1,
+                                Y = 2,
+                                ColorHex = "#010203",
+                                Operator = GameUiColorComparisonOperator.NotEquals
+                            }
+                        ]
+                    }
+                ]
+            };
+
+            File.WriteAllText(configFilePath, SerializeConfig(oldConfig));
+
+            var service = new GameUiDetectionConfigService(configFilePath);
+            var reloaded = service.Reload();
+
+            var mainMenuRule = Assert.Single(reloaded.Rules, rule => rule.Key == "main_menu");
+            Assert.Equal(GameUiStateId.MainMenu, mainMenuRule.State);
+            Assert.Equal(700, mainMenuRule.Priority);
+            Assert.False(mainMenuRule.IsEnabled);
+            Assert.Contains(mainMenuRule.AllOf, static condition =>
+                condition.X == 966 &&
+                condition.Y == 945 &&
+                condition.ColorHex == "#FFFFFF" &&
+                condition.Operator == GameUiColorComparisonOperator.Equals);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ConfigService_SyncsNewBuiltInRuleKeys_AndPreservesCustomRules()
+    {
+        var tempDirectory = CreateTempDirectory();
+
+        try
+        {
+            var configFilePath = Path.Combine(tempDirectory, "game_ui_detection_rules.json");
+            var oldConfig = new GameUiDetectionConfig
+            {
+                Version = 2,
+                ReferenceWidth = 1920,
+                ReferenceHeight = 1080,
+                DefaultTolerance = 50,
+                Rules =
+                [
+                    new GameUiDetectionRule
+                    {
+                        Key = "custom_rule",
+                        DisplayName = "Custom",
+                        State = GameUiStateId.Returnable,
+                        Priority = 10,
+                        AllOf =
+                        [
+                            new GameUiColorCondition
+                            {
+                                X = 68,
+                                Y = 54,
+                                ColorHex = "#FFFFFF",
+                                Operator = GameUiColorComparisonOperator.Equals
+                            }
+                        ]
+                    }
+                ]
+            };
+
+            File.WriteAllText(configFilePath, SerializeConfig(oldConfig));
+
+            var service = new GameUiDetectionConfigService(configFilePath);
+            var reloaded = service.Reload();
+
+            Assert.Contains(reloaded.Rules, static rule => rule.Key == "stage_settings");
+            Assert.Contains(reloaded.Rules, static rule => rule.Key == "stage_settings_alt");
+            Assert.Single(reloaded.Rules, static rule => rule.Key == "custom_rule");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ConfigService_MigratesLegacyDefaultToleranceTo50()
     {
         var tempDirectory = CreateTempDirectory();
@@ -171,6 +280,17 @@ public sealed class GameUiDetectionConfigTests
         var directoryPath = Path.Combine(Path.GetTempPath(), "BetterBTD.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directoryPath);
         return directoryPath;
+    }
+
+    private static string SerializeConfig(GameUiDetectionConfig config)
+    {
+        return JsonSerializer.Serialize(
+            config,
+            new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+            });
     }
 
     private static void SetPixel(Mat frame, int x, int y, string hexColor)

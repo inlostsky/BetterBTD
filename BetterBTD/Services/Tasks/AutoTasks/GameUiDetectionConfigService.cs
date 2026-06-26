@@ -143,7 +143,7 @@ public sealed class GameUiDetectionConfigService
         };
 
         var defaults = CreateDefaultConfig();
-        MergeMissingDefaultRules(normalized, defaults);
+        SyncDefaultRules(normalized, defaults);
         normalized.Version = Math.Max(normalized.Version, defaults.Version);
         return normalized;
     }
@@ -232,7 +232,7 @@ public sealed class GameUiDetectionConfigService
                     Eq(1910, 40, "#B1814A"), Eq(13, 40, "#B1814A")),
                 CreateRule("stage_settings", "关卡设置界面", GameUiStateId.StageSettings, 950,
                     Eq(1658, 40, "#62573C"), Eq(13, 40, "#62482E"), Eq(580, 240, "#BE945B"), Eq(550, 380, "#9F7843")),
-                CreateRule("stage_settings", "关卡设置界面", GameUiStateId.StageSettings, 950,
+                CreateRule("stage_settings_alt", "关卡设置界面", GameUiStateId.StageSettings, 950,
                     Eq(1658, 40, "#62573C"), Eq(13, 40, "#62482E"), Eq(580, 240, "#71E800"), Eq(550, 380, "#9F7843")),
                 CreateRule("stage_defeat", "关卡失败界面", GameUiStateId.Defeat, 945,
                     Eq(722, 383, "#6397D8"), Eq(1213, 383, "#6397D8"), Eq(988, 118, "#FFFFFF")),
@@ -312,25 +312,39 @@ public sealed class GameUiDetectionConfigService
         };
     }
 
-    private static void MergeMissingDefaultRules(GameUiDetectionConfig target, GameUiDetectionConfig defaults)
+    private static void SyncDefaultRules(GameUiDetectionConfig target, GameUiDetectionConfig defaults)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(defaults);
 
-        var existingKeys = new HashSet<string>(
-            target.Rules.Select(static rule => rule.Key),
+        var defaultRules = defaults.Rules
+            .Select(NormalizeRule)
+            .Where(static rule => !string.IsNullOrWhiteSpace(rule.Key))
+            .ToList();
+        var defaultKeys = new HashSet<string>(
+            defaultRules.Select(static rule => rule.Key),
             StringComparer.OrdinalIgnoreCase);
+        var existingEnabledStates = target.Rules
+            .Where(rule => defaultKeys.Contains(rule.Key))
+            .GroupBy(static rule => rule.Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(static group => group.Key, static group => group.First().IsEnabled, StringComparer.OrdinalIgnoreCase);
+        var customRules = target.Rules
+            .Where(rule => !defaultKeys.Contains(rule.Key))
+            .ToList();
+        var syncedRules = new List<GameUiDetectionRule>(defaultRules.Count + customRules.Count);
 
-        foreach (var rule in defaults.Rules.Select(NormalizeRule))
+        foreach (var rule in defaultRules)
         {
-            if (string.IsNullOrWhiteSpace(rule.Key) || existingKeys.Contains(rule.Key))
+            if (existingEnabledStates.TryGetValue(rule.Key, out var isEnabled))
             {
-                continue;
+                rule.IsEnabled = isEnabled;
             }
 
-            target.Rules.Add(rule);
-            existingKeys.Add(rule.Key);
+            syncedRules.Add(rule);
         }
+
+        syncedRules.AddRange(customRules);
+        target.Rules = syncedRules;
     }
 
     private static GameUiDetectionRule CreateRule(
