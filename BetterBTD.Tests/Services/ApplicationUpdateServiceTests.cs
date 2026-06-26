@@ -1,4 +1,5 @@
 using BetterBTD.Services.Updates;
+using System.Net;
 
 namespace BetterBTD.Tests.Services;
 
@@ -26,5 +27,13 @@ public sealed class ApplicationUpdateServiceTests
         var result = ApplicationUpdateService.IsNewerVersion(currentVersion, latestVersion);
 
         Assert.False(result);
+    }
+
+    [Fact]
+    public void BuildHttpFailureDetail_ReturnsStatusCodeAndReasonPhrase()
+    {
+        var result = ApplicationUpdateService.BuildHttpFailureDetail(HttpStatusCode.Forbidden);
+
+        Assert.Equal("HTTP 403 Forbidden", result);
     }
 }

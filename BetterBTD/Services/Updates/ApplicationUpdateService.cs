@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reflection;
@@ -111,11 +112,7 @@ public sealed class ApplicationUpdateService
             return new ApplicationUpdateCheckResult
             {
                 IsSuccessful = false,
-                StatusMessage = BuildCheckFailedMessage(
-                    string.Format(
-                        CultureInfo.InvariantCulture,
-                        "HTTP {(int)0}",
-                        response.StatusCode))
+                StatusMessage = BuildCheckFailedMessage(BuildHttpFailureDetail(response.StatusCode))
             };
         }
 
@@ -195,6 +192,15 @@ public sealed class ApplicationUpdateService
         return Version.TryParse(normalizedCurrent, out var currentParsed) &&
                Version.TryParse(normalizedLatest, out var latestParsed) &&
                latestParsed > currentParsed;
+    }
+
+    internal static string BuildHttpFailureDetail(HttpStatusCode statusCode)
+    {
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "HTTP {0} {1}",
+            (int)statusCode,
+            statusCode);
     }
 
     private static string GetFallbackVersion()
