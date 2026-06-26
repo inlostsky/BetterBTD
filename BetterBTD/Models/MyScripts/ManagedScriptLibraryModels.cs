@@ -205,8 +205,8 @@ public static class BlackBorderTaskCatalog
             StageDifficulty.Easy =>
             [
                 StageMode.Standard,
-                StageMode.Deflation,
-                StageMode.PrimaryOnly
+                StageMode.PrimaryOnly,
+                StageMode.Deflation
             ],
             StageDifficulty.Medium =>
             [
